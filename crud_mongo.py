@@ -1,5 +1,6 @@
 from typing import TypeVar, Optional
 from pydantic import BaseModel
+import pymongo
 from pymongo.collection import ReturnDocument
 from database import db
 from schemas import list_serial, individual_serial
@@ -10,13 +11,14 @@ T = TypeVar('T', bound='BaseModel')
 
 class CRUDMongoImpl(CRUD):
 
-    async def get_items(model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None):
+    async def get_items(model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None):
         collection = db[model_name]
 
         query = filters or {}
-        print(query)
+        sorts = orders or {}
 
-        items = collection.find(query, skip=skip, limit=limit)
+
+        items = collection.find(query, skip=skip, limit=limit, sort=sorts)
         serialized_items = list_serial(items)
 
         total_count = collection.count_documents(query)

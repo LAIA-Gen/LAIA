@@ -72,9 +72,9 @@ async def get_user(user_id: str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 @app.post("/users/all", response_model=dict)
-async def get_users(skip: int = 0, limit: int = 10, filters: dict = {}):
+async def get_users(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
     try:
-        items, total_count = await CRUDMongoImpl.get_items("users", skip=skip, limit=limit, filters=filters)
+        items, total_count = await CRUDMongoImpl.get_items("users", skip=skip, limit=limit, filters=filters, orders=orders)
 
         max_pages = ceil(total_count / limit)
         current_page = (skip // limit) + 1
@@ -113,10 +113,10 @@ async def get_drone(drone_id: str):
     return await CRUDMongoImpl.get_item("drones", drone_id)
 
 @app.post("/drones/all", response_model=dict)
-async def get_drones(skip: int = 0, limit: int = 10, filters: dict = {}):
-    print(f"Received request with skip={skip}, limit={limit}, filters={filters}")
+async def get_drones(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    print(f"Received request with skip={skip}, limit={limit}, filters={filters}, orders={orders}")
 
-    items, total_count = await CRUDMongoImpl.get_items("drones", skip=skip, limit=limit, filters=filters)
+    items, total_count = await CRUDMongoImpl.get_items("drones", skip=skip, limit=limit, filters=filters, orders=orders)
 
     max_pages = ceil(total_count / limit)
     current_page = (skip // limit) + 1
@@ -149,8 +149,8 @@ async def get_flight_plan(flight_plan_id: str):
     return await CRUDMongoImpl.get_item("flight_plans", flight_plan_id)
 
 @app.post("/flightplans/all", response_model=dict)
-async def get_flight_plans(skip: int = 0, limit: int = 10, filters: dict = {}):
-    items, total_count = await CRUDMongoImpl.get_items("flight_plans", skip=skip, limit=limit, filters=filters)
+async def get_flight_plans(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    items, total_count = await CRUDMongoImpl.get_items("flight_plans", skip=skip, limit=limit, filters=filters, orders=orders)
 
     max_pages = ceil(total_count / limit)
     current_page = (skip // limit) + 1
@@ -180,8 +180,8 @@ async def get_waypoint(waypoint_id: str):
     return await CRUDMongoImpl.get_item("waypoints", waypoint_id)
 
 @app.post("/waypoints/all", response_model=dict)
-async def get_waypoints(skip: int = 0, limit: int = 10, filters: dict = {}):
-    items, total_count = await CRUDMongoImpl.get_items("waypoints", skip=skip, limit=limit, filters=filters)
+async def get_waypoints(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    items, total_count = await CRUDMongoImpl.get_items("waypoints", skip=skip, limit=limit, filters=filters, orders=orders)
 
     max_pages = ceil(total_count / limit)
     current_page = (skip // limit) + 1
@@ -210,8 +210,8 @@ async def get_flightplanroutes(flightplanroutes_id: str):
     return await CRUDMongoImpl.get_item("flightplanroutes", flightplanroutes_id)
 
 @app.post("/flightplanroutes/all", response_model=dict)
-async def get_flightplanroutes(skip: int = 0, limit: int = 10, filters: dict = {}):
-    items, total_count = await CRUDMongoImpl.get_items("flightplanroutes", skip=skip, limit=limit, filters=filters)
+async def get_flightplanroutes(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    items, total_count = await CRUDMongoImpl.get_items("flightplanroutes", skip=skip, limit=limit, filters=filters, orders=orders)
 
     max_pages = ceil(total_count / limit)
     current_page = (skip // limit) + 1
