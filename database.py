@@ -2,4 +2,4 @@ from pymongo import MongoClient
 
 client = MongoClient('mongodb://localhost:27017')
 
-db = client.uspace6
+db = client.uspace7

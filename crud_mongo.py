@@ -19,7 +19,9 @@ class CRUDMongoImpl(CRUD):
         items = collection.find(query, skip=skip, limit=limit)
         serialized_items = list_serial(items)
 
-        return serialized_items
+        total_count = collection.count_documents(query)
+        
+        return serialized_items, total_count
     
     async def get_item(model_name: str, item_id: str):
         collection = db[model_name]
