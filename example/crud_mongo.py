@@ -1,6 +1,5 @@
 from typing import TypeVar, Optional
 from pydantic import BaseModel
-import pymongo
 from pymongo.collection import ReturnDocument
 from database import db
 from schemas import list_serial, individual_serial

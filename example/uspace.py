@@ -3,11 +3,30 @@ from typing import List
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-from crud_mongo import CRUDMongoImpl
+#from crud_mongo import CRUDMongoImpl
 from bson import ObjectId
 from math import ceil
+from argapilib.models import Role, Model, AccessRights
+from argapilib.crud_mongo_impl import CRUDMongoImpl
+from database import db
+import asyncio
+
+class Usera(Model):
+    description: str
 
 app = FastAPI()
+
+database_instance = CRUDMongoImpl(db)
+async def start ():
+    user = await Usera.create(Usera(name="alba", description="very well then"), ["admin"], database_instance)
+    print(user)
+
+async def main():
+    await start()
+
+# Run the event loop
+if __name__ == "__main__":
+    asyncio.run(main())
 
 app.add_middleware(
     CORSMiddleware,

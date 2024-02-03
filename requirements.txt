@@ -4,5 +4,4 @@ uvicorn
 
 pymongo
 
-sqlmodel
 pydantic[email]

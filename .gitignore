@@ -1,2 +1,8 @@
 env
 __pycache__
+requirements.txt
+argapilib.egg-info
+build
+dist
+.eggs
+.pytest_cache
