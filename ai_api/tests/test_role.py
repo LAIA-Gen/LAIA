@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from pymongo import MongoClient
 from argapilib.crud_mongo_impl import CRUDMongoImpl
-from argapilib.models.Role import Role
+from argapilib.Role import Role
 
 @pytest.fixture
 def in_memory_db():

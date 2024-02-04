@@ -1,9 +1,9 @@
 from typing import Type, List, Dict, Any
 from pydantic import BaseModel
 from .utils import create_element
-from ..crud import CRUD
+from .crud import CRUD
 from .AccessRights import AccessRights
-from ..logger import _logger
+from .logger import _logger
 
 class Model(BaseModel):
     id: str = ""
@@ -70,7 +70,7 @@ class Model(BaseModel):
         _logger.info(f"{model.__name__} deleted successfully")
 
     @classmethod
-    async def get(cls, element_id: str, model: Type, user_roles: List[str], crud_instance: CRUD):
+    async def read(cls, element_id: str, model: Type, user_roles: List[str], crud_instance: CRUD):
         _logger.info(f"Getting {model.__name__} with ID: {element_id}")
 
         model_name = model.__name__.lower()

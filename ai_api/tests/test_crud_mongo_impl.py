@@ -1,7 +1,7 @@
 import pytest, pytest_asyncio
 from pymongo import MongoClient
 from argapilib.crud_mongo_impl import CRUDMongoImpl
-from argapilib.models.Model import Model
+from argapilib.Model import Model
 
 class User(Model):
     description: str

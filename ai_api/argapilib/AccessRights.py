@@ -1,7 +1,7 @@
 from typing import Dict, Type
 from pydantic import BaseModel
-from ..crud import CRUD
-from ..logger import _logger
+from .crud import CRUD
+from .logger import _logger
 from .utils import create_element
 
 class AccessRights(BaseModel):

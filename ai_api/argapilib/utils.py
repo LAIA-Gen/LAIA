@@ -1,6 +1,6 @@
 from typing import TypeVar
-from ..crud import CRUD
-from ..logger import _logger
+from .crud import CRUD
+from .logger import _logger
 
 T = TypeVar('T', bound='BaseModel')
 

@@ -2,8 +2,8 @@ import pytest
 import pytest_asyncio
 from pymongo import MongoClient
 from argapilib.crud_mongo_impl import CRUDMongoImpl
-from argapilib.models.Model import Model
-from argapilib.models.AccessRights import AccessRights
+from argapilib.Model import Model
+from argapilib.AccessRights import AccessRights
 from argapilib.logger import _logger
 
 class User(Model):
@@ -166,7 +166,32 @@ class TestModel:
         assert updated_user["id"] == user["id"]
 
     @pytest.mark.asyncio
-    async def test_create_element_missing_access_rights_specific_field(self, crud_instance):
+    async def test_read_element_missing_access_rights_read_operation(self, crud_instance):
+        new_access_rights = {
+            "role": "userAdmin",
+            "model": "user",
+            "operations": {"create": 1, "update": 1},
+            "fields_create": {"name": 1, "description": 1},
+            "fields_edit": {"name": 1},
+            "fields_visible": {"description": 1}
+        }
+
+        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        
+        user_roles = ["userAdmin"]
+        new_user = {
+            "name": "alba",
+            "description": "This is a description",
+            "age": 21
+        }
+        
+        user = await User.create(new_user, User, ["admin"], crud_instance)
+
+        with pytest.raises(PermissionError, match="None of the roles have sufficient permissions for operation 'read' on model 'user'"):
+            await User.read(user["id"], User, user_roles, crud_instance)
+
+    @pytest.mark.asyncio
+    async def test_read_element_missing_access_rights_specific_field(self, crud_instance):
         new_access_rights = {
             "role": "userAdmin",
             "model": "user",
@@ -184,3 +209,50 @@ class TestModel:
             "description": "This is a description",
             "age": 21
         }
+        
+        user = await User.create(new_user, User, ["admin"], crud_instance)
+
+        user_read = await User.read(user["id"], User, user_roles, crud_instance)
+
+        assert user_read == {"description": "This is a description"}
+
+    @pytest.mark.asyncio
+    async def test_delete_element(self, crud_instance): 
+        user_roles = ["admin"]
+        new_user = {
+            "name": "alba",
+            "description": "This is a description",
+            "age": 21
+        }
+        
+        user = await User.create(new_user, User, user_roles, crud_instance)
+
+        await User.delete(user["id"], User, user_roles, crud_instance)
+
+        with pytest.raises(ValueError, match=f"user with ID {user['id']} not found"):
+            await User.read(user["id"], User, user_roles, crud_instance)
+
+    @pytest.mark.asyncio
+    async def test_delete_element_missing_access_rights_delete_operation(self, crud_instance):
+        new_access_rights = {
+            "role": "userAdmin",
+            "model": "user",
+            "operations": {"create": 1, "update": 1},
+            "fields_create": {"name": 1, "description": 1},
+            "fields_edit": {"name": 1},
+            "fields_visible": {"description": 1}
+        }
+
+        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        
+        user_roles = ["userAdmin"]
+        new_user = {
+            "name": "alba",
+            "description": "This is a description",
+            "age": 21
+        }
+        
+        user = await User.create(new_user, User, ["admin"], crud_instance)
+
+        with pytest.raises(PermissionError, match="None of the roles have sufficient permissions for operation 'delete' on model 'user'"):
+            await User.delete(user["id"], User, user_roles, crud_instance)

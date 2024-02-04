@@ -42,6 +42,7 @@ class CRUDMongoImpl(CRUD):
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
         item_dict['id'] = str(inserted_id)
+        item_dict.pop('_id', None)
 
         return item_dict
 
