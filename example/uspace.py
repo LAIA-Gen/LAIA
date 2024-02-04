@@ -14,6 +14,21 @@ import asyncio
 class Usera(Model):
     description: str
 
+class ModelA(BaseModel):
+    name_a: str
+
+class ModelB(ModelA):
+    name_b: str
+
+class UserCombined(ModelB):
+    description: str
+
+annotations_hierarchy = {}
+for cls in UserCombined.mro():
+    if hasattr(cls, '__annotations__'):
+        annotations_hierarchy.update(cls.__annotations__)
+
+print(annotations_hierarchy)
 app = FastAPI()
 
 database_instance = CRUDMongoImpl(db)

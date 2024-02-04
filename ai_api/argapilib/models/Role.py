@@ -8,7 +8,12 @@ class Role(BaseModel):
     name: str
 
     @classmethod
-    async def create(cls, new_role, user_roles, crud_instance):
+    async def create(cls, new_role: dict, user_roles: list, crud_instance: CRUD):
+        _logger.info(f"Creating new Role with values: {new_role}")
+
+        if "name" not in new_role:
+            raise ValueError("Missing required parameter: name")
+
         role = Role(**new_role)
         if "admin" not in user_roles:
             raise PermissionError("Only users with 'admin' role can create new roles")
@@ -18,4 +23,5 @@ class Role(BaseModel):
             raise ValueError(f"Role with name '{role.name}' already exists")
         
         created_role = await create_element(role, crud_instance)
+        _logger.info("Role created successfully")
         return cls(**created_role)

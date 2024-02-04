@@ -18,6 +18,14 @@ async def crud_instance(in_memory_db):
 class TestRole:
 
     @pytest.mark.asyncio
+    async def test_create_role_without_name_raises_exception(self, crud_instance):
+        user_roles = ["admin"]
+        new_role = {"something": "test_role"}
+
+        with pytest.raises(ValueError, match="Missing required parameter: name"):
+            await Role.create(new_role, user_roles, crud_instance)
+
+    @pytest.mark.asyncio
     async def test_create_role_admin_permission(self, crud_instance):
         user_roles = ["admin"]
         new_role = {"name": "test_role"}

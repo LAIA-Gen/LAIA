@@ -1,20 +1,28 @@
-from typing import Dict
+from typing import Dict, Type
 from pydantic import BaseModel
 from argapilib.crud import CRUD
 from argapilib.logger import _logger
-from argapilib.models.Role import Role
-from argapilib.models.Model import Model, create_element
+from argapilib.models.Model import create_element
 
 class AccessRights(BaseModel):
-    role: Role
-    model: Model
-    operations: Dict[str, int]
-    fields_create: Dict[str, int]
-    fields_edit: Dict[str, int]
-    fields_visible: Dict[str, int]
+    role: str
+    model: str
+    operations: Dict[str, int] = {}
+    fields_create: Dict[str, int] = {}
+    fields_edit: Dict[str, int] = {}
+    fields_visible: Dict[str, int] = {}
 
     @classmethod
-    async def create(cls, new_access_rights, user_roles: list, crud_instance: CRUD):
+    async def create(cls, new_access_rights: dict, model: Type, user_roles: list, crud_instance: CRUD):
+        _logger.info(f"Creating new AccessRights with values: {new_access_rights}")
+
+        required_params = cls.__annotations__.keys()
+        missing_params = set(required_params) - set(new_access_rights.keys())
+        if missing_params:
+            raise ValueError(f"Missing required parameters: {', '.join(missing_params)}")
+        
+        if new_access_rights.get("model") != model.__name__.lower():
+            raise ValueError("Provided model name does not match the class model name")
 
         if "admin" not in user_roles:
             raise PermissionError("Only users with 'admin' role can create access rights")
@@ -33,11 +41,30 @@ class AccessRights(BaseModel):
             if not isinstance(fields, dict):
                 raise ValueError(f"Invalid format for {field_type}")
             
-            model_fields = [field.name for field in cls.model.__annotations__.values()]
+            model_fields = []
+            for class_in_hierarchy in model.mro():
+                if hasattr(class_in_hierarchy, '__annotations__'):
+                    model_fields.extend([field for field in class_in_hierarchy.__annotations__ if not field.startswith("_")])
 
             for field_name, field_value in fields.items():
                 if field_name not in model_fields or not isinstance(field_value, int):
                     raise ValueError(f"Invalid field {field_name} for {field_type}")
                 
-        created_accessrights = await create_element(new_access_rights, crud_instance)
+        existing_access_rights, _ = await crud_instance.get_items(
+            "accessrights", 
+            skip=0, 
+            limit=10, 
+            filters={
+                "model": new_access_rights.get("model"),
+                "role": new_access_rights.get("role")
+            }
+        )
+
+        if existing_access_rights:
+            raise ValueError("AccessRights with the same role and model already exists")
+        
+        access_rights = AccessRights(**new_access_rights)
+
+        created_accessrights = await create_element(access_rights, crud_instance)
+        _logger.info("AccessRights created successfully")
         return cls(**created_accessrights)
