@@ -1,8 +1,8 @@
 from typing import Dict, Type
 from pydantic import BaseModel
-from argapilib.crud import CRUD
-from argapilib.logger import _logger
-from argapilib.models.Model import create_element
+from ..crud import CRUD
+from ..logger import _logger
+from .utils import create_element
 
 class AccessRights(BaseModel):
     role: str
@@ -16,11 +16,11 @@ class AccessRights(BaseModel):
     async def create(cls, new_access_rights: dict, model: Type, user_roles: list, crud_instance: CRUD):
         _logger.info(f"Creating new AccessRights with values: {new_access_rights}")
 
-        required_params = cls.__annotations__.keys()
-        missing_params = set(required_params) - set(new_access_rights.keys())
-        if missing_params:
-            raise ValueError(f"Missing required parameters: {', '.join(missing_params)}")
-        
+        if 'role' in new_access_rights and 'model' in new_access_rights:
+            pass
+        else:
+            raise ValueError("Missing required parameters")
+
         if new_access_rights.get("model") != model.__name__.lower():
             raise ValueError("Provided model name does not match the class model name")
 
@@ -63,7 +63,10 @@ class AccessRights(BaseModel):
         if existing_access_rights:
             raise ValueError("AccessRights with the same role and model already exists")
         
-        access_rights = AccessRights(**new_access_rights)
+        try:
+            access_rights = AccessRights(**new_access_rights)
+        except Exception:
+            raise ValueError("Missing required parameters")
 
         created_accessrights = await create_element(access_rights, crud_instance)
         _logger.info("AccessRights created successfully")

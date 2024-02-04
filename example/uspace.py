@@ -3,45 +3,15 @@ from typing import List
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
-#from crud_mongo import CRUDMongoImpl
+from crud_mongo import CRUDMongoImpl
 from bson import ObjectId
 from math import ceil
 from argapilib.models import Role, Model, AccessRights
-from argapilib.crud_mongo_impl import CRUDMongoImpl
+#from argapilib.crud_mongo_impl import CRUDMongoImpl
 from database import db
 import asyncio
 
-class Usera(Model):
-    description: str
-
-class ModelA(BaseModel):
-    name_a: str
-
-class ModelB(ModelA):
-    name_b: str
-
-class UserCombined(ModelB):
-    description: str
-
-annotations_hierarchy = {}
-for cls in UserCombined.mro():
-    if hasattr(cls, '__annotations__'):
-        annotations_hierarchy.update(cls.__annotations__)
-
-print(annotations_hierarchy)
 app = FastAPI()
-
-database_instance = CRUDMongoImpl(db)
-async def start ():
-    user = await Usera.create(Usera(name="alba", description="very well then"), ["admin"], database_instance)
-    print(user)
-
-async def main():
-    await start()
-
-# Run the event loop
-if __name__ == "__main__":
-    asyncio.run(main())
 
 app.add_middleware(
     CORSMiddleware,

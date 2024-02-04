@@ -1,8 +1,8 @@
 from typing import Dict
 from pydantic import BaseModel
-from argapilib.crud import CRUD
-from argapilib.logger import _logger
-from argapilib.models.Model import create_element
+from ..crud import CRUD
+from ..logger import _logger
+from .utils import create_element
 
 class Role(BaseModel):
     name: str

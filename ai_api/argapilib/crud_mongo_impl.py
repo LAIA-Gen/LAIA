@@ -33,14 +33,16 @@ class CRUDMongoImpl(CRUD):
 
         if item:
             return individual_serial(item)
-        raise Exception
+        raise ValueError(f"{model_name} with ID {item_id} not found")
 
     async def post_item(self, model_name: str, item: T):
         collection = self.db[model_name]
-        created_result = collection.insert_one(dict(item))
-        inserted_id = created_result.inserted_id
         item_dict = dict(item)
+        item_dict.pop('id', None)
+        created_result = collection.insert_one(item_dict)
+        inserted_id = created_result.inserted_id
         item_dict['id'] = str(inserted_id)
+
         return item_dict
 
     async def put_item(self, model_name: str, item_id: str, update_fields: dict):

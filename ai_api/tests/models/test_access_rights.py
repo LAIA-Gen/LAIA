@@ -3,7 +3,6 @@ import pytest_asyncio
 from pymongo import MongoClient
 from argapilib.crud_mongo_impl import CRUDMongoImpl
 from argapilib.models.AccessRights import AccessRights
-from argapilib.models.Role import Role
 from argapilib.models.Model import Model
 
 class User(Model):
@@ -81,7 +80,7 @@ class TestAccessRights:
             "fields_visible": {"description": 1}
         }
 
-        with pytest.raises(ValueError, match="Missing required parameters: model"):
+        with pytest.raises(ValueError, match="Missing required parameters"):
             await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
