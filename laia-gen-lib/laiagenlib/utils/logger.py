@@ -23,7 +23,7 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
-_logger = logging.getLogger("ARG")
+_logger = logging.getLogger("LAIA")
 _logger.setLevel(logging.INFO)
 
 ch = logging.StreamHandler()

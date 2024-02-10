@@ -1,11 +1,11 @@
 from typing import Type, List, Dict, Any
 from pydantic import BaseModel
-from .utils import create_element
-from .crud import CRUD
+from ..utils.utils import create_element
+from ..crud.crud import CRUD
 from .AccessRights import AccessRights
-from .logger import _logger
+from ..utils.logger import _logger
 
-class Model(BaseModel):
+class LaiaBaseModel(BaseModel):
     id: str = ""
     name: str
 

@@ -1,12 +1,12 @@
 from setuptools import find_packages, setup
 
 setup(
-    name='argapilib',
-    packages=find_packages(include=['argapilib']),
+    name='laia-gen-lib',
+    packages=find_packages(),
     version='0.1.1',
-    description='My first Python library',
+    description='An AI application generator engine',
     author='Me',
-    install_requires=['pymongo', 'pydantic'],
+    install_requires=['pymongo', 'pydantic', 'datamodel-code-generator'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest', 'pymongo', 'pytest-asyncio'],
     test_suite='tests',

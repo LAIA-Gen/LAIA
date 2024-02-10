@@ -1,9 +1,9 @@
 from typing import TypeVar, Optional, Dict
 from pydantic import BaseModel
 from pymongo.collection import ReturnDocument
-from argapilib.schemas import list_serial, individual_serial
+from .schemas import list_serial, individual_serial
 from bson import ObjectId
-from argapilib.crud import CRUD
+from .crud import CRUD
 
 T = TypeVar('T', bound='BaseModel')
 

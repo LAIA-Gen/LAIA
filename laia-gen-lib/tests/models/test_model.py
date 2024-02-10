@@ -1,16 +1,16 @@
 import pytest
 import pytest_asyncio
 from pymongo import MongoClient
-from argapilib.crud_mongo_impl import CRUDMongoImpl
-from argapilib.Model import Model
-from argapilib.AccessRights import AccessRights
-from argapilib.logger import _logger
+from laiagenlib.crud.crud_mongo_impl import CRUDMongoImpl
+from laiagenlib.models.Model import LaiaBaseModel
+from laiagenlib.models.AccessRights import AccessRights
+from laiagenlib.utils.logger import _logger
 
-class User(Model):
+class User(LaiaBaseModel):
     description: str
     age: int
 
-class Drone(Model):
+class Drone(LaiaBaseModel):
     description: str
     weight: float
     max_altitude: float

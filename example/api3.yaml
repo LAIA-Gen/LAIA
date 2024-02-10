@@ -1,0 +1,52 @@
+openapi: 3.0.0
+info:
+  title: GeoJSON Example API
+  version: 1.0.0
+  description: An example API demonstrating the usage of GeoJSON data.
+paths:
+  /locations:
+    get:
+      summary: Get locations
+      description: Retrieve a list of locations with GeoJSON points.
+      responses:
+        '200':
+          description: A list of locations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationList'
+
+components:
+  schemas:
+    LocationList:
+      type: object
+      properties:
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Location'
+
+    Location:
+      type: object
+      properties:
+        name:
+          type: string
+        coordinates:
+          $ref: '#/components/schemas/Point'
+
+    Point:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - Point
+          description: The type of the GeoJSON object
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+
+    Coordinates:
+      type: array
+      items:
+        type: number
+      description: The coordinates of the point in [longitude, latitude] format

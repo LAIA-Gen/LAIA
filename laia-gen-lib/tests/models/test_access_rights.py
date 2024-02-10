@@ -1,11 +1,11 @@
 import pytest
 import pytest_asyncio
 from pymongo import MongoClient
-from argapilib.crud_mongo_impl import CRUDMongoImpl
-from argapilib.AccessRights import AccessRights
-from argapilib.Model import Model
+from laiagenlib.crud.crud_mongo_impl import CRUDMongoImpl
+from laiagenlib.models.AccessRights import AccessRights
+from laiagenlib.models.Model import LaiaBaseModel
 
-class User(Model):
+class User(LaiaBaseModel):
     description: str
     age: int
 
