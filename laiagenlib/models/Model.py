@@ -1,5 +1,6 @@
 from typing import Type, List, Dict, Any
 from pydantic import BaseModel
+from math import ceil
 from ..utils.utils import create_element
 from ..crud.crud import CRUD
 from .AccessRights import AccessRights
@@ -90,7 +91,7 @@ class LaiaBaseModel(BaseModel):
         return item
     
     @classmethod
-    async def search(cls, filters: dict, model: Type, user_roles: List[str], crud_instance: CRUD):
+    async def search(cls, skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], crud_instance: CRUD):
         _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
         model_name = model.__name__.lower()
@@ -99,12 +100,14 @@ class LaiaBaseModel(BaseModel):
             await cls.check_access_rights(model_name, user_roles, "search", crud_instance)
 
         try:
-            items, total_count = await crud_instance.get_items(model_name, filters=filters)
+            items, total_count = await crud_instance.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)
+            max_pages = ceil(total_count / limit)
+            current_page = (skip // limit) + 1
         except Exception:
             raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
 
         _logger.info(f"{model.__name__} search completed successfully")
-        return items, total_count
+        return items, current_page, max_pages
     
     @classmethod
     async def check_access_rights(cls, model_name: str, roles: List[str], operation: str, crud_instance: CRUD):

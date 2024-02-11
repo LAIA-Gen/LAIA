@@ -42,7 +42,6 @@ class OpenAPI:
             model_module = self.import_model(models_path)
             model = getattr(model_module, model_name)
             model_lowercase = model_name.lower()
-            model_plural = model_lowercase + 's' # TODO: use it for search path
 
             create_route = None
             read_route = None
@@ -83,7 +82,7 @@ class OpenAPI:
         read_route = read_route or f"/{model_name}"+"/{element_id}"
         update_route = update_route or f"/{model_name}"+"/{element_id}"
         delete_route = delete_route or f"/{model_name}"+"/{element_id}"
-        search_route = search_route or None # TODO: change to the defined route
+        search_route = search_route or f"/{model_name}s"
 
 
         @router.post(create_route, response_model=dict)
@@ -116,6 +115,14 @@ class OpenAPI:
             try:
                 await model.delete(element_id, model, user_roles, self.crud_instance)
                 return f"{model_name} element deleted successfully"
+            except Exception as e:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+        @router.get(search_route, response_model=dict)
+        async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+            user_roles=["admin"]
+            try:
+                return await model.search(skip, limit, filters, orders, model, user_roles, self.crud_instance)
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
