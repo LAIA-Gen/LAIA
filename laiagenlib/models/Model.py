@@ -52,7 +52,7 @@ class LaiaBaseModel(BaseModel):
             allowed_fields = cls.get_allowed_fields(access_rights_list, 'fields_visible')
             updated_element = {field: updated_element[field] for field in allowed_fields if field in updated_element}
 
-        _logger.info(f"{model.__name__} created successfully")
+        _logger.info(f"{model.__name__} updated successfully")
         return updated_element
     
     @classmethod
@@ -107,7 +107,11 @@ class LaiaBaseModel(BaseModel):
             raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
 
         _logger.info(f"{model.__name__} search completed successfully")
-        return items, current_page, max_pages
+        return {
+            "items": items,
+            "current_page": current_page,
+            "max_pages": max_pages,
+        }
     
     @classmethod
     async def check_access_rights(cls, model_name: str, roles: List[str], operation: str, crud_instance: CRUD):

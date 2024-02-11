@@ -72,7 +72,7 @@ class OpenAPI:
                 search_route=search_route
             )
 
-    def CRUD(self, api: FastAPI, crud_instance: CRUD, model: T, create_route: Optional[str] = None, read_route: Optional[str] = None, update_route: Optional[str] = None, delete_route: Optional[str] = None, search_route: Optional[str] = None):
+    def CRUD(self, api: FastAPI, crud_instance: CRUD=None, model: T=None, create_route: Optional[str]=None, read_route: Optional[str]=None, update_route: Optional[str]=None, delete_route: Optional[str]=None, search_route: Optional[str]=None):
         model_name = model.__name__.lower()
         router = APIRouter(tags=[model.__name__])
 
@@ -119,7 +119,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.get(search_route, response_model=dict)
+        @router.post(search_route, response_model=dict)
         async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
             user_roles=["admin"]
             try:
