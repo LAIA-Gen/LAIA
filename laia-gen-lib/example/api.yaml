@@ -1,0 +1,93 @@
+openapi: 3.0.0
+info:
+  title: Sample API
+  description: A sample OpenAPI specification with different models and routes
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+paths:
+  /users:
+    get:
+      summary: Get a list of users
+      responses:
+        '200':
+          description: A list of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+  /users/{userId}:
+    get:
+      summary: Get a user by ID
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          description: ID of the user to retrieve
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: A single user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The user's unique ID
+        username:
+          type: string
+          description: The user's username
+        email:
+          type: string
+          format: email
+          description: The user's email address
+        age:
+          type: integer
+          description: The user's age
+        is_active:
+          type: boolean
+          description: Indicates whether the user is active or not
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The product ID
+        name:
+          type: string
+          description: The name of the product
+        price:
+          type: number
+          format: float
+          description: The price of the product
+        quantity:
+          type: integer
+          description: The quantity of the product available
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: The order ID
+        user_id:
+          type: integer
+          description: The ID of the user who placed the order
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+          description: The list of products in the order
+        total_price:
+          type: number
+          format: float
+          description: The total price of the order

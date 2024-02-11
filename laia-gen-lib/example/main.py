@@ -6,7 +6,7 @@ from fastapi.routing import APIRouter
 import os
 
 # Inside app, we got: api (fastAPI), db (MongoClient), crud_instance (CRUDMongoImpl)
-models_path = os.path.join(os.getcwd(), "api2.yaml")
+models_path = os.path.join(os.getcwd(), "api.yaml")
 _logger.info(models_path)
 
 app_instance = LaiaFastApi(models_path, db, CRUDMongoImpl)
