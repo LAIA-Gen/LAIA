@@ -2,7 +2,7 @@
 
 LAIA is a Python library that automates the generation of backend Python code and frontend Flutter code based on an OpenAPI description file. 
 
-<span style="color: #808080; font-style: italic;">Please note that LAIA is currently under development, and only the backend functionality is available at the moment.</span>
+*Please note that LAIA is currently under development, and only the backend functionality is available at the moment.*
 
 ## Installation
 
