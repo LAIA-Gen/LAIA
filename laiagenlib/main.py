@@ -30,4 +30,9 @@ class LaiaFastApi():
         create_models_file(self.openapi_path, models_path)
         self.openapi.create_crud_routes(self.api, self.crud_instance, models_path)
 
-    
+class LaiaFlutter():
+
+    def __init__(self, openapi):
+        self.openapi_path = openapi
+        self.openapi = OpenAPI(openapi)
+        
