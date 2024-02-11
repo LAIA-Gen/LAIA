@@ -1,6 +1,5 @@
 env
 __pycache__
-requirements.txt
 laia_gen_lib.egg-info
 build
 dist

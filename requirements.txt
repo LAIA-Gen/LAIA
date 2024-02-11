@@ -1,7 +1,0 @@
-fastapi
-pydantic
-uvicorn
-
-pymongo
-
-pydantic[email]

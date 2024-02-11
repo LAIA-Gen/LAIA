@@ -1,0 +1,8 @@
+# necessary for builing the python library
+wheel
+setuptools
+twine
+
+# necessary for testing
+pytest
+pytest-runner
