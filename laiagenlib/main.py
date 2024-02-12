@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .crud.crud import CRUD
 from .models.Openapi import OpenAPI
-from .utils.utils import create_models_file, create_flutter_app
+from .utils.utils import create_models_file, create_flutter_app, create_base_files, call_arg_code_gen
 from .utils.logger import _logger
 import os
 
@@ -22,7 +22,7 @@ class LaiaFastApi():
             allow_headers=["*"],
         )
 
-        models_dir = os.path.join(os.path.dirname(self.openapi_path), "models")
+        models_dir = os.path.join(os.path.dirname(self.openapi_path), "backend")
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
 
@@ -35,5 +35,15 @@ class LaiaFlutter():
     def __init__(self, openapi, app_name: str):
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
+
+        models_dir = os.path.join(os.path.dirname(self.openapi_path), "backend")
+        if not os.path.exists(models_dir):
+            os.makedirs(models_dir)
+
+        models_path = os.path.join(models_dir, "models.py")
         
         create_flutter_app(app_name)
+        create_base_files(app_name)
+        app_path = os.path.join(os.path.dirname(self.openapi_path), app_name)
+        self.openapi.create_flutter_app(app_name, app_path, models_path)
+        call_arg_code_gen(app_name)

@@ -3,10 +3,12 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.routing import APIRouter
 from typing import TypeVar, Optional
 import re
+import os
 from importlib.util import spec_from_file_location, module_from_spec
-from .Route import Route
+from .OpenapiModels import OpenAPIRoute, OpenAPIModel
 from ..crud.crud import CRUD
 from .Model import LaiaBaseModel
+from ..utils.flutter_base_files import home_dart, model_dart
 from ..utils.logger import _logger
 
 T = TypeVar('T', bound='LaiaBaseModel')
@@ -31,17 +33,21 @@ class OpenAPI:
                         summary = path_data[method].get('summary', '')
                         responses = path_data[method].get('responses', {})
                         extensions = path_data[method].get('x-', {})
-                        self.routes.append(Route(path, method, summary, responses, extensions))
+                        self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions))
 
         if 'components' in openapi_spec:
             schemas = openapi_spec['components'].get('schemas', {})
-            self.models = list(schemas.keys())
+            for schema_name, schema_definition in schemas.items():
+                model_name = schema_name
+                properties = schema_definition.get('properties', {})
+                required_properties = schema_definition.get('required', [])
+                self.models.append(OpenAPIModel(model_name, properties, required_properties))
 
     def create_crud_routes(self, api: FastAPI=None, crud_instance: CRUD=None, models_path: str=""):
-        for model_name in self.models:
+        for openapiModel in self.models:
             model_module = self.import_model(models_path)
-            model = getattr(model_module, model_name)
-            model_lowercase = model_name.lower()
+            model = getattr(model_module, openapiModel.model_name)
+            model_lowercase = openapiModel.model_name.lower()
 
             create_route = None
             read_route = None
@@ -134,3 +140,16 @@ class OpenAPI:
         module = module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def create_flutter_app(self, app_name:str, app_path: str, models_path: str=""):
+        for openapiModel in self.models:
+            model_module = self.import_model(models_path)
+            model = getattr(model_module, openapiModel.model_name)
+            model_file_content = model_dart(app_name, model)
+            with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
+                f.write(model_file_content)
+
+
+        home_file_content = home_dart(app_name, self.models)
+        with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
+            f.write(home_file_content)
