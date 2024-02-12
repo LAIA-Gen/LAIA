@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .crud.crud import CRUD
 from .models.Openapi import OpenAPI
-from .utils.utils import create_models_file
+from .utils.utils import create_models_file, create_flutter_app
 from .utils.logger import _logger
 import os
 
@@ -32,7 +32,8 @@ class LaiaFastApi():
 
 class LaiaFlutter():
 
-    def __init__(self, openapi):
+    def __init__(self, openapi, app_name: str):
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
         
+        create_flutter_app(app_name)

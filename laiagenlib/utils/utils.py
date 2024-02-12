@@ -35,6 +35,20 @@ from laiagenlib.models.Model import LaiaBaseModel"""
 
     print(f"File '{output_file}' created and modified.")
 
+def create_flutter_app(app_name: str):
+    # It creates the basic flutter project, with the required packages for using the arg-code-gen
+
+    subprocess.run("flutter create " + app_name, shell=True)
+
+    # TODO: change the following local dart libraries to the ones on the market
+
+    project_path = "C:/Users/Usuario/OneDrive/Documents/TFG/test/flutter_app"
+
+    # Add dependencies to the project
+    subprocess.run(["flutter", "pub", "add", "C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/annotations", "-C", project_path], shell=True)
+    subprocess.run(["flutter", "pub", "add", "--dev", "C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/riverpod_custom_generator", "-C", project_path], shell=True)
+    subprocess.run(["flutter", "pub", "add", "--dev", "C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/widget_generator", "-C", project_path], shell=True)
+
 async def create_element(element: T, crud_instance: CRUD):
     model_name = element.__class__.__name__.lower()
 
