@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Type
+from .logger import _logger
 
 def main_dart(app_name:str):
     return f"""import 'package:{app_name}/screens/home.dart';"""+"""
@@ -100,16 +100,21 @@ class Home extends ConsumerWidget {
 }
 """
 
-def model_dart(app_name:str, model:BaseModel):
+def model_dart(app_name:str, model):
     fields = ""
     fields_constructor = ""
-    for prop_name, prop_type in model.__annotations__.items():
+    inherited_fields = get_inherited_fields(model)
+    _logger.info(inherited_fields)
+    
+    for prop_name, prop_type in inherited_fields:
         dart_prop_type = pydantic_to_dart_type(prop_type)
-        fields += f"final {dart_prop_type} {prop_name};\n"
-        fields_constructor += f"required this.{prop_name},\n"
+        fields += f"  final {dart_prop_type} {prop_name};\n"
+        fields_constructor += f"    required this.{prop_name},\n"
 
     if fields_constructor:
         fields_constructor = fields_constructor[:-2]
+    
+    model_name = model.__name__
 
     return f"""import 'package:annotations/annotations.dart';
 import 'package:flutter/material.dart';
@@ -124,7 +129,7 @@ import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 
-part '{model.model_name.lower()}.g.dart';
+part '{model_name.lower()}.g.dart';
 
 @JsonSerializable()
 @RiverpodGenAnnotation(baseURL)
@@ -132,24 +137,25 @@ part '{model.model_name.lower()}.g.dart';
 @ListWidgetGenAnnotation()
 @elementWidgetGen
 @CopyWith()
-class {model.model_name} {{
-  {fields}
+class {model_name} {{
+{fields}
+  {model_name}({{
+{fields_constructor}
+  }});
 
-  {model.model_name}({{{fields_constructor}}});
+  factory {model_name}.fromJson(Map<String, dynamic> json) => _${model_name}FromJson(json);
 
-  factory {model.model_name}.fromJson(Map<String, dynamic> json) => _${model.model_name}FromJson(json);
-
-  Map<String, dynamic> toJson() => _${model.model_name}ToJson(this);
+  Map<String, dynamic> toJson() => _${model_name}ToJson(this);
 }}
 """
 
 def pydantic_to_dart_type(pydantic_type):
     dart_type_mapping = {
-        int: 'int',
-        float: 'double',
-        str: 'String',
-        bool: 'bool',
-        list: 'List',
+        'int': 'int',
+        'float': 'double',
+        'str': 'String',
+        'bool': 'bool',
+        'list': 'List',
     }
 
     if pydantic_type in dart_type_mapping:
@@ -159,3 +165,19 @@ def pydantic_to_dart_type(pydantic_type):
         return f'List<{inner_type}>'
     else:
         return 'dynamic'
+    
+def get_inherited_fields(model):
+    model_fields = []
+    for class_in_hierarchy in model.mro():
+        if hasattr(class_in_hierarchy, '__annotations__'):
+            for field_name, field_type in class_in_hierarchy.__annotations__.items():
+                if not field_name.startswith("_") and field_name not in [field[0] for field in model_fields]:
+                    if hasattr(field_type, '__args__') and len(field_type.__args__) > 0:
+                        unwrapped_type = field_type.__args__[0]
+                        if hasattr(unwrapped_type, '__name__'):
+                            model_fields.append((field_name, unwrapped_type.__name__))
+                        else:
+                            model_fields.append((field_name, str(unwrapped_type)))
+                    else:
+                        model_fields.append((field_name, getattr(field_type, '__name__', str(field_type))))
+    return model_fields

@@ -6,8 +6,8 @@ setup(
     version='0.1.4',
     description='An AI application generator engine',
     author='Me',
-    install_requires=['pymongo', 'pydantic', 'datamodel-code-generator'],
+    install_requires=['pymongo', 'pydantic', 'datamodel-code-generator', 'fastapi'],
     setup_requires=['pytest-runner'],
-    tests_require=['pytest', 'pymongo', 'pytest-asyncio'],
+    tests_require=['pytest', 'pymongo', 'pytest-asyncio', 'fastapi'],
     test_suite='tests',
 )

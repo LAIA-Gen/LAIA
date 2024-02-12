@@ -86,6 +86,7 @@ def create_base_files(app_name: str):
         f.write(generic_file_content)
 
 def call_arg_code_gen(app_name: str):
+    subprocess.run("flutter clean", cwd=f"./{app_name}", shell=True)
     subprocess.run(["flutter", "pub", "run", "build_runner", "build"], cwd=f"./{app_name}", shell=True)
     
 async def create_element(element: T, crud_instance: CRUD):

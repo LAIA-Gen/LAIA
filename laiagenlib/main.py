@@ -46,4 +46,4 @@ class LaiaFlutter():
         create_base_files(app_name)
         app_path = os.path.join(os.path.dirname(self.openapi_path), app_name)
         self.openapi.create_flutter_app(app_name, app_path, models_path)
-        call_arg_code_gen(app_name)
+        #call_arg_code_gen(app_name)
