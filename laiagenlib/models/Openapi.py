@@ -145,7 +145,7 @@ class OpenAPI:
         for openapiModel in self.models:
             model_module = self.import_model(models_path)
             model = getattr(model_module, openapiModel.model_name)
-            model_file_content = model_dart(app_name, model)
+            model_file_content = model_dart(openapiModel, app_name, model)
             with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
                 f.write(model_file_content)
 

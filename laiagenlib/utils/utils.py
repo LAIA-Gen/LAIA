@@ -3,6 +3,7 @@ import subprocess
 import re
 import os
 import yaml
+import time
 from ..crud.crud import CRUD
 from .flutter_base_files import main_dart, api_dart, styles_dart, generic_dart
 from .logger import _logger
@@ -48,7 +49,7 @@ def create_flutter_app(app_name: str):
     subprocess.run("flutter pub add --dev riverpod_custom_generator --path=C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/riverpod_custom_generator -C " + f"./{app_name}", shell=True)
     subprocess.run("flutter pub add --dev widget_generator --path=C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/widget_generator -C " + f"./{app_name}", shell=True)
     subprocess.run("flutter pub add json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 -C " + f"./{app_name}", shell=True)
-    subprocess.run("flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6  -C " + f"./{app_name}", shell=True)
+    subprocess.run("flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.4 -C " + f"./{app_name}", shell=True)
 
     assets = "assets/"
     with open(f"{app_name}/pubspec.yaml", "r") as file:
@@ -64,6 +65,8 @@ def create_flutter_app(app_name: str):
 def create_base_files(app_name: str):
     dart_dir = os.path.join(app_name, 'lib')
     os.makedirs(dart_dir, exist_ok=True)
+
+    os.makedirs(os.path.join(app_name, 'assets'), exist_ok=True)
 
     directories = ['config', 'generic', 'models', 'screens']
     for directory in directories:
@@ -87,7 +90,10 @@ def create_base_files(app_name: str):
 
 def call_arg_code_gen(app_name: str):
     subprocess.run("flutter clean", cwd=f"./{app_name}", shell=True)
+    time.sleep(5)
     subprocess.run(["flutter", "pub", "run", "build_runner", "build"], cwd=f"./{app_name}", shell=True)
+    time.sleep(5)
+    subprocess.Popen("flutter run -d chrome", cwd=f"./{app_name}", shell=True)
     
 async def create_element(element: T, crud_instance: CRUD):
     model_name = element.__class__.__name__.lower()

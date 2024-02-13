@@ -17,3 +17,10 @@ class OpenAPIModel:
 
     def __str__(self):
         return f"Model: {self.model_name}, Properties: {self.properties}, Required Properties: {self.required_properties}"
+
+    def find_frontend_properties(self):
+        frontend_properties = {}
+        for prop_name, prop_details in self.properties.items():
+            if any("x-frontend-" in key for key in prop_details):
+                frontend_properties[prop_name] = {key.replace("x-frontend-", ""): value for key, value in prop_details.items() if key.startswith("x-frontend-")}
+        return frontend_properties

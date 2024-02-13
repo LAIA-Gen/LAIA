@@ -1,11 +1,18 @@
 import pytest
 from laiagenlib.utils.flutter_base_files import model_dart
 from laiagenlib.models.Model import LaiaBaseModel
+from typing import List, Optional
+from pydantic import BaseModel, EmailStr, Field
 from laiagenlib.utils.logger import _logger
 
 class User(LaiaBaseModel):
     description: str
-    age: int
+    username: Optional[str] = Field(None, description="The user's username")
+    email: Optional[EmailStr] = Field(None, description="The user's email address")
+    age: Optional[int] = Field(None, description="The user's age")
+    is_active: Optional[bool] = Field(
+        None, description='Indicates whether the user is active or not'
+    )
 
 def test_model_dart():
     result_content = model_dart("frontend", User)
@@ -32,14 +39,27 @@ part 'user.g.dart';
 @elementWidgetGen
 @CopyWith()
 class User {
+  @Field(fieldName: 'description')
   final String description;
+  @Field(fieldName: 'username')
+  final String username;
+  @Field(fieldName: 'email')
+  final String email;
+  @Field(fieldName: 'age')
   final int age;
+  @Field(fieldName: 'is_active')
+  final bool is_active;
+  @Field(fieldName: 'id')
   final String id;
+  @Field(fieldName: 'name')
   final String name;
 
   User({
     required this.description,
+    required this.username,
+    required this.email,
     required this.age,
+    required this.is_active,
     required this.id,
     required this.name
   });

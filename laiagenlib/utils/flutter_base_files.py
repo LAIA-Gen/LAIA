@@ -100,19 +100,33 @@ class Home extends ConsumerWidget {
 }
 """
 
-def model_dart(app_name:str, model):
+def model_dart(openapiModel, app_name:str, model):
     fields = ""
     fields_constructor = ""
+    extra_imports = ""
     inherited_fields = get_inherited_fields(model)
-    _logger.info(inherited_fields)
+
+    frontend_props = openapiModel.find_frontend_properties()
     
     for prop_name, prop_type in inherited_fields:
-        dart_prop_type = pydantic_to_dart_type(prop_type)
-        fields += f"  final {dart_prop_type} {prop_name};\n"
-        fields_constructor += f"    required this.{prop_name},\n"
+      dart_prop_type = pydantic_to_dart_type(prop_type)
+      fields += f"  @Field("
+      
+      if prop_name in frontend_props:
+        frontend_details = frontend_props[prop_name]
+        fields += ", ".join(f"{key}: '{value}'" for key, value in frontend_details.items())
+        value_lower = next((value.lower() for key, value in frontend_details.items() if key == "relation"), None)
+        if value_lower:
+          extra_imports += f"import 'package:{app_name}/models/{value_lower}.dart';\n"
+      else:
+        fields += "fieldName: '{}'".format(prop_name)
+      
+      fields += ")\n"
+      fields += f"  final {dart_prop_type} {prop_name};\n"
+      fields_constructor += f"    required this.{prop_name},\n"
 
     if fields_constructor:
-        fields_constructor = fields_constructor[:-2]
+      fields_constructor = fields_constructor[:-2]
     
     model_name = model.__name__
 
@@ -128,7 +142,7 @@ import 'package:http/http.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
-
+{extra_imports}
 part '{model_name.lower()}.g.dart';
 
 @JsonSerializable()
@@ -156,6 +170,12 @@ def pydantic_to_dart_type(pydantic_type):
         'str': 'String',
         'bool': 'bool',
         'list': 'List',
+        'EmailStr': 'String',
+        'Optional[int]': 'int',
+        'Optional[str]': 'String',
+        'Optional[bool]': 'bool',
+        'Optional[EmailStr]': 'String',
+        'Optional[float]': 'double',
     }
 
     if pydantic_type in dart_type_mapping:
