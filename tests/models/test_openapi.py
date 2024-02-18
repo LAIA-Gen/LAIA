@@ -18,6 +18,10 @@ def test_parse_routes(test_files):
 
     parser = OpenAPI(input_file1)
     assert len(parser.routes) == 8
+    _logger.info("HEY")
+    _logger.info(parser.routes[1].method)
+    _logger.info(parser.routes[1].path)
+    _logger.info(parser.routes[1].extensions)
 
     parser2 = OpenAPI(input_file2)
     assert len(parser2.routes) == 6

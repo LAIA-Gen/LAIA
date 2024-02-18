@@ -45,3 +45,33 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 ```
+
+## Development
+
+### Run tests
+
+`python setup.py pytest`
+
+### Build library
+
+The wheel file will be stored in the "dist" folder and can be pip installed from there
+`python setup.py bdist_wheel`
+
+## OpenAPI.yaml extensions
+
+### Route extensions
+
+`x-create-{model}` Override the default CREATE route --> POST /model
+`x-read-{model}` Override the default READ route --> GET /model/{id}
+`x-update-{model}` Override the default UPDATE route --> PUT /model/{id}
+`x-delete-{model}` Override the default DELETE route --> DELETE /model/{id}
+`x-search-{model}` Override the default SEARCH route --> GET /models
+
+### Field extensions
+
+`x-frontend-widget` Name of the widget overriding the default (String)
+`x-frontend-fieldName` String name of the field (String)
+`x-frontend-fieldDescription` Description of the field (String)
+`x-frontend-editable` Editability of a field (Boolean)
+`x-frontend-placeholder` Placeholder on the edition input form (String)
+`x-frontend-relation` Model name of the relation id (String)

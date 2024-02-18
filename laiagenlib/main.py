@@ -13,7 +13,7 @@ class LaiaFastApi():
         self.crud_instance = crud(db)
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
-        self.api = FastAPI()
+        self.api = FastAPI(openapi_url='/openapi.json')
         self.api.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -21,6 +21,7 @@ class LaiaFastApi():
             allow_methods=["*"],
             allow_headers=["*"],
         )
+        _logger.info("hey")
 
         models_dir = os.path.join(os.path.dirname(self.openapi_path), "backend")
         if not os.path.exists(models_dir):
@@ -29,6 +30,7 @@ class LaiaFastApi():
         models_path = os.path.join(models_dir, "models.py")
         create_models_file(self.openapi_path, models_path)
         self.openapi.create_crud_routes(self.api, self.crud_instance, models_path)
+        self.openapi.add_extra_routes(models_dir)
 
 class LaiaFlutter():
 

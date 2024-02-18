@@ -32,7 +32,7 @@ class OpenAPI:
                     if method != "parameters":
                         summary = path_data[method].get('summary', '')
                         responses = path_data[method].get('responses', {})
-                        extensions = path_data[method].get('x-', {})
+                        extensions = {k: v for k, v in path_data[method].items() if k.startswith('x-')}
                         self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions))
 
         if 'components' in openapi_spec:
@@ -41,7 +41,8 @@ class OpenAPI:
                 model_name = schema_name
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
-                self.models.append(OpenAPIModel(model_name, properties, required_properties))
+                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_")):
+                    self.models.append(OpenAPIModel(model_name, properties, required_properties))
 
     def create_crud_routes(self, api: FastAPI=None, crud_instance: CRUD=None, models_path: str=""):
         for openapiModel in self.models:
@@ -49,50 +50,40 @@ class OpenAPI:
             model = getattr(model_module, openapiModel.model_name)
             model_lowercase = openapiModel.model_name.lower()
 
-            create_route = None
-            read_route = None
-            update_route = None
-            delete_route = None
-            search_route = None
+            routes_info = {
+                'create': None,
+                'read': None,
+                'update': None,
+                'delete': None,
+                'search': None
+            }
 
             for route in self.routes:
-                if route.extensions.get(f'x-create-{model_lowercase}'):
-                    create_route = route.path
-                elif route.extensions.get(f'x-read-{model_lowercase}'):
-                    read_route = route.path
-                elif route.extensions.get(f'x-update-{model_lowercase}'):
-                    update_route = route.path
-                elif route.extensions.get(f'x-delete-{model_lowercase}'):
-                    delete_route = route.path
-                elif route.extensions.get(f'x-search-{model_lowercase}'):
-                    search_route = route.path
+                for action in routes_info:
+                    if route.extensions.get(f'x-{action}-{model_lowercase}'):
+                        routes_info[action] = {
+                            'path': route.path,
+                            'openapi_extra': route.extensions
+                        }
 
             self.CRUD(
                 api=api,
                 crud_instance=crud_instance,
                 model=model,
-                create_route=create_route,
-                read_route=read_route,
-                update_route=update_route,
-                delete_route=delete_route,
-                search_route=search_route
+                routes_info=routes_info
             )
 
-    def CRUD(self, api: FastAPI, crud_instance: CRUD=None, model: T=None, create_route: Optional[str]=None, read_route: Optional[str]=None, update_route: Optional[str]=None, delete_route: Optional[str]=None, search_route: Optional[str]=None):
+    def CRUD(self, api: FastAPI, crud_instance: CRUD=None, model: T=None, routes_info: dict=None):
         model_name = model.__name__.lower()
         router = APIRouter(tags=[model.__name__])
 
-        def replace_placeholder(route: str) -> str:
-            return re.sub(r'\{.*?\}', '{element_id}', route)
+        def get_route_info(action: str):
+            route_info = routes_info.get(action, {})
+            if route_info:
+                return {'path': route_info.get('path', f"/{model_name}/"), 'openapi_extra': route_info.get('openapi_extra', {})}
+            return None
 
-        create_route = create_route or f"/{model_name}/"
-        read_route = read_route or f"/{model_name}"+"/{element_id}"
-        update_route = update_route or f"/{model_name}"+"/{element_id}"
-        delete_route = delete_route or f"/{model_name}"+"/{element_id}"
-        search_route = search_route or f"/{model_name}s"
-
-
-        @router.post(create_route, response_model=dict)
+        @router.post(**get_route_info('create') or {'path': f"/{model_name}/"}, response_model=dict)
         async def create_element(element: model):
             user_roles=["admin"]
             try:
@@ -100,15 +91,15 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.put(update_route, response_model=dict)
+        @router.put(**get_route_info('update') or {'path': f"/{model_name}/{{element_id}}"}, response_model=dict)
         async def update_element(element_id: str, values: dict):
             user_roles=["admin"]
             try:
                 return await model.update(element_id, values, model, user_roles, crud_instance)
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-        
-        @router.get(read_route, response_model=dict)
+            
+        @router.get(**get_route_info('read') or {'path': f"/{model_name}/{{element_id}}"}, response_model=dict)
         async def read_element(element_id: str):
             user_roles=["admin"]
             try:
@@ -116,7 +107,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.delete(delete_route, response_model=str)
+        @router.delete(**get_route_info('delete') or {'path': f"/{model_name}/{{element_id}}"}, response_model=str)
         async def delete_element(element_id: str):
             user_roles=["admin"]
             try:
@@ -125,7 +116,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.post(search_route, response_model=dict)
+        @router.post(**get_route_info('search') or {'path': f"/{model_name}s"}, response_model=dict)
         async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
             user_roles=["admin"]
             try:
@@ -134,6 +125,29 @@ class OpenAPI:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
         api.include_router(router)
+
+    def add_extra_routes(self, models_path):
+        extra_routes_code = ""
+        for route in self.routes:
+            route_path = route.path.strip('/')
+            function_name = route.method.lower() + '_' + route_path.replace('/', '_')
+            function_code = f"""
+@router.{route.method.lower()}("/{route_path}")
+async def {function_name}():
+return {{"message": "This is an extra route!"}}
+"""
+            extra_routes_code += function_code
+
+        routes_file_path = os.path.join(models_path, 'routes.py')
+        if os.path.exists(routes_file_path):
+            with open(routes_file_path, 'r') as f:
+                existing_code = f.read()
+                if extra_routes_code in existing_code:
+                    print("Extra routes already exist in routes.py")
+                    return
+
+        with open(routes_file_path, 'a') as f:
+            f.write(extra_routes_code)
     
     def import_model(self, models_path):
         spec = spec_from_file_location("models", models_path)
