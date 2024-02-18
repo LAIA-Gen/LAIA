@@ -33,7 +33,7 @@ class OpenAPI:
                         summary = path_data[method].get('summary', '')
                         responses = path_data[method].get('responses', {})
                         extensions = {k: v for k, v in path_data[method].items() if k.startswith('x-')}
-                        self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions))
+                        self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions, True))
 
         if 'components' in openapi_spec:
             schemas = openapi_spec['components'].get('schemas', {})
@@ -51,20 +51,36 @@ class OpenAPI:
             model_lowercase = openapiModel.model_name.lower()
 
             routes_info = {
-                'create': None,
-                'read': None,
-                'update': None,
-                'delete': None,
-                'search': None
+                'create': {
+                    'path': f"/{model_lowercase}/",
+                    'openapi_extra': {}
+                },
+                'read': {
+                    'path': f"/{model_lowercase}/{{element_id}}",
+                    'openapi_extra': {}
+                },
+                'update': {
+                    'path': f"/{model_lowercase}/{{element_id}}",
+                    'openapi_extra': {}
+                },
+                'delete': {
+                    'path': f"/{model_lowercase}/{{element_id}}",
+                    'openapi_extra': {}
+                },
+                'search': {
+                    'path': f"/{model_lowercase}s/",
+                    'openapi_extra': {}
+                },
             }
 
             for route in self.routes:
                 for action in routes_info:
-                    if route.extensions.get(f'x-{action}-{model_lowercase}'):
+                    if route.extensions.get(f'x-{action}-{model_lowercase}') or route.path == routes_info[action]['path']:
                         routes_info[action] = {
                             'path': route.path,
                             'openapi_extra': route.extensions
                         }
+                        route.extra = False
 
             self.CRUD(
                 api=api,
@@ -77,13 +93,7 @@ class OpenAPI:
         model_name = model.__name__.lower()
         router = APIRouter(tags=[model.__name__])
 
-        def get_route_info(action: str):
-            route_info = routes_info.get(action, {})
-            if route_info:
-                return {'path': route_info.get('path', f"/{model_name}/"), 'openapi_extra': route_info.get('openapi_extra', {})}
-            return None
-
-        @router.post(**get_route_info('create') or {'path': f"/{model_name}/"}, response_model=dict)
+        @router.post(**routes_info['create'], response_model=dict)
         async def create_element(element: model):
             user_roles=["admin"]
             try:
@@ -91,7 +101,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.put(**get_route_info('update') or {'path': f"/{model_name}/{{element_id}}"}, response_model=dict)
+        @router.put(**routes_info['update'], response_model=dict)
         async def update_element(element_id: str, values: dict):
             user_roles=["admin"]
             try:
@@ -99,7 +109,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
             
-        @router.get(**get_route_info('read') or {'path': f"/{model_name}/{{element_id}}"}, response_model=dict)
+        @router.get(**routes_info['read'], response_model=dict)
         async def read_element(element_id: str):
             user_roles=["admin"]
             try:
@@ -107,7 +117,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.delete(**get_route_info('delete') or {'path': f"/{model_name}/{{element_id}}"}, response_model=str)
+        @router.delete(**routes_info['delete'], response_model=str)
         async def delete_element(element_id: str):
             user_roles=["admin"]
             try:
@@ -116,7 +126,7 @@ class OpenAPI:
             except Exception as e:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-        @router.post(**get_route_info('search') or {'path': f"/{model_name}s"}, response_model=dict)
+        @router.post(**routes_info['search'], response_model=dict)
         async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
             user_roles=["admin"]
             try:
@@ -126,28 +136,37 @@ class OpenAPI:
 
         api.include_router(router)
 
-    def add_extra_routes(self, models_path):
-        extra_routes_code = ""
-        for route in self.routes:
-            route_path = route.path.strip('/')
-            function_name = route.method.lower() + '_' + route_path.replace('/', '_')
-            function_code = f"""
-@router.{route.method.lower()}("/{route_path}")
+    def add_extra_routes(self, routes_path):
+        if os.path.exists(routes_path):
+            with open(routes_path, 'r') as f:
+                lines = f.readlines()
+
+            all_index = len(lines) 
+            for i, line in enumerate(lines):
+                if "__all__" in line:
+                    all_index = i
+                    break
+
+            with open(routes_path, 'w') as f:
+                for i, line in enumerate(lines):
+                    if i == all_index:
+
+                        for route in self.routes:
+                            if route.extra == True:
+                                route_path = route.path.strip('/')
+                                function_name = route.method.lower() + '_' + route_path.replace('/', '_').replace('{', '').replace('}', '')
+                                if function_name not in ''.join(lines):
+                                    function_code = f"""@router.{route.method.lower()}("/{route_path}", openapi_extra={route.extensions})
 async def {function_name}():
-return {{"message": "This is an extra route!"}}
+    return {{"message": "This is an extra route!"}}
+
 """
-            extra_routes_code += function_code
+                                    f.write(function_code)
+                                else:
+                                    print(f"Function {function_name} already exists in routes.py")
 
-        routes_file_path = os.path.join(models_path, 'routes.py')
-        if os.path.exists(routes_file_path):
-            with open(routes_file_path, 'r') as f:
-                existing_code = f.read()
-                if extra_routes_code in existing_code:
-                    print("Extra routes already exist in routes.py")
-                    return
+                    f.write(line)
 
-        with open(routes_file_path, 'a') as f:
-            f.write(extra_routes_code)
     
     def import_model(self, models_path):
         spec = spec_from_file_location("models", models_path)

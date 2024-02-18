@@ -37,7 +37,19 @@ from laiagenlib.models.Model import LaiaBaseModel"""
     with open(output_file, 'w') as f:
         f.write(modified_content)
 
-    print(f"File '{output_file}' created and modified.")
+    _logger.info(f"File '{output_file}' created and modified.")
+
+def create_routes_file(path: str):
+    if not os.path.exists(path):
+        with open(path, 'w') as f:
+            f.write("""from fastapi import APIRouter
+
+router = APIRouter(tags=["Extra Routes"])
+
+__all__ = ['router']""")
+        _logger.info(f"Routes file created at {path}")
+    else:
+        _logger.info(f"Routes file already exists at {path}")
 
 def create_flutter_app(app_name: str):
     # It creates the basic flutter project, with the required packages for using the arg-code-gen

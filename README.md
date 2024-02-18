@@ -27,12 +27,16 @@ from laiagenlib.utils.logger import _logger
 from pymongo import MongoClient
 import os
 import uvicorn
+import requests
+import threading
+import yaml
+import json
 
 client = MongoClient('mongodb://localhost:27017')
 
 db = client.test
 
-openapi_path = os.path.join(os.getcwd(), "api.yaml")
+openapi_path = os.path.join(os.getcwd(), "openapi.yaml")
 
 # Inside app_instance, we got: api (fastAPI), db (MongoClient), crud_instance (CRUDMongoImpl)
 app_instance = LaiaFastApi(openapi_path, db, CRUDMongoImpl)
@@ -41,9 +45,21 @@ flutter_app = LaiaFlutter(openapi_path, "frontend")
 
 app = app_instance.api
 
-if __name__ == "__main__":
-    import uvicorn
+def run_server():
+    from backend.routes import router
+    app.include_router(router)
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+server_thread = threading.Thread(target=run_server)
+server_thread.start()
+
+response = requests.get("http://localhost:8000/openapi.json")
+if response.status_code == 200:
+    openapi_yaml = yaml.dump(json.loads(response.text), default_flow_style=False)
+    with open(openapi_path, 'wb') as f: 
+        f.write(openapi_yaml.encode('utf-8'))
+else:
+    _logger.info("Failed to retrieve OpenAPI YAML file.")
 ```
 
 ## Development
@@ -61,17 +77,17 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 
 ### Route extensions
 
-`x-create-{model}` Override the default CREATE route --> POST /model
-`x-read-{model}` Override the default READ route --> GET /model/{id}
-`x-update-{model}` Override the default UPDATE route --> PUT /model/{id}
-`x-delete-{model}` Override the default DELETE route --> DELETE /model/{id}
-`x-search-{model}` Override the default SEARCH route --> GET /models
+`x-create-{model}` Override the default CREATE route --> POST /model\n
+`x-read-{model}` Override the default READ route --> GET /model/{id}\n
+`x-update-{model}` Override the default UPDATE route --> PUT /model/{id}\n
+`x-delete-{model}` Override the default DELETE route --> DELETE /model/{id}\n
+`x-search-{model}` Override the default SEARCH route --> GET /models\n
 
 ### Field extensions
 
-`x-frontend-widget` Name of the widget overriding the default (String)
-`x-frontend-fieldName` String name of the field (String)
-`x-frontend-fieldDescription` Description of the field (String)
-`x-frontend-editable` Editability of a field (Boolean)
-`x-frontend-placeholder` Placeholder on the edition input form (String)
-`x-frontend-relation` Model name of the relation id (String)
+`x-frontend-widget` Name of the widget overriding the default (String)\n
+`x-frontend-fieldName` String name of the field (String)\n
+`x-frontend-fieldDescription` Description of the field (String)\n
+`x-frontend-editable` Editability of a field (Boolean)\n
+`x-frontend-placeholder` Placeholder on the edition input form (String)\n
+`x-frontend-relation` Model name of the relation id (String)\n
