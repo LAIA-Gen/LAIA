@@ -31,8 +31,8 @@ def test_parse_routes(test_files):
 
 def test_parse_models(test_files):
     properties = {
-        'id': {'type': 'string', 'format': 'uuid', 'description': 'Unique identifier for the person', 'x-frontend-editable': False, 'x-frontend-fieldName': 'Id'},
-        'name': {'type': 'string', 'description': 'Name of the person', 'x-frontend-fieldName': 'Name', 'x-view-roles': {'type': 'string', 'description': 'Roles required to view this field', 'example': 'admin'}, 'x-edit-roles': {'type': 'string', 'description': 'Roles required to edit this field', 'example': 'admin'}},
+        'id': {'type': 'string', 'format': 'uuid', 'description': 'Unique identifier for the person', 'x_frontend_editable': False, 'x_frontend_fieldName': 'Id'},
+        'name': {'type': 'string', 'description': 'Name of the person', 'x_frontend_fieldName': 'Name', 'x_view_roles': {'type': 'string', 'description': 'Roles required to view this field', 'example': 'admin'}, 'x_edit_roles': {'type': 'string', 'description': 'Roles required to edit this field', 'example': 'admin'}},
         'age': {'type': 'integer', 'description': 'Age of the person'},
         'pets': {'type': 'array', 'items': {'$ref': '#/components/schemas/Pet'}}
     }
@@ -41,6 +41,6 @@ def test_parse_models(test_files):
     frontend_props = model.find_frontend_properties()
     extensions = model.find_extensions()
     assert frontend_props == {'id': {'editable': False, 'fieldName': 'Id'}, 'name': {'fieldName': 'Name'}}
-    assert extensions == {'id': {'x-frontend-editable': False, 'x-frontend-fieldName': 'Id'}, 'name': {'x-frontend-fieldName': 'Name', 'x-view-roles': {'type': 'string', 'description': 'Roles required to view this field', 'example': 'admin'}, 'x-edit-roles': {'type': 'string', 'description': 'Roles required to edit this field', 'example': 'admin'}}}
+    assert extensions == {'id': {'x_frontend_editable': False, 'x_frontend_fieldName': 'Id'}, 'name': {'x_frontend_fieldName': 'Name', 'x_view_roles': {'type': 'string', 'description': 'Roles required to view this field', 'example': 'admin'}, 'x_edit_roles': {'type': 'string', 'description': 'Roles required to edit this field', 'example': 'admin'}}}
 
     

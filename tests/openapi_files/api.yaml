@@ -141,17 +141,17 @@ components:
           type: string
           format: uuid
           description: Unique identifier for the person
-          x-frontend-editable: false
-          x-frontend-fieldName: Id
+          x_frontend_editable: false
+          x_frontend_fieldName: Id
         name:
           type: string
           description: Name of the person
-          x-frontend-fieldName: Name
-          x-view-roles:
+          x_frontend_fieldName: Name
+          x_view_roles:
             type: string
             description: Roles required to view this field
             example: admin
-          x-edit-roles:
+          x_edit_roles:
             type: string
             description: Roles required to edit this field
             example: admin

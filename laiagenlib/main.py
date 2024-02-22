@@ -29,7 +29,7 @@ class LaiaFastApi():
 
         models_path = os.path.join(backend_dir, "models.py")
         routes_path = os.path.join(backend_dir, "routes.py")
-        create_models_file(self.openapi_path, models_path)
+        create_models_file(self.openapi_path, models_path, self.openapi.models)
         create_routes_file(routes_path)
         self.openapi.create_crud_routes(self.api, self.crud_instance, models_path)
         self.openapi.add_extra_routes(routes_path)
@@ -47,7 +47,7 @@ class LaiaFlutter():
         models_path = os.path.join(models_dir, "models.py")
         
         create_flutter_app(app_name)
-        create_base_files(app_name)
+        create_base_files(app_name, self.openapi.models)
         app_path = os.path.join(os.path.dirname(self.openapi_path), app_name)
         self.openapi.create_flutter_app(app_name, app_path, models_path)
         call_arg_code_gen(app_name)

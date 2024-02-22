@@ -22,13 +22,13 @@ class OpenAPIModel:
     def find_frontend_properties(self):
         frontend_properties = {}
         for prop_name, prop_details in self.properties.items():
-            if any("x-frontend-" in key for key in prop_details):
-                frontend_properties[prop_name] = {key.replace("x-frontend-", ""): value for key, value in prop_details.items() if key.startswith("x-frontend-")}
+            if any("x_frontend_" in key for key in prop_details):
+                frontend_properties[prop_name] = {key.replace("x_frontend_", ""): value for key, value in prop_details.items() if key.startswith("x_frontend_")}
         return frontend_properties
     
     def find_extensions(self):
         extensions = {}
         for prop_name, prop_details in self.properties.items():
-            if any("x-" in key for key in prop_details):
-                extensions[prop_name] = {key: value for key, value in prop_details.items() if key.startswith("x-")}
+            if any("x_" in key for key in prop_details):
+                extensions[prop_name] = {key: value for key, value in prop_details.items() if key.startswith("x_")}
         return extensions
