@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from math import ceil
 from ..utils.utils import create_element
 from ..crud.crud import CRUD
-from .AccessRights import AccessRights
+from .AccessRights import AccessRight
 from ..utils.logger import _logger
 
 class LaiaBaseModel(BaseModel):
@@ -137,7 +137,7 @@ class LaiaBaseModel(BaseModel):
         return access_rights_list
     
     @classmethod
-    async def check_fields_permission(cls, model, fields_type: str, new_element: Dict[str, int], access_rights_list: List[AccessRights]):
+    async def check_fields_permission(cls, model, fields_type: str, new_element: Dict[str, int], access_rights_list: List[AccessRight]):
         model_fields = []
 
         for class_in_hierarchy in model.mro():
@@ -160,7 +160,7 @@ class LaiaBaseModel(BaseModel):
                 raise PermissionError(f"Insufficient permissions to create the field '{field_name}' in any role.")
 
     @classmethod
-    def get_allowed_fields(cls, access_rights_list: List[AccessRights], fields_type: str):
+    def get_allowed_fields(cls, access_rights_list: List[AccessRight], fields_type: str):
         allowed_fields = set()
 
         for access_rights in access_rights_list:

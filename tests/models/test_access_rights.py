@@ -2,7 +2,7 @@ import pytest
 import pytest_asyncio
 from pymongo import MongoClient
 from laiagenlib.crud.crud_mongo_impl import CRUDMongoImpl
-from laiagenlib.models.AccessRights import AccessRights
+from laiagenlib.models.AccessRights import AccessRight
 from laiagenlib.models.Model import LaiaBaseModel
 
 class User(LaiaBaseModel):
@@ -35,7 +35,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="Provided model name does not match the class model name"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
     
     @pytest.mark.asyncio
     async def test_create_access_rights_no_admin_permission_raises_exception(self, crud_instance):
@@ -50,7 +50,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(PermissionError, match="Only users with 'admin' role can create access rights"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
     async def test_create_access_rights_admin_permission(self, crud_instance):
@@ -64,7 +64,7 @@ class TestAccessRights:
             "fields_visible": {"description": 1}
         }
 
-        created_access_rights = await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+        created_access_rights = await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
         assert created_access_rights.role == "userAdmin"
         assert created_access_rights.model == "user"
@@ -81,7 +81,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="Missing required parameters"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
     async def test_create_access_rights_invalid_operations(self, crud_instance):
@@ -96,7 +96,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="Invalid format for operation invalid_op"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
     async def test_create_access_rights_invalid_fields_format(self, crud_instance):
@@ -111,7 +111,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="Invalid format for fields_create"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
     async def test_create_access_rights_invalid_field_name(self, crud_instance):
@@ -126,7 +126,7 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="Invalid field invalid_field for fields_create"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)
 
     @pytest.mark.asyncio
     async def test_create_access_rights_already_exists(self, crud_instance):
@@ -140,7 +140,7 @@ class TestAccessRights:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(existing_access_rights, User, user_roles, crud_instance)
+        await AccessRight.create(existing_access_rights, User, user_roles, crud_instance)
 
         new_access_rights = {
             "role": "userAdmin",
@@ -152,4 +152,4 @@ class TestAccessRights:
         }
 
         with pytest.raises(ValueError, match="AccessRights with the same role and model already exists"):
-            await AccessRights.create(new_access_rights, User, user_roles, crud_instance)
+            await AccessRight.create(new_access_rights, User, user_roles, crud_instance)

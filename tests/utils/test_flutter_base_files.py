@@ -1,6 +1,7 @@
 import pytest
 from laiagenlib.utils.flutter_base_files import model_dart
 from laiagenlib.models.Model import LaiaBaseModel
+from laiagenlib.models.Openapi import OpenAPI
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 from laiagenlib.utils.logger import _logger
@@ -15,7 +16,7 @@ class User(LaiaBaseModel):
     )
 
 def test_model_dart():
-    result_content = model_dart("frontend", User)
+    result_content = model_dart(None, "frontend", User)
 
     true_content = """import 'package:annotations/annotations.dart';
 import 'package:flutter/material.dart';

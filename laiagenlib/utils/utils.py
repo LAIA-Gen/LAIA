@@ -21,7 +21,8 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
     import_statement = """
 # modified by laia-gen-lib:
 
-from laiagenlib.models.Model import LaiaBaseModel"""
+from laiagenlib.models.Model import LaiaBaseModel
+from laiagenlib.models.User import LaiaUser"""
 
     with open(output_file, 'r') as f:
         model_content = f.read()
@@ -184,3 +185,10 @@ async def create_element(element: T, crud_instance: CRUD):
     model_name = element.__class__.__name__.lower()
 
     return await crud_instance.post_item(model_name, element.dict())
+
+def validate_email(email: str) -> bool:
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(email_pattern, email))
+
+def validate_password(password: str) -> bool:
+    return len(password) >= 8

@@ -3,7 +3,7 @@ import pytest_asyncio
 from pymongo import MongoClient
 from laiagenlib.crud.crud_mongo_impl import CRUDMongoImpl
 from laiagenlib.models.Model import LaiaBaseModel
-from laiagenlib.models.AccessRights import AccessRights
+from laiagenlib.models.AccessRights import AccessRight
 from laiagenlib.utils.logger import _logger
 
 class User(LaiaBaseModel):
@@ -75,7 +75,7 @@ class TestModel:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin"]
         new_user = {
@@ -98,7 +98,7 @@ class TestModel:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin"]
         new_user = {
@@ -131,8 +131,8 @@ class TestModel:
         }
 
 
-        await AccessRights.create(new_access_rights1, User, ["admin"], crud_instance)
-        await AccessRights.create(new_access_rights2, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights1, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights2, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin1", "userAdmin2"]
         new_user = {
@@ -176,7 +176,7 @@ class TestModel:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin"]
         new_user = {
@@ -201,7 +201,7 @@ class TestModel:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin"]
         new_user = {
@@ -243,7 +243,7 @@ class TestModel:
             "fields_visible": {"description": 1}
         }
 
-        await AccessRights.create(new_access_rights, User, ["admin"], crud_instance)
+        await AccessRight.create(new_access_rights, User, ["admin"], crud_instance)
         
         user_roles = ["userAdmin"]
         new_user = {

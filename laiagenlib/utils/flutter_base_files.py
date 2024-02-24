@@ -22,10 +22,10 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Demo',
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
-          color:  Color.fromARGB(244, 224, 224, 214),
+          color:  Color.fromARGB(255, 255, 255, 255),
         ), 
         colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.brown),
-        scaffoldBackgroundColor: const Color.fromARGB(244, 245, 245, 239),
+        scaffoldBackgroundColor: const Color.fromARGB(244, 255, 255, 255),
         textTheme: const TextTheme(
           bodyLarge: TextStyle(color: Colors.black),
           bodyMedium: TextStyle(color: Colors.black),
@@ -49,8 +49,11 @@ def styles_dart():
     return """import 'dart:ui';
 
 class Styles {
-  static const primaryColor = Color.fromARGB(255, 163, 144, 129);
-  static const secondaryColor = Color.fromARGB(255, 196, 209, 208);
+  static const primaryColor = Color.fromARGB(255, 210, 223, 224);
+  static const secondaryColor = Color.fromARGB(255, 236, 243, 242);
+  static const buttonPrimaryColor = Color.fromARGB(255, 210, 223, 224);
+  static const buttonPrimaryColorHover = Color.fromARGB(255, 165, 194, 191);
+  static const dashboardBlock = Color.fromARGB(255, 196, 209, 208);
 }
 """
 
@@ -73,27 +76,63 @@ def home_dart(app_name:str, models:list):
     return f"""import 'package:annotations/annotations.dart';
 {import_statements}
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';"""+"""
+import 'package:flutter/material.dart';"""+"""
 
 part 'home.g.dart';
 
 @homeWidget
-class Home extends ConsumerWidget {
+class Home extends StatefulWidget {
+  const Home({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  _HomeState createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  int _selectedIndex = 0;
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('This is your APP :)'),
+        title: const Text('LAIA'),
+        centerTitle: true,
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          dashboardWidget(),
+          Expanded(
+            child: dashboardWidget(context),
+          ),
         ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: Colors.white,
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.favorite_outline_sharp),
+            label: 'Favorites',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline_outlined),
+            label: 'Profile',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        selectedItemColor: const Color.fromARGB(255, 0, 0, 0),
+        onTap: _onItemTapped,
       ),
     );
   }
@@ -105,8 +144,11 @@ def model_dart(openapiModel, app_name:str, model):
     fields_constructor = ""
     extra_imports = ""
     inherited_fields = get_inherited_fields(model)
-
-    frontend_props = openapiModel.find_frontend_properties()
+    
+    if openapiModel:
+      frontend_props = openapiModel.find_frontend_properties()
+    else:
+      frontend_props = {}
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)

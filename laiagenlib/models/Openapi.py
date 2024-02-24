@@ -8,6 +8,8 @@ from importlib.util import spec_from_file_location, module_from_spec
 from .OpenapiModels import OpenAPIRoute, OpenAPIModel
 from ..crud.crud import CRUD
 from .Model import LaiaBaseModel
+from .AccessRights import AccessRight, create_access_rights_router
+from .User import LaiaUser
 from ..utils.flutter_base_files import home_dart, model_dart
 from ..utils.logger import _logger
 
@@ -45,33 +47,14 @@ class OpenAPI:
                     self.models.append(OpenAPIModel(model_name, properties, required_properties))
 
     def create_crud_routes(self, api: FastAPI=None, crud_instance: CRUD=None, models_path: str=""):
+        modelsTypes = {}
         for openapiModel in self.models:
             model_module = self.import_model(models_path)
             model = getattr(model_module, openapiModel.model_name)
+            modelsTypes[openapiModel.model_name] = model
             model_lowercase = openapiModel.model_name.lower()
 
-            routes_info = {
-                'create': {
-                    'path': f"/{model_lowercase}/",
-                    'openapi_extra': {}
-                },
-                'read': {
-                    'path': f"/{model_lowercase}/{{element_id}}",
-                    'openapi_extra': {}
-                },
-                'update': {
-                    'path': f"/{model_lowercase}/{{element_id}}",
-                    'openapi_extra': {}
-                },
-                'delete': {
-                    'path': f"/{model_lowercase}/{{element_id}}",
-                    'openapi_extra': {}
-                },
-                'search': {
-                    'path': f"/{model_lowercase}s/",
-                    'openapi_extra': {}
-                },
-            }
+            routes_info = self.get_routes_info(model_lowercase)
 
             for route in self.routes:
                 for action in routes_info:
@@ -88,6 +71,17 @@ class OpenAPI:
                 model=model,
                 routes_info=routes_info
             )
+        
+        router = APIRouter(tags=["AccessRight"])
+        create_access_rights_router(router, modelsTypes, crud_instance) 
+        api.include_router(router)
+
+        #self.CRUD(
+        #    api=api,
+        #    crud_instance=crud_instance,
+        #    model=LaiaUser,
+        #    routes_info=self.get_routes_info("laiauser")
+        #)
 
     def CRUD(self, api: FastAPI, crud_instance: CRUD=None, model: T=None, routes_info: dict=None):
         model_name = model.__name__.lower()
@@ -186,3 +180,27 @@ async def {function_name}():
         home_file_content = home_dart(app_name, self.models)
         with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
             f.write(home_file_content)
+
+    def get_routes_info(self, model_lowercase: str):
+        return {
+            'create': {
+                'path': f"/{model_lowercase}/",
+                'openapi_extra': {}
+            },
+            'read': {
+                'path': f"/{model_lowercase}/{{element_id}}",
+                'openapi_extra': {}
+            },
+            'update': {
+                'path': f"/{model_lowercase}/{{element_id}}",
+                'openapi_extra': {}
+            },
+            'delete': {
+                'path': f"/{model_lowercase}/{{element_id}}",
+                'openapi_extra': {}
+            },
+            'search': {
+                'path': f"/{model_lowercase}s/",
+                'openapi_extra': {}
+            },
+        }
