@@ -39,7 +39,7 @@ def test_parse_models(test_files):
 
     model = OpenAPIModel("Person", properties, ["id", "name"])
     frontend_props = model.find_frontend_properties()
-    extensions = model.find_extensions()
+    extensions = model.find_field_extensions()
     assert frontend_props == {'id': {'editable': False, 'fieldName': 'Id'}, 'name': {'fieldName': 'Name'}}
     assert extensions == {'id': {'x_frontend_editable': False, 'x_frontend_fieldName': 'Id'}, 'name': {'x_frontend_fieldName': 'Name', 'x_view_roles': {'type': 'string', 'description': 'Roles required to view this field', 'example': 'admin'}, 'x_edit_roles': {'type': 'string', 'description': 'Roles required to edit this field', 'example': 'admin'}}}
 

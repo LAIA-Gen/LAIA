@@ -83,6 +83,10 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 * `x-delete-{model}` Override the default DELETE route --> DELETE /model/{id}
 * `x-search-{model}` Override the default SEARCH route --> GET /models
 
+### Model Schema extensions
+
+* `x-auth` Add authentication (CRUD + register + login)
+
 ### Field extensions
 
 * `x-frontend-widget` Name of the widget overriding the default (String)

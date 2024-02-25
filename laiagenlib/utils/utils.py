@@ -21,6 +21,7 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
     import_statement = """
 # modified by laia-gen-lib:
 
+from pydantic import ConfigDict
 from laiagenlib.models.Model import LaiaBaseModel
 from laiagenlib.models.User import LaiaUser"""
 
@@ -35,6 +36,14 @@ from laiagenlib.models.User import LaiaUser"""
 
     modified_content = '\n'.join(lines)
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
+
+    for model in models:
+        if hasattr(model, 'extensions') and model.extensions:
+            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.extensions})"
+            modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):',
+                                                        f'class {model.model_name}(LaiaBaseModel):\n    {model_config_line}')
+        if hasattr(model, 'extensions') and model.extensions.get('x-auth'):
+            modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):', f'class {model.model_name}(LaiaUser):', 1)
 
     with open(output_file, 'w') as f:
         f.write(modified_content)
@@ -67,7 +76,7 @@ def extract_class_info(file_content, models):
             field_matches = field_pattern.findall(class_content.group(1))
             model = next((model for model in models if model.model_name == class_name), None)
             if model:
-                extensions = model.find_extensions()
+                extensions = model.find_field_extensions()
                 for field_name, type, field_declaration in field_matches:
                     extra_data_dict = extensions.get(field_name, {})
                     extra_data_list = [f"{key.replace('-', '_')}='{value}'" if isinstance(value, str) else f"{key.replace('-', '_')}={value}" for key, value in extra_data_dict.items()]
@@ -192,3 +201,27 @@ def validate_email(email: str) -> bool:
 
 def validate_password(password: str) -> bool:
     return len(password) >= 8
+
+def get_routes_info(model_lowercase: str):
+    return {
+        'create': {
+            'path': f"/{model_lowercase}/",
+            'openapi_extra': {}
+        },
+        'read': {
+            'path': f"/{model_lowercase}/{{element_id}}",
+            'openapi_extra': {}
+        },
+        'update': {
+            'path': f"/{model_lowercase}/{{element_id}}",
+            'openapi_extra': {}
+        },
+        'delete': {
+            'path': f"/{model_lowercase}/{{element_id}}",
+            'openapi_extra': {}
+        },
+        'search': {
+            'path': f"/{model_lowercase}s/",
+            'openapi_extra': {}
+        },
+    }

@@ -1,17 +1,18 @@
 import yaml
 from fastapi import FastAPI, HTTPException, status
 from fastapi.routing import APIRouter
-from typing import TypeVar, Optional
-import re
+from typing import TypeVar
 import os
 from importlib.util import spec_from_file_location, module_from_spec
 from .OpenapiModels import OpenAPIRoute, OpenAPIModel
 from ..crud.crud import CRUD
 from .Model import LaiaBaseModel
-from .AccessRights import AccessRight, create_access_rights_router
-from .User import LaiaUser
+from ..routes.ModelRoutes import ModelCRUD
+from ..routes.UserRoutes import AuthRoutes
+from .AccessRights import create_access_rights_router
 from ..utils.flutter_base_files import home_dart, model_dart
 from ..utils.logger import _logger
+from ..utils.utils import get_routes_info
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
@@ -35,7 +36,8 @@ class OpenAPI:
                         summary = path_data[method].get('summary', '')
                         responses = path_data[method].get('responses', {})
                         extensions = {k: v for k, v in path_data[method].items() if k.startswith('x-')}
-                        self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions, True))
+                        if 'AccessRight' not in path_data[method].get('tags', []):
+                            self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions, True))
 
         if 'components' in openapi_spec:
             schemas = openapi_spec['components'].get('schemas', {})
@@ -43,8 +45,9 @@ class OpenAPI:
                 model_name = schema_name
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
-                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_")):
-                    self.models.append(OpenAPIModel(model_name, properties, required_properties))
+                extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
+                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth"):
+                    self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
 
     def create_crud_routes(self, api: FastAPI=None, crud_instance: CRUD=None, models_path: str=""):
         modelsTypes = {}
@@ -54,7 +57,7 @@ class OpenAPI:
             modelsTypes[openapiModel.model_name] = model
             model_lowercase = openapiModel.model_name.lower()
 
-            routes_info = self.get_routes_info(model_lowercase)
+            routes_info = get_routes_info(model_lowercase)
 
             for route in self.routes:
                 for action in routes_info:
@@ -64,8 +67,17 @@ class OpenAPI:
                             'openapi_extra': route.extensions
                         }
                         route.extra = False
+                    if openapiModel.extensions.get(f'x-auth') and (route.path == f"/auth/register/{model_lowercase}/" or route.path == f"/auth/login/{model_lowercase}/"):
+                        route.extra = False
 
-            self.CRUD(
+            if openapiModel.extensions.get(f'x-auth'):
+                AuthRoutes(
+                    api=api,
+                    crud_instance=crud_instance,
+                    model=model
+                )
+
+            ModelCRUD(
                 api=api,
                 crud_instance=crud_instance,
                 model=model,
@@ -74,60 +86,6 @@ class OpenAPI:
         
         router = APIRouter(tags=["AccessRight"])
         create_access_rights_router(router, modelsTypes, crud_instance) 
-        api.include_router(router)
-
-        #self.CRUD(
-        #    api=api,
-        #    crud_instance=crud_instance,
-        #    model=LaiaUser,
-        #    routes_info=self.get_routes_info("laiauser")
-        #)
-
-    def CRUD(self, api: FastAPI, crud_instance: CRUD=None, model: T=None, routes_info: dict=None):
-        model_name = model.__name__.lower()
-        router = APIRouter(tags=[model.__name__])
-
-        @router.post(**routes_info['create'], response_model=dict)
-        async def create_element(element: model):
-            user_roles=["admin"]
-            try:
-                return await model.create(dict(element), model, user_roles, crud_instance)
-            except Exception as e:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-        @router.put(**routes_info['update'], response_model=dict)
-        async def update_element(element_id: str, values: dict):
-            user_roles=["admin"]
-            try:
-                return await model.update(element_id, values, model, user_roles, crud_instance)
-            except Exception as e:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-            
-        @router.get(**routes_info['read'], response_model=dict)
-        async def read_element(element_id: str):
-            user_roles=["admin"]
-            try:
-                return await model.read(element_id, model, user_roles, crud_instance)
-            except Exception as e:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-        @router.delete(**routes_info['delete'], response_model=str)
-        async def delete_element(element_id: str):
-            user_roles=["admin"]
-            try:
-                await model.delete(element_id, model, user_roles, crud_instance)
-                return f"{model_name} element deleted successfully"
-            except Exception as e:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-        @router.post(**routes_info['search'], response_model=dict)
-        async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
-            user_roles=["admin"]
-            try:
-                return await model.search(skip, limit, filters, orders, model, user_roles, crud_instance)
-            except Exception as e:
-                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
         api.include_router(router)
 
     def add_extra_routes(self, routes_path):
@@ -180,27 +138,3 @@ async def {function_name}():
         home_file_content = home_dart(app_name, self.models)
         with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
             f.write(home_file_content)
-
-    def get_routes_info(self, model_lowercase: str):
-        return {
-            'create': {
-                'path': f"/{model_lowercase}/",
-                'openapi_extra': {}
-            },
-            'read': {
-                'path': f"/{model_lowercase}/{{element_id}}",
-                'openapi_extra': {}
-            },
-            'update': {
-                'path': f"/{model_lowercase}/{{element_id}}",
-                'openapi_extra': {}
-            },
-            'delete': {
-                'path': f"/{model_lowercase}/{{element_id}}",
-                'openapi_extra': {}
-            },
-            'search': {
-                'path': f"/{model_lowercase}s/",
-                'openapi_extra': {}
-            },
-        }
