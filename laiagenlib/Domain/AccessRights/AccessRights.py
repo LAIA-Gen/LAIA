@@ -1,9 +1,5 @@
-from typing import Dict, Type
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Dict
 from pydantic import BaseModel
-from ..crud.crud import CRUD
-from ..utils.logger import _logger
-from ..utils.utils import create_element
 
 class AccessRight(BaseModel):
     role: str

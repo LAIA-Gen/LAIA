@@ -1,10 +1,10 @@
-from typing import Dict, Type
+from typing import Type
 from pydantic import BaseModel
 from ...Domain.AccessRights.AccessRights import AccessRight
-from ...Domain.Model.ModelRepository import ModelRepository
+from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
-def create_access_rights(repository: ModelRepository, new_access_rights: dict, model: Type[BaseModel], user_roles: list):
+async def create_access_rights(repository: ModelRepository, new_access_rights: dict, model: Type[BaseModel], user_roles: list):
     _logger.info(f"Creating new AccessRights with values: {new_access_rights}")
 
     if 'role' in new_access_rights and 'model' in new_access_rights:
@@ -61,7 +61,7 @@ def create_access_rights(repository: ModelRepository, new_access_rights: dict, m
 
     created_accessrights = await repository.post_item(
         "accessrights",
-        access_rights.dict()
+        access_rights.model_dump()
     )
     _logger.info("AccessRights created successfully")
     return created_accessrights

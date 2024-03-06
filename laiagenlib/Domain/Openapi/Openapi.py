@@ -1,19 +1,7 @@
-import yaml
-from fastapi import FastAPI, HTTPException, status
-from fastapi.routing import APIRouter
-from typing import TypeVar
-import os
-from importlib.util import spec_from_file_location, module_from_spec
-from .OpenapiModels import OpenAPIRoute, OpenAPIModel
-from ..crud.crud import CRUD
-from .Model import LaiaBaseModel
-from ..models.OpenapiModels import OpenAPIRoute, OpenapiModel
-from ..routes.ModelRoutes import ModelCRUD
-from ..routes.UserRoutes import AuthRoutes
-from .AccessRights import create_access_rights_router
-from ..utils.flutter_base_files import home_dart, model_dart
-from ..utils.logger import _logger
-from ..utils.utils import get_routes_info
+from typing import TypeVar, List
+from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from .OpenapiModel import OpenAPIModel
+from .OpenapiRoute import OpenAPIRoute
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
@@ -26,3 +14,27 @@ class OpenAPI:
         self.yaml_path = yaml_path
         self.routes = []
         self.models = []
+
+        self.parse_yaml()
+
+    def parse_yaml(self, openapi_spec):
+        if 'paths' in openapi_spec:
+            for path, path_data in openapi_spec['paths'].items():
+                methods = path_data.keys()
+                for method in methods:
+                    if method != "parameters":
+                        summary = path_data[method].get('summary', '')
+                        responses = path_data[method].get('responses', {})
+                        extensions = {k: v for k, v in path_data[method].items() if k.startswith('x-')}
+                        if 'AccessRight' not in path_data[method].get('tags', []):
+                            self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions, True))
+
+        if 'components' in openapi_spec:
+            schemas = openapi_spec['components'].get('schemas', {})
+            for schema_name, schema_definition in schemas.items():
+                model_name = schema_name
+                properties = schema_definition.get('properties', {})
+                required_properties = schema_definition.get('required', [])
+                extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
+                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth"):
+                    self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
