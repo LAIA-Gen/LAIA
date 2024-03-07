@@ -6,7 +6,7 @@ async def check_access_rights_of_user(model_name: str, roles: List[str], operati
     
     for role in roles:
         access_rights, _ = await repository.get_items(
-            "accessrights", 
+            "accessright", 
             skip=0, 
             limit=1, 
             filters={

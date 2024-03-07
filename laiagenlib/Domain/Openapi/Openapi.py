@@ -1,4 +1,5 @@
 from typing import TypeVar, List
+import yaml
 from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from .OpenapiModel import OpenAPIModel
 from .OpenapiRoute import OpenAPIRoute
@@ -15,7 +16,10 @@ class OpenAPI:
         self.routes = []
         self.models = []
 
-        self.parse_yaml()
+        with open(self.yaml_path, 'r') as file:
+            openapi_spec = yaml.safe_load(file)
+
+        self.parse_yaml(openapi_spec)
 
     def parse_yaml(self, openapi_spec):
         if 'paths' in openapi_spec:
@@ -35,6 +39,5 @@ class OpenAPI:
                 model_name = schema_name
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
-                extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
                 if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth"):
-                    self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
+                    self.models.append(OpenAPIModel(model_name, properties, required_properties))

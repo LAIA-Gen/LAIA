@@ -1,17 +1,17 @@
+from typing import List
+
 class OpenAPIModel:
     model_name: str
     properties: dict
-    required_properties: dict
-    extensions: dict
+    required_properties: List[str]
 
-    def __init__(self, model_name, properties, required_properties, extensions):
+    def __init__(self, model_name, properties, required_properties):
         self.model_name = model_name
         self.properties = properties
         self.required_properties = required_properties
-        self.extensions = extensions
 
     def __str__(self):
-        return f"Model: {self.model_name}, Properties: {self.properties}, Required Properties: {self.required_properties}, Extensions: {self.extensions}"
+        return f"Model: {self.model_name}, Properties: {self.properties}, Required Properties: {self.required_properties}"
 
     def get_frontend_properties(self):
         frontend_properties = {}

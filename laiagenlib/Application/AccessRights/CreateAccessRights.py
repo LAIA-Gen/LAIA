@@ -5,7 +5,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
 async def create_access_rights(repository: ModelRepository, new_access_rights: dict, model: Type[BaseModel], user_roles: list):
-    _logger.info(f"Creating new AccessRights with values: {new_access_rights}")
+    _logger.info(f"Creating new AccessRight with values: {new_access_rights}")
 
     if 'role' in new_access_rights and 'model' in new_access_rights:
         pass
@@ -42,7 +42,7 @@ async def create_access_rights(repository: ModelRepository, new_access_rights: d
                 raise ValueError(f"Invalid field {field_name} for {field_type}")
             
     existing_access_rights, _ = await repository.get_items(
-        "accessrights", 
+        "accessright", 
         skip=0, 
         limit=10, 
         filters={
@@ -52,7 +52,7 @@ async def create_access_rights(repository: ModelRepository, new_access_rights: d
     )
 
     if existing_access_rights:
-        raise ValueError("AccessRights with the same role and model already exists")
+        raise ValueError("AccessRight with the same role and model already exists")
     
     try:
         access_rights = AccessRight(**new_access_rights)
@@ -60,8 +60,8 @@ async def create_access_rights(repository: ModelRepository, new_access_rights: d
         raise ValueError("Missing required parameters")
 
     created_accessrights = await repository.post_item(
-        "accessrights",
+        "accessright",
         access_rights.model_dump()
     )
-    _logger.info("AccessRights created successfully")
+    _logger.info("AccessRight created successfully")
     return created_accessrights

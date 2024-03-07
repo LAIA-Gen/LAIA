@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, List
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
 
@@ -72,7 +72,7 @@ part 'generic_widgets.g.dart';
 class GenericWidgets {}
 """
 
-def home_dart(app_name: str, models: list):
+def home_dart(app_name: str, models: List[OpenAPIModel]):
     import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
     return f"""import 'package:annotations/annotations.dart';
 {import_statements}
@@ -206,28 +206,38 @@ class {model_name} {{
 }}
 """
 
-def pydantic_to_dart_type(pydantic_type):
+def pydantic_to_dart_type(pydantic_type: str):
     dart_type_mapping = {
         'int': 'int',
         'float': 'double',
         'str': 'String',
         'bool': 'bool',
-        'list': 'List',
+        'list': 'List<dynamic>',
+        'List': 'List<dynamic>',
+        'List[int]': 'List<int>',
+        'List[str]': 'List<String>',
+        'List[float]': 'List<double>',
+        'List[bool]': 'List<bool>',
         'EmailStr': 'String',
-        'Optional[int]': 'int',
-        'Optional[str]': 'String',
-        'Optional[bool]': 'bool',
-        'Optional[EmailStr]': 'String',
-        'Optional[float]': 'double',
+        'Optional[int]': 'int?',
+        'Optional[str]': 'String?',
+        'Optional[bool]': 'bool?',
+        'Optional[EmailStr]': 'String?',
+        'Optional[float]': 'double?',
     }
 
+    dart_type = "dynamic"
+
+    if pydantic_type.startswith('Optional[') and pydantic_type.endswith(']'):
+        dart_type = 'dynamic?'
+
     if pydantic_type in dart_type_mapping:
-        return dart_type_mapping[pydantic_type]
+        dart_type = dart_type_mapping[pydantic_type]
     elif hasattr(pydantic_type, "__origin__") and pydantic_type.__origin__ == list:
         inner_type = pydantic_to_dart_type(pydantic_type.__args__[0])
-        return f'List<{inner_type}>'
-    else:
-        return 'dynamic'
+        dart_type = f'List<{inner_type}>'
+    
+    return dart_type
     
 def get_inherited_fields(model: Type[BaseModel]):
     model_fields = []
