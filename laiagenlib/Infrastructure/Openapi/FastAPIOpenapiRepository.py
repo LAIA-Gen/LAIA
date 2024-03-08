@@ -16,7 +16,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
     def __init__(self, api: any):
         if not isinstance(api, FastAPI):
             raise ValueError("API must be an instance of FastAPI for this implementation")
-        self.api = api
+        super().__init__(api)
 
     async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info)

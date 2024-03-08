@@ -17,6 +17,8 @@ async def create_laia_base_model(new_element: dict, model: Type, user_roles: lis
 
     if "admin" not in user_roles:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "create", repository)
+        _logger.info("ACCESSSSS: " + str(access_rights_list))
+        _logger.info(new_element)
         await check_access_rights_of_fields(model, 'fields_create', new_element, access_rights_list)
     
     created_element = await repository.post_item(

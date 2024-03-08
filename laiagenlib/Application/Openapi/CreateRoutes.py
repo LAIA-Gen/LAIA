@@ -6,7 +6,7 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str=""):
+async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str=""):
     modelsTypes = {}
     for openapiModel in openapi.models:
         model_module = import_model(models_path)
@@ -28,12 +28,12 @@ def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelR
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):
-            repositoryAPI.create_auth_user_routes(repository, models_path)
-
-        repositoryAPI.create_routes(repository, model=model, routes_info=routes_info)
+            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info)
+        else:
+            await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info)
     
-    repositoryAPI.create_access_rights_routes(modelsTypes, repository)
-    repositoryAPI.create_roles_routes(repository)
+    await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository)
+    await repositoryAPI.create_roles_routes(repository)
 
     # add extra routes
 
@@ -58,7 +58,7 @@ def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelR
                             if function_name not in ''.join(lines):
                                 function_code = f"""@router.{route.method.lower()}("/{route_path}", openapi_extra={route.extensions})
 async def {function_name}():
-return {{"message": "This is an extra route!"}}
+    return {{"message": "This is an extra route!"}}
 
 """
                                 f.write(function_code)

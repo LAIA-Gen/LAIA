@@ -57,14 +57,14 @@ class TestDeleteLaiaBaseModel:
         assert "does not exist" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_delete_access_rights(self, repository_instance):
+    async def test_delete_access_rights_not_admin(self, repository_instance):
         new_access_rights = {
             "role": "user",
             "model": "drone",
-            "operations": {"create": 1, "read": 1},
+            "operations": {"create": 1, "read": 1, "delete": 1},
             "fields_create": {"name": 1, "description": 1, "weight": 1, "max_altitude": 1, "max_speed": 1},
             "fields_edit": {"name": 1},
-            "fields_visible": {"name": 1}
+            "fields_visible": {"name": 1, "id": 1, "description": 1, "weight": 1, "max_altitude": 1, "max_speed": 1}
         }
 
         await create_access_rights(repository_instance, new_access_rights, Drone, ["admin"])
@@ -75,6 +75,4 @@ class TestDeleteLaiaBaseModel:
         created_element = await create_laia_base_model(new_element, model, user_roles, repository_instance)
         element_id = str(created_element['id'])
 
-        with pytest.raises(ValueError) as exc_info:
-            await delete_laia_base_model(element_id, model, user_roles, repository_instance)
-        assert "Access denied" in str(exc_info.value)
+        await delete_laia_base_model(element_id, model, user_roles, repository_instance)

@@ -1,4 +1,5 @@
 import os
+from typing import List
 from .DownloadImage import download_image
 from ....Domain.Openapi.FlutterBaseFiles import main_dart, api_dart, styles_dart, generic_dart
 

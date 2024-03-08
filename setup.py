@@ -6,7 +6,7 @@ setup(
     version='0.1.5',
     description='An AI application generator engine',
     author='Me',
-    install_requires=['pymongo', 'pydantic', 'datamodel-code-generator', 'fastapi', 'bcrypt'],
+    install_requires=['pymongo', 'pydantic', 'datamodel-code-generator', 'fastapi', 'bcrypt', 'asyncinit'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest', 'pymongo', 'pytest-asyncio', 'fastapi'],
     test_suite='tests',

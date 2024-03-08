@@ -1,5 +1,6 @@
 from typing import List, Dict, Type
 from ...Domain.AccessRights.AccessRights import AccessRight
+from ...Domain.Shared.Utils.logger import _logger
 
 async def check_access_rights_of_fields(model: Type, fields_type: str, new_element: Dict[str, int], access_rights_list: List[AccessRight]):
     model_fields = []
@@ -18,6 +19,7 @@ async def check_access_rights_of_fields(model: Type, fields_type: str, new_eleme
         for access_rights in access_rights_list:
             if hasattr(access_rights, fields_type):
                 fields_dict = getattr(access_rights, fields_type)
+                _logger.info(fields_dict)
                 
                 if field_name in fields_dict:
                     if fields_dict[field_name] == 1:

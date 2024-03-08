@@ -1,11 +1,12 @@
-from typing import Type
 import bcrypt
+from typing import List
 from ..Shared.Utils import ValidateEmail, ValidatePassword
 from ..LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_laia_user(new_element: dict, model: Type, user_roles: list, repository: ModelRepository):
+async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[str], repository: ModelRepository):
     _logger.info("Creating new User")
     email = new_element.get('email')
     password = new_element.get('password')

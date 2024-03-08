@@ -35,11 +35,11 @@ from laiagenlib.models.User import LaiaUser"""
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
 
     for model in models:
-        if hasattr(model, 'extensions') and model.extensions:
-            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.extensions})"
+        if model.get_field_extensions():
+            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.get_field_extensions()})"
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):',
                                                         f'class {model.model_name}(LaiaBaseModel):\n    {model_config_line}')
-        if hasattr(model, 'extensions') and model.extensions.get('x-auth'):
+        if model.get_field_extensions() and model.get_field_extensions().get('x-auth'):
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):', f'class {model.model_name}(LaiaUser):', 1)
 
     with open(output_file, 'w') as f:

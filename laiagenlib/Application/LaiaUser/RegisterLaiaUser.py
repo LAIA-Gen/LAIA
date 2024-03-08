@@ -1,10 +1,11 @@
-from typing import Type, Dict, Any
+from typing import Dict, Any
 from .CreateLaiaUser import create_laia_user
 from ..Shared.Utils import ValidateEmail, ValidatePassword
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 
-async def register(new_user_data: Dict[str, Any], model: Type, user_roles: list, repository: ModelRepository):
+async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: list, repository: ModelRepository):
     _logger.info("Registering new User")
     email = new_user_data.get('email')
     password = new_user_data.get('password')

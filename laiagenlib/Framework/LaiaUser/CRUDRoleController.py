@@ -46,7 +46,7 @@ def CRUDRoleController(repository: ModelRepository=None):
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.post(*"/roles/", response_model=dict)
+    @router.post("/roles/", response_model=dict)
     async def search_element(skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
         user_roles=["admin"]
         try:
