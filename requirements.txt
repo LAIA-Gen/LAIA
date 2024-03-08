@@ -6,3 +6,9 @@ twine
 # necessary for testing
 pytest
 pytest-runner
+
+pydantic
+fastapi
+bson
+pymongo
+bcrypt

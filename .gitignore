@@ -1,4 +1,5 @@
 env
+venv
 __pycache__
 laia_gen_lib.egg-info
 build
