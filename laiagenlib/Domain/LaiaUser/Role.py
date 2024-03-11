@@ -1,5 +1,4 @@
-from typing import Dict
-from pydantic import BaseModel
+from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 
-class Role(BaseModel):
+class Role(LaiaBaseModel):
     name: str

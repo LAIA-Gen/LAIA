@@ -17,7 +17,7 @@ def extract_class_info(file_content, models):
                 extensions = model.get_field_extensions()
                 for field_name, type, field_declaration in field_matches:
                     extra_data_dict = extensions.get(field_name, {})
-                    extra_data_list = [f"{key.replace('-', '_')}='{value}'" if isinstance(value, str) else f"{key.replace('-', '_')}={value}" for key, value in extra_data_dict.items()]
+                    extra_data_list = [f'{key.replace("-", "_")}="{value}"' if isinstance(value, str) else f"{key.replace('-', '_')}={value}" for key, value in extra_data_dict.items()]
                     fields.append(FieldInfo(field_name, type, field_declaration, extra=extra_data_list))
                 class_info[class_name] = fields
     return class_info

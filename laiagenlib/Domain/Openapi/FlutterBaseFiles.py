@@ -1,6 +1,8 @@
 from typing import Type, List
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
+from ..AccessRights.AccessRights import AccessRight
+from ..LaiaUser.Role import Role
 
 def main_dart(app_name: str):
     return f"""import 'package:{app_name}/screens/home.dart';"""+"""
@@ -73,9 +75,11 @@ class GenericWidgets {}
 """
 
 def home_dart(app_name: str, models: List[OpenAPIModel]):
+    laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
     return f"""import 'package:annotations/annotations.dart';
 {import_statements}
+{laia_import_statements}
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';"""+"""
 
@@ -140,14 +144,14 @@ class _HomeState extends State<Home> {
 }
 """
 
-def model_dart(openapiModel: OpenAPIModel, app_name: str, model: Type[BaseModel]):
+def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[BaseModel]=None):
     fields = ""
     fields_constructor = ""
     extra_imports = ""
     inherited_fields = get_inherited_fields(model)
     
     if openapiModel:
-      frontend_props = openapiModel.find_frontend_properties()
+      frontend_props = openapiModel.get_frontend_properties()
     else:
       frontend_props = {}
     
@@ -157,7 +161,12 @@ def model_dart(openapiModel: OpenAPIModel, app_name: str, model: Type[BaseModel]
       
       if prop_name in frontend_props:
         frontend_details = frontend_props[prop_name]
-        fields += ", ".join(f"{key}: '{value}'" for key, value in frontend_details.items())
+        for key, value in frontend_details.items():
+          if isinstance(value, bool):
+            fields += f"{key}: {str(value).lower()}, "
+          else:
+            fields += f"{key}: '{value}', "
+        fields = fields[:-2]
         value_lower = next((value.lower() for key, value in frontend_details.items() if key == "relation"), None)
         if value_lower:
           extra_imports += f"import 'package:{app_name}/models/{value_lower}.dart';\n"
@@ -224,12 +233,14 @@ def pydantic_to_dart_type(pydantic_type: str):
         'Optional[bool]': 'bool?',
         'Optional[EmailStr]': 'String?',
         'Optional[float]': 'double?',
+        'Optional[List]': 'List<dynamic>?',
+        'Optional[List[int]]': 'List<int>?',
+        'Optional[List[str]]': 'List<String>?',
+        'Optional[List[float]]': 'List<double>?',
+        'Optional[List[bool]]': 'List<bool>?',
     }
 
     dart_type = "dynamic"
-
-    if pydantic_type.startswith('Optional[') and pydantic_type.endswith(']'):
-        dart_type = 'dynamic?'
 
     if pydantic_type in dart_type_mapping:
         dart_type = dart_type_mapping[pydantic_type]

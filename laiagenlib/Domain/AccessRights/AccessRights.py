@@ -1,9 +1,10 @@
 from typing import Dict
-from pydantic import BaseModel
+from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 
 ALLOWED_OPERATIONS = ["create", "read", "update", "delete", "search"]
 
-class AccessRight(BaseModel):
+class AccessRight(LaiaBaseModel):
+    name: str = ""
     role: str
     model: str
     operations: Dict[str, int] = {}

@@ -2,6 +2,8 @@ import os
 from typing import List
 from .DownloadImage import download_image
 from ....Domain.Openapi.FlutterBaseFiles import main_dart, api_dart, styles_dart, generic_dart
+from ....Domain.LaiaUser.Role import Role
+from ....Domain.AccessRights.AccessRights import AccessRight
 
 def create_base_files(app_name: str, models: List[any] = []):
     dart_dir = os.path.join(app_name, 'lib')
@@ -13,6 +15,13 @@ def create_base_files(app_name: str, models: List[any] = []):
     for model in models:
         image_url = "https://static.vecteezy.com/system/resources/thumbnails/024/983/914/small/simple-user-default-icon-free-png.png"
         image_name = model.model_name.lower() + ".png"
+        image_path = os.path.join(assets_dir, image_name)
+        download_image(image_url, image_path)
+
+    laia_models = [AccessRight, Role]
+    for model in laia_models:
+        image_url = "https://static.vecteezy.com/system/resources/thumbnails/024/983/914/small/simple-user-default-icon-free-png.png"
+        image_name = model.__name__.lower() + ".png"
         image_path = os.path.join(assets_dir, image_name)
         download_image(image_url, image_path)
 

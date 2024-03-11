@@ -1,20 +1,24 @@
 import os
 import subprocess
 import yaml
+import asyncio
 from ...Domain.Openapi.Openapi import OpenAPI
+from ...Domain.AccessRights.AccessRights import AccessRight
+from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart
 
-def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str=""):
+async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str=""):
     subprocess.run("flutter create " + app_name, shell=True)
 
-    # TODO: change the following local dart libraries to the ones on the market
-    subprocess.run("flutter pub add annotations --path=C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/annotations -C " + f"./{app_name}", shell=True)
-    subprocess.run("flutter pub add --dev riverpod_custom_generator --path=C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/riverpod_custom_generator -C " + f"./{app_name}", shell=True)
-    subprocess.run("flutter pub add --dev widget_generator --path=C:/Users/Usuario/OneDrive/Documents/TFG/code_gen_arg/widget_generator -C " + f"./{app_name}", shell=True)
-    subprocess.run("flutter pub add json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 -C " + f"./{app_name}", shell=True)
-    subprocess.run("flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.4 -C " + f"./{app_name}", shell=True)
-
+    # TODO: change the following local dart libraries to the ones on the marketç
+    await asyncio.gather(
+        run("flutter pub add annotations --path=/home/albieta/Documents/tfg/laia_flutter_gen/annotations -C " + f"./{app_name}"),
+        run("flutter pub add --dev riverpod_custom_generator --path=/home/albieta/Documents/tfg/laia_flutter_gen/riverpod_custom_generator -C " + f"./{app_name}"),
+        run("flutter pub add --dev widget_generator --path=/home/albieta/Documents/tfg/laia_flutter_gen/widget_generator -C " + f"./{app_name}"),
+        run("flutter pub add json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 -C " + f"./{app_name}"),
+        run("flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.4 -C " + f"./{app_name}")
+    )
     assets = "assets/"
     with open(f"{app_name}/pubspec.yaml", "r") as file:
         pubspec_content = yaml.safe_load(file)
@@ -33,8 +37,26 @@ def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="",
         with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
 
+    laia_models = [AccessRight, Role]
+    for model in laia_models:
+        model_file_content = model_dart(app_name=app_name, model=model)
+        with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
+            f.write(model_file_content)
 
     home_file_content = home_dart(app_name, openapi.models)
     with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
         f.write(home_file_content)
 
+async def run(cmd):
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+
+    stdout, stderr = await proc.communicate()
+
+    print(f'[{cmd!r} exited with {proc.returncode}]')
+    if stdout:
+        print(f'[stdout]\n{stdout.decode()}')
+    if stderr:
+        print(f'[stderr]\n{stderr.decode()}')

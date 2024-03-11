@@ -6,7 +6,7 @@ class OpenAPIModel:
     required_properties: List[str]
     extensions: dict
 
-    def __init__(self, model_name, properties, required_properties, extensions):
+    def __init__(self, model_name, properties, required_properties, extensions = {}):
         self.model_name = model_name
         self.properties = properties
         self.required_properties = required_properties
