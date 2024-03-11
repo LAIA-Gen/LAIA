@@ -31,7 +31,7 @@ class OpenAPI:
                         summary = path_data[method].get('summary', '')
                         responses = path_data[method].get('responses', {})
                         extensions = {k: v for k, v in path_data[method].items() if k.startswith('x-')}
-                        if 'AccessRight' not in path_data[method].get('tags', []):
+                        if 'AccessRight' not in path_data[method].get('tags', []) and 'Role' not in path_data[method].get('tags', []):
                             self.routes.append(OpenAPIRoute(path, method, summary, responses, extensions, True))
 
         if 'components' in openapi_spec:
@@ -41,6 +41,6 @@ class OpenAPI:
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
                 extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
-                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth"):
+                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth" and not model_name == "AccessRight" and not model_name == "Role"):
                     self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
                     

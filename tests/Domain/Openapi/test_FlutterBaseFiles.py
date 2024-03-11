@@ -89,6 +89,8 @@ def test_home_dart():
 
     expected_dart_code = f"""import 'package:annotations/annotations.dart';
 {expected_import_statements}
+import 'package:{app_name}/models/accessright.dart';
+import 'package:{app_name}/models/role.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -183,7 +185,7 @@ def test_pydantic_to_dart_type():
     assert FlutterBaseFiles.pydantic_to_dart_type('List[List[str]]') == 'dynamic'
 
     assert FlutterBaseFiles.pydantic_to_dart_type('other') == 'dynamic'
-    assert FlutterBaseFiles.pydantic_to_dart_type('Optional[other]') == 'dynamic?'
+    assert FlutterBaseFiles.pydantic_to_dart_type('Optional[other]') == 'dynamic'
 
 class ParentModel(BaseModel):
     parent_field: str

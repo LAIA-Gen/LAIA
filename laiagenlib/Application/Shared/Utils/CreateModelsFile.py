@@ -13,14 +13,16 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
     # The generated file is modified so that the pydantic models extend the LaiaBaseModel, this is necessary for 
     # using the Laia library
 
+    excluded_models = ["AccessRight", "Auth", "Role", "ValidationError", "HTTPValidationError"]
+
     subprocess.run(["datamodel-codegen", "--input", input_file, "--output", output_file], check=True)
 
     import_statement = """
 # modified by laia-gen-lib:
 
 from pydantic import ConfigDict
-from laiagenlib.models.Model import LaiaBaseModel
-from laiagenlib.models.User import LaiaUser"""
+from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser"""
 
     with open(output_file, 'r') as f:
         model_content = f.read()
@@ -34,12 +36,16 @@ from laiagenlib.models.User import LaiaUser"""
     modified_content = '\n'.join(lines)
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
 
+    excluded_models_pattern = "|".join(excluded_models)
+    model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearchElement\w+)\(LaiaBaseModel\):.*?(?=class|$)', re.DOTALL)
+    modified_content = re.sub(model_pattern, '', modified_content)
+    
     for model in models:
-        if model.get_field_extensions():
-            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.get_field_extensions()})"
+        if hasattr(model, 'extensions') and model.extensions:
+            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.extensions})"
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):',
                                                         f'class {model.model_name}(LaiaBaseModel):\n    {model_config_line}')
-        if model.get_field_extensions() and model.get_field_extensions().get('x-auth'):
+        if hasattr(model, 'extensions') and model.extensions.get('x-auth'):
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):', f'class {model.model_name}(LaiaUser):', 1)
 
     with open(output_file, 'w') as f:

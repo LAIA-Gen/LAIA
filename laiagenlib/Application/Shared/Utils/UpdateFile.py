@@ -5,7 +5,7 @@ def update_file(filename: str, classes_info):
         file_content = file.readlines()
 
     for class_name, fields in classes_info.items():
-        class_pattern = re.compile(r"class\s+" + class_name + r"\(LaiaBaseModel\):")
+        class_pattern = re.compile(r"class\s+" + class_name + r"\((LaiaBaseModel|LaiaUser)\):")
         in_class = False
 
         for i, line in enumerate(file_content):

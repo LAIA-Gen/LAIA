@@ -43,7 +43,7 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
 
         all_index = len(lines) 
         for i, line in enumerate(lines):
-            if "__all__" in line:
+            if "return router" in line:
                 all_index = i
                 break
 
@@ -56,9 +56,9 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                             route_path = route.path.strip('/')
                             function_name = route.method.lower() + '_' + route_path.replace('/', '_').replace('{', '').replace('}', '')
                             if function_name not in ''.join(lines):
-                                function_code = f"""@router.{route.method.lower()}("/{route_path}", openapi_extra={route.extensions})
-async def {function_name}():
-    return {{"message": "This is an extra route!"}}
+                                function_code = f"""    @router.{route.method.lower()}("/{route_path}", openapi_extra={route.extensions})
+    async def {function_name}():
+        return {{"message": "This is an extra route!"}}
 
 """
                                 f.write(function_code)
