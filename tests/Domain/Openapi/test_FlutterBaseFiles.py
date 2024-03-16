@@ -64,7 +64,7 @@ class Styles {
 
 def test_generic_dart():
     app_name = "your_package_name"
-    expected_result = f"""import 'package:annotations/annotations.dart';
+    expected_result = f"""import 'package:laia_annotations/laia_annotations.dart';
 import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -87,7 +87,7 @@ def test_home_dart():
 
     expected_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
 
-    expected_dart_code = f"""import 'package:annotations/annotations.dart';
+    expected_dart_code = f"""import 'package:laia_annotations/laia_annotations.dart';
 {expected_import_statements}
 import 'package:{app_name}/models/accessright.dart';
 import 'package:{app_name}/models/role.dart';

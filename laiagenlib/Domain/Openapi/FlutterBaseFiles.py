@@ -61,7 +61,7 @@ class Styles {
 """
 
 def generic_dart(app_name: str):
-    return f"""import 'package:annotations/annotations.dart';
+    return f"""import 'package:laia_annotations/laia_annotations.dart';
 import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -77,7 +77,7 @@ class GenericWidgets {}
 def home_dart(app_name: str, models: List[OpenAPIModel]):
     laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
-    return f"""import 'package:annotations/annotations.dart';
+    return f"""import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
 import 'package:flutter/foundation.dart';
@@ -165,7 +165,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
           if isinstance(value, bool):
             fields += f"{key}: {str(value).lower()}, "
           else:
-            fields += f"{key}: '{value}', "
+            fields += f'{key}: "{value}", '
         fields = fields[:-2]
         value_lower = next((value.lower() for key, value in frontend_details.items() if key == "relation"), None)
         if value_lower:
@@ -182,7 +182,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     
     model_name = model.__name__
 
-    return f"""import 'package:annotations/annotations.dart';
+    return f"""import 'package:laia_annotations/laia_annotations.dart';
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
