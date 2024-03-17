@@ -7,11 +7,11 @@ from ...Domain.Openapi.Openapi import OpenAPI
 @asyncinit
 class LaiaFlutter():
 
-    async def __init__(self, openapi, app_name: str):
+    async def __init__(self, openapi, backend_folder_name, app_name: str):
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
 
-        models_dir = os.path.join(os.path.dirname(self.openapi_path), "backend")
+        models_dir = os.path.join(os.path.dirname(self.openapi_path), backend_folder_name)
         if not os.path.exists(models_dir):
             os.makedirs(models_dir)
 

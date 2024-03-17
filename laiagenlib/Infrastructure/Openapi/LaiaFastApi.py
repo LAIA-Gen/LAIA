@@ -13,7 +13,7 @@ from ...Domain.Shared.Utils.logger import _logger
 @asyncinit
 class LaiaFastApi():
 
-    async def __init__(self, openapi, db, repository: ModelRepository, repositoryAPI: OpenapiRepository):
+    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository):
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
         self.repository_instance = repository(db)
@@ -28,7 +28,7 @@ class LaiaFastApi():
             allow_headers=["*"],
         )
 
-        backend_dir = os.path.join(os.path.dirname(self.openapi_path), "backend")
+        backend_dir = os.path.join(os.path.dirname(self.openapi_path), backend_folder_name)
         if not os.path.exists(backend_dir):
             os.makedirs(backend_dir)
 
