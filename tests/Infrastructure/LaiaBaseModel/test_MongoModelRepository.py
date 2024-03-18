@@ -1,7 +1,8 @@
 import pytest, pytest_asyncio
 from pymongo import MongoClient
-from laiagenlib.crud.crud_mongo_impl import CRUDMongoImpl
-from laiagenlib.models.Model import LaiaBaseModel
+from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoModelRepository
+from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from laiagenlib.Domain.Shared.Utils.logger import _logger
 
 class User(LaiaBaseModel):
     description: str
@@ -22,7 +23,7 @@ def in_memory_db():
 
 @pytest_asyncio.fixture
 async def crud_instance(in_memory_db):
-    return CRUDMongoImpl(in_memory_db)
+    return MongoModelRepository(in_memory_db)
 
 class TestCRUDMongoImpl:
 
@@ -65,3 +66,32 @@ class TestCRUDMongoImpl:
 
         assert len(items) == 5
         assert total_count == 5
+
+    @pytest.mark.asyncio
+    async def test_filter_by_id(self, crud_instance):
+        item_ids = []
+        for _ in range(5):
+            created_item = await crud_instance.post_item("user_collection", User(**test_data))
+            item_ids.append(created_item["id"])
+
+        query_id = item_ids[0]
+        items, _ = await crud_instance.get_items("user_collection", filters={"id": query_id})
+        assert len(items) == 1
+        assert items[0]["id"] == query_id
+
+        query_id = item_ids[0]
+        items, _ = await crud_instance.get_items("user_collection", filters={"id": {"$in": [query_id]}})
+        assert len(items) == 1
+        assert items[0]["id"] == query_id
+
+        query_ids = item_ids[1:3]
+        items, _ = await crud_instance.get_items("user_collection", filters={"id": {"$in": query_ids}})
+        assert len(items) == 2
+        retrieved_ids = [item["id"] for item in items]
+        assert all(query_id in retrieved_ids for query_id in query_ids)
+
+        query_ids = item_ids[:3]
+        items, _ = await crud_instance.get_items("user_collection", filters={"id": {"$nin": query_ids}})
+        assert len(items) == 2 
+        retrieved_ids = [item["id"] for item in items]
+        assert all(query_id not in retrieved_ids for query_id in query_ids)

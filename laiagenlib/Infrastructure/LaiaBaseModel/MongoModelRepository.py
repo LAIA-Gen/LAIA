@@ -1,9 +1,10 @@
 from typing import TypeVar, Optional, Dict
 from pydantic import BaseModel
-from bson import ObjectId
+from bson import ObjectId, regex
 from pymongo.collection import ReturnDocument
 from ...Application.Shared.Utils.Schemas import list_serial, individual_serial
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from ...Domain.Shared.Utils.logger import _logger
 
 
 T = TypeVar('T', bound='BaseModel')
@@ -19,6 +20,15 @@ class MongoModelRepository(ModelRepository):
         query = filters or {}
         sorts = orders or {}
 
+        if 'id' in query:
+            id_filter = query.pop('id')
+            if isinstance(id_filter, dict):
+                if '$in' in id_filter:
+                    query['_id'] = {'$in': [ObjectId(id_) for id_ in id_filter['$in']]}
+                elif '$nin' in id_filter:
+                    query['_id'] = {'$nin': [ObjectId(id_) for id_ in id_filter['$nin']]}
+            else:
+                query['_id'] = {'$in': [ObjectId(id_filter)]}
 
         items = collection.find(query, skip=skip, limit=limit, sort=sorts)
         serialized_items = list_serial(items)
