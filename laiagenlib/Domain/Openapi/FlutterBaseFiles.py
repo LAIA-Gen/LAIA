@@ -193,6 +193,7 @@ import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 {extra_imports}
 part '{model_name.lower()}.g.dart';
