@@ -187,6 +187,11 @@ def test_pydantic_to_dart_type():
     assert FlutterBaseFiles.pydantic_to_dart_type('other') == 'dynamic'
     assert FlutterBaseFiles.pydantic_to_dart_type('Optional[other]') == 'dynamic'
 
+    assert FlutterBaseFiles.pydantic_to_dart_type('Dict[str, Any]') == 'Map<String, dynamic>'
+    assert FlutterBaseFiles.pydantic_to_dart_type('List[Dict[str, Any]]') == 'List<Map<String, dynamic>>'
+    assert FlutterBaseFiles.pydantic_to_dart_type('Optional[Dict[str, Any]]') == 'Map<String, dynamic>?'
+    assert FlutterBaseFiles.pydantic_to_dart_type('Optional[List[Dict[str, Any]]]') == 'List<Map<String, dynamic>>?'
+
 class ParentModel(BaseModel):
     parent_field: str
 

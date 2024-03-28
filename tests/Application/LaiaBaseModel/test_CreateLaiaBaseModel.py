@@ -4,10 +4,12 @@ from pymongo import MongoClient
 from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoModelRepository
 from laiagenlib.Application.LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from laiagenlib.Domain.GeoJSON.Geometry import Point
 
 class User(LaiaBaseModel):
     description: str
     age: int
+    position: Point
 
 class Drone(LaiaBaseModel):
     description: str
@@ -28,6 +30,31 @@ async def repository_instance(in_memory_db):
     return MongoModelRepository(in_memory_db)
 
 class TestCreateLaiaBaseModel:
+
+    @pytest.mark.asyncio
+    async def test_create_laia_base_model_geojson(self, repository_instance):
+        new_element = {
+            'name': 'name1',
+            'description': 'description1', 
+            'age': 3, 
+            'position': {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [125.6, 10.1]
+                },
+                "properties": {
+                    "name": "Dinagat Islands"
+                }
+            }
+        }
+        model = User
+        user_roles = ['admin']
+        result = await create_laia_base_model(new_element, model, user_roles, repository_instance)
+        
+        assert result.get('name') == new_element.get('name')
+        assert result.get('age') == new_element.get('age')
+        assert result.get('position') == new_element.get('position')
 
     @pytest.mark.asyncio
     async def test_create_laia_base_model_success(self, repository_instance):

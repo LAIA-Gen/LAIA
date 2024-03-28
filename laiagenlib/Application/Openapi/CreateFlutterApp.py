@@ -6,7 +6,7 @@ from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
-from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart
+from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
 
 async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str=""):
     subprocess.run("flutter create " + app_name, shell=True)
@@ -36,6 +36,9 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         model_file_content = model_dart(openapiModel, app_name, model)
         with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
+    
+    with open(os.path.join(app_path, 'lib', 'models', 'geometry.dart'), 'w') as f:
+        f.write(geojson_models_file())
 
     laia_models = [AccessRight, Role]
     for model in laia_models:

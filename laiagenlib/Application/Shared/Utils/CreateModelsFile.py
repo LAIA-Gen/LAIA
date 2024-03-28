@@ -8,12 +8,10 @@ from ....Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='BaseModel')
 
-def create_models_file(input_file="openapi.yaml", output_file="model.py", models: List[any] = []):
+def create_models_file(input_file="openapi.yaml", output_file="model.py", models: List[any] = [], excluded_models: List[str] = []):
     # This function uses the datamodel-code-generator for generating the pydantic models given a openapi.yaml file. 
     # The generated file is modified so that the pydantic models extend the LaiaBaseModel, this is necessary for 
     # using the Laia library
-
-    excluded_models = ["AccessRight", "Auth", "Role", "ValidationError", "HTTPValidationError"]
 
     subprocess.run(["datamodel-codegen", "--input", input_file, "--output", output_file], check=True)
 
@@ -22,7 +20,8 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
 
 from pydantic import ConfigDict
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
-from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser"""
+from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser
+from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon"""
 
     with open(output_file, 'r') as f:
         model_content = f.read()
@@ -37,7 +36,7 @@ from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser"""
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
 
     excluded_models_pattern = "|".join(excluded_models)
-    model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearchElement\w+)\(LaiaBaseModel\):.*?(?=class|$)', re.DOTALL)
+    model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearchElement\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
     modified_content = re.sub(model_pattern, '', modified_content)
     
     for model in models:

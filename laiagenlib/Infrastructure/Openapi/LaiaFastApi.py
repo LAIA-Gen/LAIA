@@ -34,6 +34,6 @@ class LaiaFastApi():
 
         models_path = os.path.join(backend_dir, "models.py")
         routes_path = os.path.join(backend_dir, "routes.py")
-        create_models_file(self.openapi_path, models_path, self.openapi.models)
+        create_models_file(self.openapi_path, models_path, self.openapi.models, self.openapi.excluded_models)
         create_routes_file(routes_path)
         await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path)

@@ -8,9 +8,32 @@ from ...Domain.Shared.Utils.logger import _logger
 T = TypeVar('T', bound='LaiaBaseModel')
 
 class OpenAPI:
-    yaml_path: str
+    yaml_path: str 
     routes: List[OpenAPIRoute]
     models: List[OpenAPIModel]
+    excluded_models: List[str] = [
+        "AccessRight", 
+        "Auth",
+        "Role",
+        "Type",  
+        "Point",
+        "GeometryPoint",
+        "LineString",
+        "GeometryLineString",
+        "Polygon",
+        "GeometryPolygon",
+        "MultiPoint", 
+        "GeometryMultiPoint",
+        "MultiLineString", 
+        "GeometryMultiLineString",
+        "MultiPolygon", 
+        "GeometryMultiPolygon",
+        "Geometry", 
+        "Feature",
+        "ValidationError", 
+        "HTTPValidationError", 
+        "HTTPException"
+    ]
 
     def __init__(self, yaml_path):
         self.yaml_path = yaml_path
@@ -41,6 +64,6 @@ class OpenAPI:
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
                 extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
-                if (model_name != "ValidationError" and model_name != "HTTPValidationError" and model_name != "HTTPException" and not model_name.startswith("Body_search_element_") and not model_name == "Auth" and not model_name == "AccessRight" and not model_name == "Role"):
+                if (model_name not in self.excluded_models and not model_name.startswith("Body_search_element_")):
                     self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
                     

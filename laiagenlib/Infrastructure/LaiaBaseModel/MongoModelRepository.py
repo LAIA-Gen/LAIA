@@ -1,7 +1,9 @@
 from typing import TypeVar, Optional, Dict
+from enum import Enum
 from pydantic import BaseModel
 from bson import ObjectId, regex
 from pymongo.collection import ReturnDocument
+import json
 from ...Application.Shared.Utils.Schemas import list_serial, individual_serial
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
@@ -49,6 +51,7 @@ class MongoModelRepository(ModelRepository):
     async def post_item(self, model_name: str, item: T):
         collection = self.db[model_name]
         item_dict = dict(item)
+        item_dict = json.loads(json.dumps(item_dict, default=lambda o: o.value if isinstance(o, Enum) else o))
         item_dict.pop('id', None)
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
