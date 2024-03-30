@@ -156,8 +156,23 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     
     if openapiModel:
       frontend_props = openapiModel.get_frontend_properties()
+      try:
+        defaultFields = "defaultFields: " + str(openapiModel.extensions['x-frontend-defaultFields']) + ", "
+      except KeyError:
+        defaultFields = ""
+      try:
+        pageSize = "pageSize: " + str(openapiModel.extensions['x-frontend-pageSize']) + ", "
+      except KeyError:
+        pageSize = ""
+      try:
+        widget = "widget: '" + str(openapiModel.extensions['x-frontend-widget']) + "', "
+      except KeyError:
+        widget = ""
     else:
       frontend_props = {}
+      defaultFields = ""
+      pageSize = ""
+      widget = ""
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)
@@ -206,7 +221,7 @@ part '{model_name.lower()}.g.dart';
 @JsonSerializable()
 @RiverpodGenAnnotation(baseURL)
 @HomeWidgetElementGenAnnotation()
-@ListWidgetGenAnnotation()
+@ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
 @elementWidgetGen
 @CopyWith()
 class {model_name} {{
