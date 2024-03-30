@@ -89,9 +89,10 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 
 ### Field extensions
 
-* `x-frontend-widget` Name of the widget overriding the default (String)
-* `x-frontend-fieldName` String name of the field (String)
-* `x-frontend-fieldDescription` Description of the field (String)
-* `x-frontend-editable` Editability of a field (Boolean)
-* `x-frontend-placeholder` Placeholder on the edition input form (String)
-* `x-frontend-relation` Model name of the relation id (String)
+* `x_frontend_widget` Name of the widget overriding the default (String)
+* `x_frontend_fieldName` String name of the field (String)
+* `x_frontend_fieldDescription` Description of the field (String)
+* `x_frontend_editable` Editability of a field (Boolean)
+* `x_frontend_placeholder` Placeholder on the edition input form (String)
+* `x_frontend_relation` Model name of the relation id (String)
+* `x_frontend_uspaceMap` Enaire Uspace regulation enabling (Boolean)
