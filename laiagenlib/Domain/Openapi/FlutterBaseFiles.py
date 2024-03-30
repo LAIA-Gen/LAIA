@@ -57,6 +57,7 @@ class Styles {
   static const buttonPrimaryColor = Color.fromARGB(255, 210, 223, 224);
   static const buttonPrimaryColorHover = Color.fromARGB(255, 165, 194, 191);
   static const dashboardBlock = Color.fromARGB(255, 196, 209, 208);
+  static const polygonColor = Color.fromARGB(118, 104, 161, 51);
 }
 """
 
@@ -66,7 +67,9 @@ import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_arcgis/flutter_map_arcgis.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutter_map;
 import 'package:{app_name}/models/geometry.dart';"""+"""
 
 part 'generic_widgets.g.dart';
@@ -219,10 +222,29 @@ class {model_name} {{
 """
 
 def geojson_models_file():
-   return """import 'package:json_annotation/json_annotation.dart';
+   return """// ignore_for_file: overridden_fields
+   
+import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
 
 part 'geometry.g.dart';
+
+@JsonSerializable()
+@CopyWith()
+class Geometry {
+  final String type;
+  final dynamic coordinates;
+
+  Geometry({
+    required this.type,
+    required this.coordinates,
+  });
+
+  factory Geometry.fromJson(Map<String, dynamic> json) => _$GeometryFromJson(json);
+
+  Map<String, dynamic> toJson() => _$GeometryToJson(this);
+}
+
 
 @JsonSerializable()
 @CopyWith()
@@ -244,14 +266,14 @@ class Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryLineString {
-  final String type;
+class GeometryLineString extends Geometry{
+  @override
   final List<List<double>> coordinates;
 
   GeometryLineString({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryLineString.fromJson(Map<String, dynamic> json) => _$GeometryLineStringFromJson(json);
 
@@ -276,14 +298,14 @@ class LineString extends Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryMultiLineString {
-  final String type;
+class GeometryMultiLineString extends Geometry {
+  @override
   final List<List<List<double>>> coordinates;
 
   GeometryMultiLineString({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryMultiLineString.fromJson(Map<String, dynamic> json) => _$GeometryMultiLineStringFromJson(json);
 
@@ -308,14 +330,14 @@ class MultiLineString extends Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryMultiPoint {
-  final String type;
+class GeometryMultiPoint extends Geometry {
+  @override
   final List<List<double>> coordinates;
 
   GeometryMultiPoint({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryMultiPoint.fromJson(Map<String, dynamic> json) => _$GeometryMultiPointFromJson(json);
 
@@ -340,14 +362,14 @@ class MultiPoint extends Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryMultiPolygon {
-  final String type;
+class GeometryMultiPolygon extends Geometry{
+  @override
   final List<List<List<List<double>>>> coordinates;
 
   GeometryMultiPolygon({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryMultiPolygon.fromJson(Map<String, dynamic> json) => _$GeometryMultiPolygonFromJson(json);
 
@@ -372,14 +394,14 @@ class MultiPolygon extends Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryPoint {
-  final String type;
+class GeometryPoint extends Geometry{
+  @override
   final List<double> coordinates;
 
   GeometryPoint({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryPoint.fromJson(Map<String, dynamic> json) => _$GeometryPointFromJson(json);
 
@@ -404,14 +426,14 @@ class Point extends Feature {
 
 @JsonSerializable()
 @CopyWith()
-class GeometryPolygon {
-  final String type;
+class GeometryPolygon extends Geometry{
+  @override
   final List<List<List<double>>> coordinates;
 
   GeometryPolygon({
-    required this.type,
+    required String type,
     required this.coordinates,
-  });
+  }): super(type: type, coordinates: coordinates);
 
   factory GeometryPolygon.fromJson(Map<String, dynamic> json) => _$GeometryPolygonFromJson(json);
 

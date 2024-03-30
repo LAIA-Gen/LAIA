@@ -58,6 +58,7 @@ class Styles {
   static const buttonPrimaryColor = Color.fromARGB(255, 210, 223, 224);
   static const buttonPrimaryColorHover = Color.fromARGB(255, 165, 194, 191);
   static const dashboardBlock = Color.fromARGB(255, 196, 209, 208);
+  static const polygonColor = Color.fromARGB(118, 104, 161, 51);
 }
 """
     assert FlutterBaseFiles.styles_dart() == expected_result
@@ -69,7 +70,10 @@ import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';"""+"""
+import 'package:flutter_map_arcgis/flutter_map_arcgis.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutter_map;
+import 'package:{app_name}/models/geometry.dart';"""+"""
 
 part 'generic_widgets.g.dart';
 
