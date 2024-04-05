@@ -1,5 +1,6 @@
 from typing import Dict, Any
 import bcrypt
+from .JWTToken import create_jwt_token
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
@@ -20,6 +21,12 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
 
     if bcrypt.checkpw(password.encode('utf-8'), user.get('password').encode('utf-8')):
         _logger.info("User logged in successfully")
-        return user
+
+        jwt_token = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'))
+
+        return {
+            'user': user,
+            'token': jwt_token
+        }
     else:
         raise ValueError("Incorrect email or password")

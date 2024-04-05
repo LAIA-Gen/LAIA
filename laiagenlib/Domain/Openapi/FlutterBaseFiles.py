@@ -219,7 +219,7 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 part '{model_name.lower()}.g.dart';
 
 @JsonSerializable()
-@RiverpodGenAnnotation(baseURL)
+@RiverpodGenAnnotation()
 @HomeWidgetElementGenAnnotation()
 @ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
 @elementWidgetGen
@@ -479,6 +479,7 @@ def pydantic_to_dart_type(pydantic_type: str):
         'float': 'double',
         'str': 'String',
         'bool': 'bool',
+        'datetime': 'DateTime',
         'list': 'List<dynamic>',
         'List': 'List<dynamic>',
         'List[int]': 'List<int>',
@@ -499,6 +500,7 @@ def pydantic_to_dart_type(pydantic_type: str):
         'Optional[bool]': 'bool?',
         'Optional[EmailStr]': 'String?',
         'Optional[float]': 'double?',
+        'Optional[datetime]': 'DateTime?',
         'Optional[List]': 'List<dynamic>?',
         'Optional[List[int]]': 'List<int>?',
         'Optional[List[str]]': 'List<String>?',

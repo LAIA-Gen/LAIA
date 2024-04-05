@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from .CreateLaiaUser import create_laia_user
+from .JWTToken import create_jwt_token
 from ..Shared.Utils import ValidateEmail, ValidatePassword
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
@@ -9,8 +10,9 @@ async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: l
     _logger.info("Registering new User")
     email = new_user_data.get('email')
     password = new_user_data.get('password')
+    name = new_user_data.get('name')
     
-    if not email or not password:
+    if not email or not password or not name:
         raise ValueError("Email and password are required for registration")
 
     if not ValidateEmail.validate_email(email):
@@ -25,4 +27,10 @@ async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: l
 
     user = await create_laia_user({**new_user_data}, model, user_roles, repository)
     _logger.info("User registered successfully")
-    return user
+
+    jwt_token = create_jwt_token(user.get('id'), name, user_roles)
+
+    return {
+        'user': user,
+        'token': jwt_token
+    }
