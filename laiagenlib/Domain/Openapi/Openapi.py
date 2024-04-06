@@ -64,6 +64,6 @@ class OpenAPI:
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
                 extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
-                if (model_name not in self.excluded_models and not model_name.startswith("Body_search_element_")):
+                if (model_name not in self.excluded_models and not model_name.startswith("Body_search_element_") and not model_name.startswith("Body_search_access_rights_")):
                     self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
                     
