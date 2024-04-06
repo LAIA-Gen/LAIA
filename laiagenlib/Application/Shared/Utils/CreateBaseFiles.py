@@ -29,7 +29,7 @@ def create_base_files(app_name: str, models: List[any] = []):
     for directory in directories:
         os.makedirs(os.path.join(dart_dir, directory), exist_ok=True)
 
-    main_file_content = main_dart(app_name)
+    main_file_content = main_dart(app_name, models)
     with open(os.path.join(dart_dir, 'main.dart'), 'w') as f:
         f.write(main_file_content)
 

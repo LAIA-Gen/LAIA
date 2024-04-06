@@ -4,8 +4,13 @@ from .OpenapiModel import OpenAPIModel
 from ..AccessRights.AccessRights import AccessRight
 from ..LaiaUser.Role import Role
 
-def main_dart(app_name: str):
-    return f"""import 'package:{app_name}/screens/home.dart';"""+"""
+def main_dart(app_name: str, models: List[OpenAPIModel]):
+    auth_models = [model for model in models if model.extensions.get('x-auth')]
+    import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in auth_models])
+    auth_screens = ', '.join([f"'{model.model_name}': {model.model_name}LoginWidget()" for model in auth_models])
+
+    file_content = f"""{import_statements}
+import 'package:{app_name}/screens/home.dart';"""+"""
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -22,7 +27,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'LAIA',
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           color:  Color.fromARGB(255, 255, 255, 255),
@@ -34,11 +39,39 @@ class MyApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.black),
         ),
       ),
-      home: Home(),
+      home: """+f"""{ "SplashScreen()" if auth_models else "Home()" }"""+""",
     );
   }
 }
 """
+    if auth_models:
+      file_content = file_content + """
+class SplashScreen extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<bool> tokenVerificationResult = ref.watch(verifyToken"""+f"""{auth_models[0].model_name}"""+"""Provider);
+
+    return Scaffold(
+      body: tokenVerificationResult.when(
+        data: (isValid) {
+          if (isValid) {
+            return Home();
+          } else {
+            return """+f"""{ ''.join([auth_models[0].model_name, 'LoginWidget();']) if len(auth_models) == 1 else f"DynamicLogInScreen(widgetMap: const {{ {auth_screens} }});"}"""+"""
+          }
+        },
+        loading: () => Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, stackTrace) {
+          return Container();
+        },
+      ),
+    );
+  }
+}
+"""
+    return file_content
 
 def api_dart():
     return """const String baseURL = 'http://localhost:8000';
@@ -81,7 +114,8 @@ class GenericWidgets {}
 def home_dart(app_name: str, models: List[OpenAPIModel]):
     laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
-    return f"""import 'package:laia_annotations/laia_annotations.dart';
+    return f"""import 'package:{app_name}/config/styles.dart';
+import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
 import 'package:flutter/foundation.dart';
@@ -194,12 +228,21 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       
       fields += ")\n"
       fields += f"  final {dart_prop_type} {prop_name};\n"
-      fields_constructor += f"    required this.{prop_name},\n"
+      if '?' in dart_prop_type:
+        fields_constructor += f"    this.{prop_name},\n"
+      else:
+        fields_constructor += f"    required this.{prop_name},\n"
 
     if fields_constructor:
       fields_constructor = fields_constructor[:-2]
     
     model_name = model.__name__
+    auth = 'false'
+    if openapiModel:
+      if openapiModel.extensions.get('x-auth'):
+        auth = 'true'
+        extra_imports += f"import 'package:shared_preferences/shared_preferences.dart';\n"
+        extra_imports += f"import 'package:{app_name}/screens/home.dart';\n"
 
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';
@@ -219,10 +262,10 @@ import 'package:flutter_typeahead/flutter_typeahead.dart';
 part '{model_name.lower()}.g.dart';
 
 @JsonSerializable()
-@RiverpodGenAnnotation()
+@RiverpodGenAnnotation(auth: {auth})
 @HomeWidgetElementGenAnnotation()
 @ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
-@elementWidgetGen
+@ElementWidgetGen(auth: {auth})
 @CopyWith()
 class {model_name} {{
 {fields}

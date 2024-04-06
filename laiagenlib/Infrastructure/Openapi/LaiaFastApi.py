@@ -13,11 +13,11 @@ from ...Domain.Shared.Utils.logger import _logger
 @asyncinit
 class LaiaFastApi():
 
-    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository):
+    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository, jwtSecretKey: str='secret_key'):
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
         self.repository_instance = repository(db)
-        self.repository_api_instance = repositoryAPI(self.api)
+        self.repository_api_instance = repositoryAPI(self.api, jwtSecretKey)
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
         self.api.add_middleware(

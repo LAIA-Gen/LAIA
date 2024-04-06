@@ -24,7 +24,7 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                         'openapi_extra': route.extensions
                     }
                     route.extra = False
-                if openapiModel.extensions.get(f'x-auth') and (route.path == f"/auth/register/{model_lowercase}/" or route.path == f"/auth/login/{model_lowercase}/"):
+                if openapiModel.extensions.get(f'x-auth') and (route.path == f"/auth/register/{model_lowercase}/" or route.path == f"/auth/login/{model_lowercase}/"or route.path == f"/auth/verify/{model_lowercase}/{{token}}"):
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):

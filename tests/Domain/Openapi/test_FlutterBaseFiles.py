@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
   }
 }
 """
-    assert FlutterBaseFiles.main_dart(app_name) == expected_result
+    assert FlutterBaseFiles.main_dart(app_name, []) == expected_result
 
 def test_api_dart():
     expected_result = """const String baseURL = 'http://localhost:8000';

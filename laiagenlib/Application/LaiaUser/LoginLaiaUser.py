@@ -5,7 +5,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 
-async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: ModelRepository):
+async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: ModelRepository, jwtSecretKey: str):
     _logger.info("Logging in User")
     email = new_user_data.get('email')
     password = new_user_data.get('password')
@@ -22,7 +22,7 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
     if bcrypt.checkpw(password.encode('utf-8'), user.get('password').encode('utf-8')):
         _logger.info("User logged in successfully")
 
-        jwt_token = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'))
+        jwt_token = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey)
 
         return {
             'user': user,
