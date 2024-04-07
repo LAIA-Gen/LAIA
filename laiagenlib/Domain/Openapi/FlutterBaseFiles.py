@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
 from ..AccessRights.AccessRights import AccessRight
 from ..LaiaUser.Role import Role
+from ...Domain.Shared.Utils.logger import _logger
 
 def main_dart(app_name: str, models: List[OpenAPIModel]):
     auth_models = [model for model in models if model.extensions.get('x-auth')]

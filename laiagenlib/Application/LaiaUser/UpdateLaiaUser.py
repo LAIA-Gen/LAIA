@@ -11,10 +11,6 @@ async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser
         new_email = updated_values['email']
         if not ValidateEmail.validate_email(new_email):
             raise ValueError("Invalid email address")
-        
-        existing_users, _ = await crud_instance.get_items(model_name=model.__name__.lower(), filters={'email': new_email})
-        if existing_users:
-            raise ValueError("User with this email already exists")
     
     if 'password' in updated_values:
         if not ValidatePassword.validate_password(updated_values['password']):

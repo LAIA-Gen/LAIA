@@ -36,7 +36,7 @@ from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, Multi
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
 
     excluded_models_pattern = "|".join(excluded_models)
-    model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearchElement\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
+    model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearch\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
     modified_content = re.sub(model_pattern, '', modified_content)
     
     for model in models:

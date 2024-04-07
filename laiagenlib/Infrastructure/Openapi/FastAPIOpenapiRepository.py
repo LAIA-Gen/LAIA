@@ -2,7 +2,7 @@ from typing import TypeVar, Type, Dict
 from pydantic import BaseModel
 from fastapi import FastAPI
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
-from ...Framework.AccessRights.CreateAccessRightsController import create_access_rights_router
+from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
@@ -29,9 +29,9 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         self.api.include_router(user_router)
 
     async def create_access_rights_routes(self, models: Dict[str, Type[BaseModel]], repository: ModelRepository):
-        router = create_access_rights_router(models=models, repository=repository)
+        router = CRUDAccessRightsController(models=models, repository=repository)
         self.api.include_router(router)
 
     async def create_roles_routes(self, repository: ModelRepository=None):
-        router = CRUDRoleController(repository=repository)
+        router = await CRUDRoleController(repository=repository)
         self.api.include_router(router)

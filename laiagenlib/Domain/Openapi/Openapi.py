@@ -11,6 +11,7 @@ class OpenAPI:
     yaml_path: str 
     routes: List[OpenAPIRoute]
     models: List[OpenAPIModel]
+    laia_models: List[OpenAPIModel]
     excluded_models: List[str] = [
         "AccessRight", 
         "Auth",
@@ -39,6 +40,7 @@ class OpenAPI:
         self.yaml_path = yaml_path
         self.routes = []
         self.models = []
+        self.laia_models = []
 
         with open(self.yaml_path, 'r') as file:
             openapi_spec = yaml.safe_load(file)
@@ -64,6 +66,8 @@ class OpenAPI:
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
                 extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
-                if (model_name not in self.excluded_models and not model_name.startswith("Body_search_element_")):
+                if (model_name in ['AccessRight', 'Role']):
+                    self.laia_models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
+                if (model_name not in self.excluded_models and not model_name.startswith("Body_search_element_") and not model_name.startswith("Body_search_access_rights_")):
                     self.models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
                     
