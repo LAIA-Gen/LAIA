@@ -9,9 +9,13 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDRoleController(repository: ModelRepository=None):
+async def CRUDRoleController(repository: ModelRepository=None):
     model = Role
     router = APIRouter(tags=[model.__name__])
+
+    admin_role, _ = await repository.get_items("role", skip=0, limit=10, filters={ "name": "admin"})
+    if not admin_role:
+        await CreateRole.create_role({"name": "admin"}, ["admin"], repository)
 
     @router.post("/role/", response_model=dict)
     async def create_element(element: Role):

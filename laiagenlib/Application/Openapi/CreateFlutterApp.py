@@ -40,9 +40,10 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     with open(os.path.join(app_path, 'lib', 'models', 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
 
-    laia_models = [AccessRight, Role]
-    for model in laia_models:
-        model_file_content = model_dart(app_name=app_name, model=model)
+    laia_models = {'AccessRight': AccessRight, 'Role': Role}
+    for laiaModel in openapi.laia_models:
+        model = laia_models.get(laiaModel.model_name)
+        model_file_content = model_dart(openapiModel=laiaModel, app_name=app_name, model=model)
         with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
 

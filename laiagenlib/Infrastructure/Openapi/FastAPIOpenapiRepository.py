@@ -33,5 +33,5 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         self.api.include_router(router)
 
     async def create_roles_routes(self, repository: ModelRepository=None):
-        router = CRUDRoleController(repository=repository)
+        router = await CRUDRoleController(repository=repository)
         self.api.include_router(router)

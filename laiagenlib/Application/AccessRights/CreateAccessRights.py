@@ -11,8 +11,20 @@ async def create_access_rights(repository: ModelRepository, new_access_rights: d
         pass
     else:
         raise ValueError("Missing required parameters")
+    
+    existing_roles, _ = await repository.get_items(
+        "role", 
+        skip=0, 
+        limit=10, 
+        filters={
+            "id": new_access_rights.get("role"),
+        }
+    )
 
-    if new_access_rights.get("model") != model.__name__.lower():
+    if not existing_roles:
+        raise ValueError("Provided role does not exist")
+    
+    if new_access_rights.get("model").lower() != model.__name__.lower():
         raise ValueError("Provided model name does not match the class model name")
 
     if "admin" not in user_roles:

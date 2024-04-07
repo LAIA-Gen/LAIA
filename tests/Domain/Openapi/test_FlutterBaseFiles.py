@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from laiagenlib.Domain.Openapi import FlutterBaseFiles
+from laiagenlib.Domain.AccessRights.AccessRights import AccessRight
+from laiagenlib.Domain.Shared.Utils.logger import _logger
 from .Stub.StubOpenAPIModelBuilder import StubOpenAPIModelBuilder
 
 def test_main_dart():
