@@ -1,4 +1,5 @@
 from typing import TypeVar, Optional, Dict
+from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel
 from bson import ObjectId, regex
@@ -51,6 +52,11 @@ class MongoModelRepository(ModelRepository):
     async def post_item(self, model_name: str, item: T):
         collection = self.db[model_name]
         item_dict = dict(item)
+
+        for key, value in item_dict.items():
+            if isinstance(value, datetime):
+                item_dict[key] = value.isoformat()
+
         item_dict = json.loads(json.dumps(item_dict, default=lambda o: o.value if isinstance(o, Enum) else o))
         item_dict.pop('id', None)
         created_result = collection.insert_one(item_dict)
