@@ -196,6 +196,14 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       except KeyError:
         defaultFields = ""
       try:
+        defaultFieldsDetail = "defaultFieldsDetail: " + str(openapiModel.extensions['x-frontend-defaultFieldsDetail']) + ", "
+      except KeyError:
+        defaultFieldsDetail = ""
+      try:
+        widgetDistributionDetail = "widgetDistributionDetail: " + str(openapiModel.extensions['x-frontend-widgetDistributionDetail']) + ", "
+      except KeyError:
+        widgetDistributionDetail = ""
+      try:
         pageSize = "pageSize: " + str(openapiModel.extensions['x-frontend-pageSize']) + ", "
       except KeyError:
         pageSize = ""
@@ -206,6 +214,8 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     else:
       frontend_props = {}
       defaultFields = ""
+      defaultFieldsDetail = ""
+      widgetDistributionDetail = ""
       pageSize = ""
       widget = ""
     
@@ -266,7 +276,7 @@ part '{model_name.lower()}.g.dart';
 @RiverpodGenAnnotation(auth: {auth})
 @HomeWidgetElementGenAnnotation()
 @ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
-@ElementWidgetGen(auth: {auth})
+@ElementWidgetGen({defaultFieldsDetail}{widgetDistributionDetail}auth: {auth})
 @CopyWith()
 class {model_name} {{
 {fields}
