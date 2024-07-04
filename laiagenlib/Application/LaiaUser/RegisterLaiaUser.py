@@ -28,7 +28,7 @@ async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: l
     user = await create_laia_user({**new_user_data}, model, user_roles, repository)
     _logger.info("User registered successfully")
 
-    jwt_token = create_jwt_token(user.get('id'), name, user_roles, jwtSecretKey)
+    jwt_token = create_jwt_token(user.get('id'), name, [], jwtSecretKey)
 
     return {
         'user': user,

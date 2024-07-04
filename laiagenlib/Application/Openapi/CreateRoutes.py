@@ -6,7 +6,7 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str=""):
+async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key'):
     modelsTypes = {}
     for openapiModel in openapi.models:
         model_module = import_model(models_path)
@@ -28,9 +28,9 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):
-            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info)
+            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey)
         else:
-            await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info)
+            await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey)
     
     await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository)
     await repositoryAPI.create_roles_routes(repository)

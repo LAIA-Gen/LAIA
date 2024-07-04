@@ -8,7 +8,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, routes_info: dict=None):
+def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key'):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
 

@@ -18,13 +18,13 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             raise ValueError("API must be an instance of FastAPI for this implementation")
         super().__init__(api, jwtSecretKey)
 
-    async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None):
-        router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info)
+    async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key'):
+        router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey)
         self.api.include_router(router)
 
     async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key'):
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey)
-        user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info)
+        user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
 

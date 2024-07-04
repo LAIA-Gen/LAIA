@@ -22,7 +22,6 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
 
     @router.post(f"/auth/login/{model_name}/", response_model=dict)
     async def login_user(element: Auth):
-        user_roles=["admin"]
         try:
             return await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey)
         except Exception as e:
@@ -30,7 +29,6 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
 
     @router.get(f"/auth/verify/{model_name}/{{token}}", response_model=dict)
     async def verify_user(token: str):
-        user_roles=["admin"]
         try:
             return JWTToken.verify_jwt_token(token, jwtSecretKey)
         except Exception as e:
