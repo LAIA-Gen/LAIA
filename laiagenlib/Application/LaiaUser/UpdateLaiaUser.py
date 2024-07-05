@@ -13,10 +13,11 @@ async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser
             raise ValueError("Invalid email address")
     
     if 'password' in updated_values:
-        if not ValidatePassword.validate_password(updated_values['password']):
-            raise ValueError("Invalid password")
-        hashed_password = bcrypt.hashpw(updated_values['password'].encode('utf-8'), bcrypt.gensalt())
-        updated_values['password'] = hashed_password.decode('utf-8')
+        if not updated_values['password'].startswith('$2b$'):
+            if not ValidatePassword.validate_password(updated_values['password']):
+                raise ValueError("Invalid password")
+            hashed_password = bcrypt.hashpw(updated_values['password'].encode('utf-8'), bcrypt.gensalt())
+            updated_values['password'] = hashed_password.decode('utf-8')
 
     user = await update_laia_base_model(element_id, {**updated_values}, model, user_roles, crud_instance)
     _logger.info("User updated successfully")

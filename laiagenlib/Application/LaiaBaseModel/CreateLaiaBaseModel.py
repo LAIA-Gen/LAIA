@@ -17,7 +17,6 @@ async def create_laia_base_model(new_element: dict, model: Type, user_roles: lis
 
     if "admin" not in user_roles:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "create", repository)
-        _logger.info("ACCESSSSS: " + str(access_rights_list))
         _logger.info(new_element)
         await check_access_rights_of_fields(model, 'fields_create', new_element, access_rights_list)
     
@@ -28,6 +27,7 @@ async def create_laia_base_model(new_element: dict, model: Type, user_roles: lis
 
     if "admin" not in user_roles:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
+        _logger.info(allowed_fields)
         created_element = {field: created_element[field] for field in allowed_fields if field in created_element}
 
     _logger.info(f"{model.__name__} created successfully")

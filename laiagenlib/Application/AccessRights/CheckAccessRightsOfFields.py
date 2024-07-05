@@ -25,6 +25,8 @@ async def check_access_rights_of_fields(model: Type, fields_type: str, new_eleme
                     if fields_dict[field_name] == 1:
                         allowed_by_some_role = True
                         break
+                elif field_name == 'id' or field_name == 'owner':
+                    allowed_by_some_role = True
 
         if not allowed_by_some_role:
             raise PermissionError(f"Insufficient permissions to create the field '{field_name}' in any role.")

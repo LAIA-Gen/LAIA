@@ -26,7 +26,7 @@ async def update_access_rights(element_id:str, repository: ModelRepository, new_
         raise ValueError("Model and role cannot be changed during update")
     
     try:
-        access_right = AccessRight(**new_access_rights)
+        new_access_rights["model"] = new_access_rights.get("model").lower()
     except ValueError as ve:
         raise ValueError(str(ve))
     

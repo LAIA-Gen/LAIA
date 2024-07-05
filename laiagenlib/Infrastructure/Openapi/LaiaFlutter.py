@@ -16,7 +16,12 @@ class LaiaFlutter():
             os.makedirs(models_dir)
 
         models_path = os.path.join(models_dir, "models.py")
+
+        auth_required = False
+        for model in self.openapi.models:
+            if model.extensions.get(f'x-auth'):
+                auth_required = True
         
         create_base_files(app_name, self.openapi.models)
         app_path = os.path.join(os.path.dirname(self.openapi_path), app_name)
-        await create_flutter_app(self.openapi , app_name, app_path, models_path)
+        await create_flutter_app(self.openapi , app_name, app_path, models_path, auth_required)

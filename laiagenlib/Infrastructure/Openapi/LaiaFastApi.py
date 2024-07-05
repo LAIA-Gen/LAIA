@@ -34,6 +34,12 @@ class LaiaFastApi():
 
         models_path = os.path.join(backend_dir, "models.py")
         routes_path = os.path.join(backend_dir, "routes.py")
+
+        auth_required = False
+        for model in self.openapi.models:
+            if model.extensions.get(f'x-auth'):
+                auth_required = True
+
         create_models_file(self.openapi_path, models_path, self.openapi.models, self.openapi.excluded_models)
         create_routes_file(routes_path)
-        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey)
+        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey, auth_required)

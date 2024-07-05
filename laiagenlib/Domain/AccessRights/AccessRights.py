@@ -12,6 +12,7 @@ class AccessRight(LaiaBaseModel):
     fields_create: Dict = Field({}, x_frontend_placeholder="{'field_1': 1, 'field_2': 1, 'field_3': 0, ...}", x_frontend_fieldName="Fields Creation")
     fields_edit: Dict = Field({}, x_frontend_placeholder="{'field_1': 1, 'field_2': 1, 'field_3': 0, ...}", x_frontend_fieldName="Fields Edition")
     fields_visible: Dict = Field({}, x_frontend_placeholder="{'field_1': 1, 'field_2': 1, 'field_3': 0, ...}", x_frontend_fieldName="Fields Visibility")
+    owner: Optional[bool] = Field(False, x_frontend_fieldName="Only applies to own records")
 
     def __init__(self, **data):
         if "operations" in data:

@@ -1,18 +1,28 @@
 from typing import List
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.AccessRights.AccessRights import AccessRight
+from ...Domain.Shared.Utils.logger import _logger
 
 async def check_access_rights_of_user(model_name: str, roles: List[str], operation: str, repository: ModelRepository):
     access_rights_list = []
     
-    for role in roles:
+    for role_name in roles:
+        role, _ = await repository.get_items(
+            "role",
+            skip = 0, 
+            limit = 1, 
+            filters={
+                "name": role_name
+            }
+        )
+        _logger.info(role)
         access_rights, _ = await repository.get_items(
             "accessright", 
             skip=0, 
             limit=1, 
             filters={
                 "model": model_name,
-                "role": role
+                "role": role[0]['id']
             }
         )
 

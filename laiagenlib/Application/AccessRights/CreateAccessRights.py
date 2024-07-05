@@ -67,6 +67,7 @@ async def create_access_rights(repository: ModelRepository, new_access_rights: d
         raise ValueError("AccessRight with the same role and model already exists")
     
     try:
+        new_access_rights["model"] = new_access_rights.get("model").lower()
         access_rights = AccessRight(**new_access_rights)
     except Exception:
         raise ValueError("Missing required parameters")

@@ -8,7 +8,7 @@ from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
 
-async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str=""):
+async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str="", auth_required: bool = False):
     subprocess.run("flutter create " + app_name, shell=True)
 
     # TODO: change the following local dart libraries to the ones on the marketç
@@ -40,12 +40,13 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     with open(os.path.join(app_path, 'lib', 'models', 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
 
-    laia_models = {'AccessRight': AccessRight, 'Role': Role}
-    for laiaModel in openapi.laia_models:
-        model = laia_models.get(laiaModel.model_name)
-        model_file_content = model_dart(openapiModel=laiaModel, app_name=app_name, model=model)
-        with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
-            f.write(model_file_content)
+    if auth_required:
+        laia_models = {'AccessRight': AccessRight, 'Role': Role}
+        for laiaModel in openapi.laia_models:
+            model = laia_models.get(laiaModel.model_name)
+            model_file_content = model_dart(openapiModel=laiaModel, app_name=app_name, model=model)
+            with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
+                f.write(model_file_content)
 
     home_file_content = home_dart(app_name, openapi.models)
     with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
