@@ -12,6 +12,7 @@ from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.LaiaUser.Role import Role
 from ...Application.LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from ...Application.LaiaBaseModel.SearchLaiaBaseModel import search_laia_base_model
+from ...Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='BaseModel')
 
@@ -33,7 +34,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             password =  bcrypt.hashpw("admin".encode('utf-8'), bcrypt.gensalt())
             admin_role = await search_laia_base_model(0, 1, {"name": "admin"}, {}, Role, ["admin"], repository)
             first_user_values = {"name": "Admin", "email": "admin", "roles": [admin_role['items'][0]['id']]}
-            await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository)
+            try:
+                await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository)
+            except Exception as e:
+                _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey)
         user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
