@@ -9,10 +9,11 @@ from ...Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
+from bson import ObjectId
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, model_create: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -38,8 +39,11 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
             _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:
-                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
-                user_roles.append(user_role['name'])
+                if isinstance(role, str) and len(role) != 24:
+                    user_roles.append(role)
+                else:
+                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
+                    user_roles.append(user_role['name'])
 
         except ValueError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
@@ -60,20 +64,23 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
         except ValueError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
         
-        return user_id
+        return ObjectId(user_id)
 
     @router.post(**routes_info['create'], response_model=dict)
-    async def create_element(element: model, token: get_auth_dependency() = None):
+    async def create_element(element: model_create, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        element_dict = element.dict()
         if auth_required:
-            element.owner = await get_user_id(repository, token, jwtSecretKey)
+            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey)
+
+        element_full = model(**element_dict)
         try:
-            return await CreateLaiaUser.create_laia_user(dict(element), model, user_roles, repository)
+            return await CreateLaiaUser.create_laia_user(dict(element_full), model, user_roles, repository)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @router.put(**routes_info['update'], response_model=dict)
-    async def update_element(element_id: str, values: dict, token: get_auth_dependency() = None):
+    async def update_element(element_id: str, values: model_create, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
             return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository)

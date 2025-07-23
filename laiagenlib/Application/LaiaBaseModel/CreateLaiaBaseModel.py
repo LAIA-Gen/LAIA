@@ -4,14 +4,10 @@ from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fiel
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
+from bson import ObjectId
 
-async def create_laia_base_model(new_element: dict, model: Type, user_roles: list, repository: ModelRepository):
+async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository):
     _logger.info(f"Creating new {model.__name__} with values: {new_element}")
-
-    try:
-        element = model(**new_element)
-    except Exception:
-        raise ValueError("Missing required parameters")
     
     model_name = model.__name__.lower()
 
@@ -22,7 +18,7 @@ async def create_laia_base_model(new_element: dict, model: Type, user_roles: lis
     
     created_element = await repository.post_item(
         model_name,
-        element.model_dump()
+        new_element
     )
 
     if "admin" not in user_roles:
@@ -31,4 +27,15 @@ async def create_laia_base_model(new_element: dict, model: Type, user_roles: lis
         created_element = {field: created_element[field] for field in allowed_fields if field in created_element}
 
     _logger.info(f"{model.__name__} created successfully")
-    return created_element
+    return serialize_bson(created_element)
+
+
+def serialize_bson(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_bson(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_bson(i) for i in obj]
+    elif isinstance(obj, ObjectId):
+        return str(obj)
+    else:
+        return obj

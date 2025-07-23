@@ -9,6 +9,5 @@ pytest-runner
 
 pydantic
 fastapi
-bson
 pymongo
 bcrypt

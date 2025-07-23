@@ -51,16 +51,17 @@ class MongoModelRepository(ModelRepository):
 
     async def post_item(self, model_name: str, item: T):
         collection = self.db[model_name]
-        item_dict = dict(item)
 
-        for key, value in item_dict.items():
-            if isinstance(value, datetime):
-                item_dict[key] = value.isoformat()
+        if hasattr(item, 'model_dump'):
+            item_dict = item.model_dump(mode="python")
+        else:
+            item_dict = dict(item)
 
-        item_dict = json.loads(json.dumps(item_dict, default=lambda o: o.value if isinstance(o, Enum) else o))
         item_dict.pop('id', None)
+
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
+
         item_dict['id'] = str(inserted_id)
         item_dict.pop('_id', None)
 

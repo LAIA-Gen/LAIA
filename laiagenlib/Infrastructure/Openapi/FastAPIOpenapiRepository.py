@@ -23,11 +23,11 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             raise ValueError("API must be an instance of FastAPI for this implementation")
         super().__init__(api, jwtSecretKey)
 
-    async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
-        router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+    async def create_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+        router = CRUDLaiaBaseModelController(repository=repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -39,7 +39,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             except Exception as e:
                 _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey)
-        user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        user_router = CRUDLaiaUserController(repository=repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
 
