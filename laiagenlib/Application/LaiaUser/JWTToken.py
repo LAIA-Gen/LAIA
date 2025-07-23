@@ -1,18 +1,35 @@
 import jwt
 from datetime import datetime, timedelta
 
-def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str) -> str:
+def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str) -> dict:
     """
-    Create a JWT token for the given user ID, name, and roles.
+    Create both an access token and a refresh token for the user.
+    Access token lasts 5 minutes.
+    Refresh token lasts 7 days.
     """
-    payload = {
+    access_payload = {
         'user_id': user_id,
         'user_name': user_name,
         'user_roles': user_roles,
-        'exp': datetime.utcnow() + timedelta(days=1) 
+        'type': 'access',
+        'exp': datetime.utcnow() + timedelta(minutes=5)
     }
-    token = jwt.encode(payload, jwtSecretKey, algorithm='HS256')
-    return token
+
+    refresh_payload = {
+        'user_id': user_id,
+        'user_name': user_name,
+        'user_roles': user_roles,
+        'type': 'refresh',
+        'exp': datetime.utcnow() + timedelta(days=7)
+    }
+
+    access_token = jwt.encode(access_payload, jwtSecretKey, algorithm='HS256')
+    refresh_token = jwt.encode(refresh_payload, jwtSecretKey, algorithm='HS256')
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token
+    }
 
 def verify_jwt_token(token: str, jwtSecretKey: str) -> dict:
     """

@@ -22,11 +22,12 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
     if bcrypt.checkpw(password.encode('utf-8'), user.get('password').encode('utf-8')):
         _logger.info("User logged in successfully")
 
-        jwt_token = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey)
+        tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey)
 
         return {
             'user': user,
-            'token': jwt_token
+            'access_token': tokens['access_token'],
+            'refresh_token': tokens['refresh_token']
         }
     else:
         raise ValueError("Incorrect email or password")
