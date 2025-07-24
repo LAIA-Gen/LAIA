@@ -40,3 +40,46 @@ def verify_jwt_token(token: str, jwtSecretKey: str) -> dict:
         return payload
     except Exception:
         raise ValueError("Invalid session token")
+    
+def refresh_token(refresh_token: str, secret_key: str) -> dict:
+    """
+    Validate the refresh token and return new access and refresh tokens.
+    """
+    try:
+        payload = jwt.decode(refresh_token, secret_key, algorithms=["HS256"])
+
+        if payload.get("type") != "refresh":
+            raise Exception("Invalid token type")
+
+        user_id = payload.get("user_id")
+        user_name = payload.get("user_name")
+        user_roles = payload.get("user_roles")
+
+        new_access_payload = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "user_roles": user_roles,
+            "type": "access",
+            "exp": datetime.utcnow() + timedelta(minutes=5)
+        }
+
+        new_refresh_payload = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "user_roles": user_roles,
+            "type": "refresh",
+            "exp": datetime.utcnow() + timedelta(days=7)
+        }
+
+        new_access_token = jwt.encode(new_access_payload, secret_key, algorithm="HS256")
+        new_refresh_token = jwt.encode(new_refresh_payload, secret_key, algorithm="HS256")
+
+        return {
+            "access_token": new_access_token,
+            "refresh_token": new_refresh_token
+        }
+
+    except jwt.ExpiredSignatureError:
+        raise Exception("Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise Exception("Invalid refresh token")

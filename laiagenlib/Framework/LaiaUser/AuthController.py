@@ -1,10 +1,13 @@
 from fastapi import HTTPException, status
 from fastapi.routing import APIRouter
 from typing import TypeVar
+
+from laiagenlib.Application.LaiaUser import VerifyLaiaUser
 from ...Application.LaiaUser import RegisterLaiaUser, LoginLaiaUser, JWTToken
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.LaiaUser.Auth import Auth
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from fastapi import Body
 
 T = TypeVar('T', bound='LaiaUser')
 
@@ -30,8 +33,15 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     @router.get(f"/auth/verify/{model_name}/{{token}}", response_model=dict)
     async def verify_user(token: str):
         try:
-            return JWTToken.verify_jwt_token(token, jwtSecretKey)
+            return await VerifyLaiaUser.verify(token, model, repository, jwtSecretKey)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        
+    @router.post(f"/auth/refresh/{model_name}/", response_model=dict)
+    async def refresh_token_route(refresh_token: str = Body(..., embed=True)):
+        try:
+            return JWTToken.refresh_token(refresh_token, jwtSecretKey)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
     return router
