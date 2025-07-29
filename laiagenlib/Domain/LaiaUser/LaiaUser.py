@@ -1,8 +1,7 @@
 from typing import List
-from pydantic import Field
-from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from pydantic import BaseModel, Field
 
-class LaiaUser(LaiaBaseModel):
+class LaiaUser(BaseModel):
     email: str
     password: str
     roles: List[str] = Field([], x_frontend_relation="Role")

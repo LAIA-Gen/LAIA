@@ -19,7 +19,7 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
     
     user = users[0]
 
-    if bcrypt.checkpw(password.encode('utf-8'), user.get('password').encode('utf-8')):
+    if bcrypt.checkpw(password.encode('utf-8'), user.get('password')):
         _logger.info("User logged in successfully")
 
         tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey)

@@ -12,13 +12,17 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     subprocess.run("flutter create " + app_name, shell=True)
 
     # TODO: change the following local dart libraries to the ones on the marketç
-    await asyncio.gather(
-        run("flutter pub add laia_annotations -C " + f"./{app_name}"),
-        run("flutter pub add --dev laia_riverpod_custom_generator -C " + f"./{app_name}"),
-        run("flutter pub add --dev laia_widget_generator -C " + f"./{app_name}"),
-        run("flutter pub add collection:^1.18.0 json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 shared_preferences:^2.2.2 -C " + f"./{app_name}"),
-        run("flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.4 -C " + f"./{app_name}")
-    )
+    await run(f"flutter pub add laia_annotations -C ./{app_name}")
+    await run(f"flutter pub add --dev laia_riverpod_custom_generator -C ./{app_name}")
+    await run(f"flutter pub add --dev laia_widget_generator -C ./{app_name}")
+    await run(f"flutter pub add collection json_annotation json_serializable flutter_riverpod http tuple copy_with_extension flutter_map flutter_map_arcgis dio latlong2 flutter_typeahead dart_amqp shared_preferences -C ./{app_name}")
+    await run(f"flutter pub add --dev riverpod_lint build_runner copy_with_extension_gen flutter_lints -C ./{app_name}")
+    
+    models_dir = os.path.join(f"./{app_name}", "lib", "models")
+    screens_dir = os.path.join(f"./{app_name}", "lib", "screens")   
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(screens_dir, exist_ok=True)
+
     assets = "assets/"
     with open(f"{app_name}/pubspec.yaml", "r") as file:
         pubspec_content = yaml.safe_load(file)
@@ -31,13 +35,15 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         yaml.dump(pubspec_content, file)
 
     for openapiModel in openapi.models:
+        if openapiModel.model_name.startswith("Body_"):
+            continue
         model_module = import_model(models_path)
         model = getattr(model_module, openapiModel.model_name)
         model_file_content = model_dart(openapiModel, app_name, model)
-        with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
+        with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
     
-    with open(os.path.join(app_path, 'lib', 'models', 'geometry.dart'), 'w') as f:
+    with open(os.path.join(models_dir, 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
 
     if auth_required:
@@ -45,11 +51,11 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         for laiaModel in openapi.laia_models:
             model = laia_models.get(laiaModel.model_name)
             model_file_content = model_dart(openapiModel=laiaModel, app_name=app_name, model=model)
-            with open(os.path.join(app_path, 'lib', 'models', f'{model.__name__.lower()}.dart'), 'w') as f:
+            with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
                 f.write(model_file_content)
 
     home_file_content = home_dart(app_name, openapi.models)
-    with open(os.path.join(app_path, 'lib', 'screens', 'home.dart'), 'w') as f:
+    with open(os.path.join(screens_dir, 'home.dart'), 'w') as f:
         f.write(home_file_content)
 
 async def run(cmd):
