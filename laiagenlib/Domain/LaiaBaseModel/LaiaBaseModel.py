@@ -6,4 +6,4 @@ from laiagenlib.Domain.Shared.Types.objectid_annotation import ObjectIdPydanticA
 
 class LaiaBaseModel(BaseModel):
     id: str = ""
-    owner: Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]]
+    owner: Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]] = None
