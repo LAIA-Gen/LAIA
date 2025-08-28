@@ -31,10 +31,24 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         current_page = (skip // limit) + 1
     except Exception:
         raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
+    
+    serialized_items = []
+    for item in items:
+        serialized_items.append(serialize_bson(item))
 
     _logger.info(f"{model.__name__} search completed successfully")
     return {
-        "items": items,
+        "items": serialized_items,
         "current_page": current_page,
         "max_pages": max_pages,
     }
+
+def serialize_bson(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_bson(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_bson(i) for i in obj]
+    elif isinstance(obj, ObjectId):
+        return str(obj)
+    else:
+        return obj
