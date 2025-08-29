@@ -1,5 +1,7 @@
 from typing import Type, List
 from math import ceil
+
+from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
@@ -42,13 +44,3 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         "current_page": current_page,
         "max_pages": max_pages,
     }
-
-def serialize_bson(obj):
-    if isinstance(obj, dict):
-        return {k: serialize_bson(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [serialize_bson(i) for i in obj]
-    elif isinstance(obj, ObjectId):
-        return str(obj)
-    else:
-        return obj

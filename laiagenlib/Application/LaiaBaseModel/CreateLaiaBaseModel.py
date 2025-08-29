@@ -1,4 +1,6 @@
 from typing import Type
+
+from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
@@ -28,14 +30,3 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
 
     _logger.info(f"{model.__name__} created successfully")
     return serialize_bson(created_element)
-
-
-def serialize_bson(obj):
-    if isinstance(obj, dict):
-        return {k: serialize_bson(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [serialize_bson(i) for i in obj]
-    elif isinstance(obj, ObjectId):
-        return str(obj)
-    else:
-        return obj
