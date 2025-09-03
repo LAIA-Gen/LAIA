@@ -8,7 +8,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from fastapi.encoders import jsonable_encoder
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            
@@ -22,7 +22,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
 
     model_name = model.__name__.lower()
 
-    if "admin" not in user_roles:
+    if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "update", repository)
         await check_access_rights_of_fields(model, 'fields_edit', updated_values, access_rights_list)
 
@@ -38,7 +38,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         _logger.exception("Unexpected error updating %s with ID %s", model.__name__, element_id)
         raise 
     
-    if "admin" not in user_roles:
+    if "admin" not in user_roles and use_access_rights:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
         updated_element = {field: updated_element[field] for field in allowed_fields if field in updated_element}
 

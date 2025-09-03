@@ -42,11 +42,9 @@ from bson import ObjectId"""
 
     create_classes = []
     for block in class_blocks:
-        # Sustituye el nombre de clase para la versión Create
         create_block = re.sub(r'class\s+(\w+)\(LaiaBaseModel\):', r'class \1Create(BaseModel):', block)
         create_classes.append(create_block)
 
-    # Añade las clases Create al final del archivo
     modified_content += '\n\n' + '\n'.join(create_classes)
 
     excluded_models_pattern = "|".join(excluded_models)

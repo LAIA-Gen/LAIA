@@ -36,7 +36,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
             _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:
-                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
+                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
                 user_roles.append(user_role['name'])
 
         except ValueError:

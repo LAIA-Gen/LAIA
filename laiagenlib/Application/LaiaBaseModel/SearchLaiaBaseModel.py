@@ -8,12 +8,12 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = ''):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
 
-    if "admin" not in user_roles:
+    if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "search", repository)
         _logger.info("USER ID: " + user_id)
         _logger.info(access_rights_list)
@@ -23,7 +23,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
 
     try:
         items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)
-        if "admin" not in user_roles:
+        if "admin" not in user_roles and use_access_rights:
             allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
             items = [
                 {field: item[field] for field in allowed_fields if field in item}

@@ -13,7 +13,7 @@ from bson import ObjectId
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, model_create: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, model_create: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -42,7 +42,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
                 if isinstance(role, str) and len(role) != 24:
                     user_roles.append(role)
                 else:
-                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
+                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
                     user_roles.append(user_role['name'])
 
         except ValueError:
@@ -75,13 +75,13 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
         element_full = model(**element_dict)
 
-        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository)
+        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights)
 
     @router.put(**routes_info['update'], response_model=dict)
     async def update_element(element_id: str, values: model_create, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository)
+            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
@@ -89,7 +89,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -97,7 +97,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
+            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights)
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -109,7 +109,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

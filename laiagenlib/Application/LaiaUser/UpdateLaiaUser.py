@@ -27,6 +27,6 @@ async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser
             hashed_password = bcrypt.hashpw(updated_values['password'].encode('utf-8'), bcrypt.gensalt())
             updated_values['password'] = hashed_password.decode('utf-8')
 
-    user = await update_laia_base_model(element_id, {**updated_values}, model, user_roles, crud_instance)
+    user = await update_laia_base_model(element_id, {**updated_values}, model, user_roles, crud_instance, True)
     _logger.info("User updated successfully")
     return user

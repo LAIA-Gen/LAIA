@@ -42,7 +42,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, mode
                 if isinstance(role, str) and len(role) != 24:
                     user_roles.append(role)
                 else:
-                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
+                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
                     user_roles.append(user_role['name'])
 
         except ValueError:
@@ -91,7 +91,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, mode
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -99,7 +99,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, mode
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
+            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, True)
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -111,7 +111,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, mode
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

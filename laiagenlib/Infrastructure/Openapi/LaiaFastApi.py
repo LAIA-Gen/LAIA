@@ -13,7 +13,7 @@ from ...Domain.Shared.Utils.logger import _logger
 @asyncinit
 class LaiaFastApi():
 
-    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository, jwtSecretKey: str='secret_key'):
+    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository, use_access_rights: bool, jwtSecretKey: str='secret_key'):
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
         self.repository_instance = repository(db)
@@ -42,4 +42,4 @@ class LaiaFastApi():
 
         create_models_file(self.openapi_path, models_path, self.openapi.models, self.openapi.excluded_models)
         create_routes_file(routes_path)
-        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey, auth_required)
+        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey, auth_required, use_access_rights)
