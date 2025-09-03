@@ -7,6 +7,14 @@ from ...Domain.Shared.Utils.logger import _logger
 
 async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser, user_roles: list, crud_instance: ModelRepository):
     _logger.info("Updating new User")
+
+    if hasattr(updated_values, "dict"): 
+        updated_values = updated_values.dict(exclude_unset=True)
+    elif hasattr(updated_values, "model_dump"):
+        updated_values = updated_values.model_dump(exclude_unset=True)
+    elif not isinstance(updated_values, dict):
+        updated_values = dict(updated_values)
+
     if 'email' in updated_values:
         new_email = updated_values['email']
         if not ValidateEmail.validate_email(new_email):

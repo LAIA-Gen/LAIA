@@ -1,4 +1,6 @@
 from typing import Type
+
+from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
@@ -24,4 +26,4 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         updated_element = {field: updated_element[field] for field in allowed_fields if field in updated_element}
 
     _logger.info(f"{model.__name__} updated successfully")
-    return updated_element
+    return serialize_bson(updated_element)
