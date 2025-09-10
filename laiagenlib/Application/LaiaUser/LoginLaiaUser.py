@@ -23,7 +23,10 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
     if bcrypt.checkpw(password.encode('utf-8'), user.get('password')):
         _logger.info("User logged in successfully")
 
-        tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey)
+        token_props = model.model_config.get("json_schema_extra", {}).get("x-token-properties", [])
+        token_props = {prop: user.get(prop) for prop in token_props}
+
+        tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey, token_props)
 
         return {
             'user': serialize_bson(user),
