@@ -13,7 +13,7 @@ from bson import ObjectId
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, model_create: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True):
+def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, model_create: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -109,7 +109,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

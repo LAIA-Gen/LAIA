@@ -52,8 +52,24 @@ from bson import ObjectId"""
     modified_content = re.sub(model_pattern, '', modified_content)
     
     for model in models:
+        context_map = {}
+        if hasattr(model, "properties"):
+            for prop_name, prop in model.properties.items():
+                if isinstance(prop, dict) and "x_ontology" in prop:
+                    context_map[prop_name] = prop["x_ontology"]
+
+        json_schema_extra = {}
+
+        # Primero, todo lo que venga de extensions
+        if hasattr(model, "extensions") and model.extensions:
+            json_schema_extra.update(model.extensions)
+
+        # Luego, añadimos el @context si hay ontologías
+        if context_map:
+            json_schema_extra["@context"] = context_map
+
         if hasattr(model, 'extensions') and model.extensions:
-            model_config_line = f"model_config = ConfigDict(json_schema_extra={model.extensions})"
+            model_config_line = f"model_config = ConfigDict(json_schema_extra={json_schema_extra})"
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):',
                                                         f'class {model.model_name}(LaiaBaseModel):\n    {model_config_line}')
         if hasattr(model, 'extensions') and model.extensions.get('x-auth'):
