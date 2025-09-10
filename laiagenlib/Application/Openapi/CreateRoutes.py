@@ -6,7 +6,7 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True):
+async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False):
     await repositoryAPI.create_roles_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     modelsTypes = {}
@@ -33,7 +33,7 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
         if openapiModel.extensions.get(f'x-auth'):
             await repositoryAPI.create_auth_user_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         else:
-            await repositoryAPI.create_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights)
+            await repositoryAPI.create_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
 
     if use_access_rights: await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 

@@ -8,7 +8,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
@@ -31,6 +31,10 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
             ]
         max_pages = ceil(total_count / limit)
         current_page = (skip // limit) + 1
+        context = {}
+        if use_ontology:
+            extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+            context = extra.get("@context", {})
     except Exception:
         raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
     
@@ -39,8 +43,13 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         serialized_items.append(serialize_bson(item))
 
     _logger.info(f"{model.__name__} search completed successfully")
-    return {
+    response = {
         "items": serialized_items,
         "current_page": current_page,
         "max_pages": max_pages,
     }
+
+    if use_ontology:
+        response["@context"] = context
+
+    return response
