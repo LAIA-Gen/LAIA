@@ -23,8 +23,7 @@ from pydantic import ConfigDict, validator
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser
 from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
-from laiagenlib.Domain.Shared.Types.objectid_annotation import ObjectIdPydanticAnnotation
-from bson import ObjectId"""
+"""
 
     with open(output_file, 'r') as f:
         model_content = f.read()
@@ -37,15 +36,6 @@ from bson import ObjectId"""
 
     modified_content = '\n'.join(lines)
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
-
-    class_blocks = re.findall(r'(class\s+\w+\(LaiaBaseModel\):\n(?: {4}.+\n)+)', modified_content)
-
-    create_classes = []
-    for block in class_blocks:
-        create_block = re.sub(r'class\s+(\w+)\(LaiaBaseModel\):', r'class \1Create(BaseModel):', block)
-        create_classes.append(create_block)
-
-    modified_content += '\n\n' + '\n'.join(create_classes)
 
     excluded_models_pattern = "|".join(excluded_models)
     model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearch\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
@@ -60,11 +50,9 @@ from bson import ObjectId"""
 
         json_schema_extra = {}
 
-        # Primero, todo lo que venga de extensions
         if hasattr(model, "extensions") and model.extensions:
             json_schema_extra.update(model.extensions)
 
-        # Luego, añadimos el @context si hay ontologías
         if context_map:
             json_schema_extra["@context"] = context_map
 
@@ -80,30 +68,6 @@ from bson import ObjectId"""
             for prop_name, prop in model.properties.items():
                 if isinstance(prop, dict) and 'x_frontend_relation' in prop:
                     frontend_fields.append(prop_name)
-
-        if frontend_fields:
-            validator_block = f"""
-    @validator({', '.join([repr(f) for f in frontend_fields])}, pre=True)
-    def convert_objectid_fields(cls, v):
-        return ObjectId(v)
-    """
-            modified_content = re.sub(
-                rf'(class {model.model_name}\(LaiaBaseModel\):)',
-                rf'\1{validator_block}',
-                modified_content
-            )
-
-        for field in frontend_fields:
-            modified_content = re.sub(
-                rf'({field}\s*:\s*)Optional\[str\]',
-                rf"\1Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]]",
-                modified_content
-            )
-            modified_content = re.sub(
-                rf'({field}\s*:\s*)str',
-                rf"\1Annotated[ObjectId, ObjectIdPydanticAnnotation]",
-                modified_content
-            )
 
     with open(output_file, 'w') as f:
         f.write(modified_content)

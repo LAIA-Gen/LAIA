@@ -31,7 +31,7 @@ def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKe
     refresh_token = jwt.encode(refresh_payload, jwtSecretKey, algorithm='HS256')
 
     return {
-        "access_token": access_token,
+        "token": access_token,
         "refresh_token": refresh_token
     }
 
@@ -73,7 +73,7 @@ def refresh_token(refresh_token: str, secret_key: str) -> dict:
         new_refresh_token = jwt.encode(new_refresh_payload, secret_key, algorithm="HS256")
 
         return {
-            "access_token": new_access_token,
+            "token": new_access_token,
             "refresh_token": new_refresh_token
         }
 

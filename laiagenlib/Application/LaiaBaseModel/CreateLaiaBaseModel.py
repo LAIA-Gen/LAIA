@@ -1,12 +1,10 @@
 from typing import Type
 
-from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
-from bson import ObjectId
 
 async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool):
     _logger.info(f"Creating new {model.__name__} with values: {new_element}")
@@ -29,4 +27,4 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         created_element = {field: created_element[field] for field in allowed_fields if field in created_element}
 
     _logger.info(f"{model.__name__} created successfully")
-    return serialize_bson(created_element)
+    return created_element

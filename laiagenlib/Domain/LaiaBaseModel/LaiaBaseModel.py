@@ -1,9 +1,8 @@
-from typing import Annotated, Optional
-from pydantic import BaseModel
+from typing import Optional
+from pydantic import BaseModel, ConfigDict
 from pydantic import Field
-from bson import ObjectId
-from laiagenlib.Domain.Shared.Types.objectid_annotation import ObjectIdPydanticAnnotation
 
 class LaiaBaseModel(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     id: str = ""
-    owner: Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]] = None
+    owner: Optional[str] = Field(None, description="The owner's ID")

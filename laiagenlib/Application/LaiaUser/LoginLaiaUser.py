@@ -1,6 +1,5 @@
 from typing import Dict, Any
 import bcrypt
-from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from .JWTToken import create_jwt_token
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
@@ -29,8 +28,8 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
         tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey, token_props)
 
         return {
-            'user': serialize_bson(user),
-            'access_token': tokens['access_token'],
+            'user': user,
+            'token': tokens['token'],
             'refresh_token': tokens['refresh_token']
         }
     else:
