@@ -70,7 +70,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, False)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
