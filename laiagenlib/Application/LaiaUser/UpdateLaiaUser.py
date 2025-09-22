@@ -1,4 +1,5 @@
 import bcrypt
+from bson import ObjectId
 from ..Shared.Utils import ValidateEmail, ValidatePassword
 from ..LaiaBaseModel.UpdateLaiaBaseModel import update_laia_base_model
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository

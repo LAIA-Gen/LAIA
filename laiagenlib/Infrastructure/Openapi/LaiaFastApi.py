@@ -13,11 +13,11 @@ from ...Domain.Shared.Utils.logger import _logger
 @asyncinit
 class LaiaFastApi():
 
-    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository, use_ontology: bool, use_access_rights: bool, jwtSecretKey: str='secret_key'):
+    async def __init__(self, openapi, backend_folder_name, db, repository: ModelRepository, repositoryAPI: OpenapiRepository, use_ontology: bool, use_access_rights: bool, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh'):
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
         self.repository_instance = repository(db)
-        self.repository_api_instance = repositoryAPI(self.api, jwtSecretKey)
+        self.repository_api_instance = repositoryAPI(self.api, jwtSecretKey, jwtRefreshSecretKey)
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
         self.api.add_middleware(
@@ -42,4 +42,4 @@ class LaiaFastApi():
 
         create_models_file(self.openapi_path, models_path, self.openapi.models, self.openapi.excluded_models)
         create_routes_file(routes_path)
-        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey, auth_required, use_access_rights, use_ontology)
+        await create_crud_routes(self.repository_api_instance, self.repository_instance, self.openapi, models_path, routes_path, jwtSecretKey, jwtRefreshSecretKey, auth_required, use_access_rights, use_ontology)

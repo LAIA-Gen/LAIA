@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
 
-def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str, token_props: dict) -> dict:
+def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str, jwtRefreshSecretKey: str, token_props: dict) -> dict:
     """
     Create both an access token and a refresh token for the user.
     Access token lasts 5 minutes.
@@ -28,10 +28,10 @@ def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKe
     }
 
     access_token = jwt.encode(access_payload, jwtSecretKey, algorithm='HS256')
-    refresh_token = jwt.encode(refresh_payload, jwtSecretKey, algorithm='HS256')
+    refresh_token = jwt.encode(refresh_payload, jwtRefreshSecretKey, algorithm='HS256')
 
     return {
-        "access_token": access_token,
+        "token": access_token,
         "refresh_token": refresh_token
     }
 
@@ -45,12 +45,12 @@ def verify_jwt_token(token: str, jwtSecretKey: str) -> dict:
     except Exception:
         raise ValueError("Invalid session token")
     
-def refresh_token(refresh_token: str, secret_key: str) -> dict:
+def refresh_token(refresh_token: str, jwtSecretKey: str, jwtRefreshSecretKey: str) -> dict:
     """
     Validate the refresh token and return new access and refresh tokens.
     """
     try:
-        payload = jwt.decode(refresh_token, secret_key, algorithms=["HS256"])
+        payload = jwt.decode(refresh_token, jwtRefreshSecretKey, algorithms=["HS256"])
 
         if payload.get("type") != "refresh":
             raise Exception("Invalid token type")
@@ -69,11 +69,11 @@ def refresh_token(refresh_token: str, secret_key: str) -> dict:
             "exp": datetime.utcnow() + timedelta(days=7),
         }
 
-        new_access_token = jwt.encode(new_access_payload, secret_key, algorithm="HS256")
-        new_refresh_token = jwt.encode(new_refresh_payload, secret_key, algorithm="HS256")
+        new_access_token = jwt.encode(new_access_payload, jwtSecretKey, algorithm="HS256")
+        new_refresh_token = jwt.encode(new_refresh_payload, jwtRefreshSecretKey, algorithm="HS256")
 
         return {
-            "access_token": new_access_token,
+            "token": new_access_token,
             "refresh_token": new_refresh_token
         }
 

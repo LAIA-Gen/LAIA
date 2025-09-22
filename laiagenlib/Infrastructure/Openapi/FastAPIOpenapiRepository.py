@@ -18,16 +18,16 @@ T = TypeVar('T', bound='BaseModel')
 
 class FastAPIOpenapiRepository(OpenapiRepository):
 
-    def __init__(self, api: any, jwtSecretKey: str):
+    def __init__(self, api: any, jwtSecretKey: str, jwtRefreshSecretKey: str):
         if not isinstance(api, FastAPI):
             raise ValueError("API must be an instance of FastAPI for this implementation")
-        super().__init__(api, jwtSecretKey)
+        super().__init__(api, jwtSecretKey, jwtRefreshSecretKey)
 
     async def create_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool=True, use_ontology: bool = False):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -38,7 +38,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
                 await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository)
             except Exception as e:
                 _logger.info(e)
-        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey)
+        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey)
         user_router = CRUDLaiaUserController(repository=repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)

@@ -1,5 +1,7 @@
 from typing import Type
 
+from bson import ObjectId
+
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
@@ -18,7 +20,11 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
     elif not isinstance(updated_values, dict):
         updated_values = dict(updated_values)
 
-    updated_values = jsonable_encoder(updated_values, exclude_none=True)
+    updated_values = jsonable_encoder(
+        updated_values,
+        exclude_none=True,
+        custom_encoder={ObjectId: str}
+    )
 
     model_name = model.__name__.lower()
 

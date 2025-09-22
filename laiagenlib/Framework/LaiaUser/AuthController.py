@@ -11,7 +11,7 @@ from fastapi import Body
 
 T = TypeVar('T', bound='LaiaUser')
 
-def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key'):
+def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh'):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
 
@@ -19,14 +19,14 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     async def register_user(element: model):
         user_roles=["admin"]
         try:
-            return await RegisterLaiaUser.register(dict(element), model, user_roles, repository, jwtSecretKey)
+            return await RegisterLaiaUser.register(dict(element), model, user_roles, repository)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @router.post(f"/auth/login/{model_name}/", response_model=dict)
     async def login_user(element: Auth):
         try:
-            return await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey)
+            return await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey, jwtRefreshSecretKey)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
@@ -40,7 +40,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     @router.post(f"/auth/refresh/{model_name}/", response_model=dict)
     async def refresh_token_route(refresh_token: str = Body(..., embed=True)):
         try:
-            return JWTToken.refresh_token(refresh_token, jwtSecretKey)
+            return JWTToken.refresh_token(refresh_token, jwtSecretKey, jwtRefreshSecretKey)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
