@@ -1,10 +1,12 @@
 from typing import Type, List
 from math import ceil
 
+from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
+from bson import ObjectId
 
 async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
@@ -17,7 +19,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         _logger.info(access_rights_list)
         if not any(not access_right.owner for access_right in access_rights_list):
             _logger.info("HEY")
-            filters["owner"] = user_id
+            filters["owner"] = ObjectId(user_id)
 
     try:
         items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)
@@ -38,7 +40,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     
     serialized_items = []
     for item in items:
-        serialized_items.append(item)
+        serialized_items.append(serialize_bson(item))
 
     _logger.info(f"{model.__name__} search completed successfully")
     response = {

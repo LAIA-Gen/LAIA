@@ -1,10 +1,7 @@
 from typing import List
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field
 
-from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
-
-class LaiaUser(LaiaBaseModel):
+class LaiaUser(BaseModel):
     email: str
     password: str
     roles: List[str] = Field([], x_frontend_relation="Role")
-

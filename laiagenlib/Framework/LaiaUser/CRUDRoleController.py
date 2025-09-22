@@ -38,7 +38,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
             _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:
-                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
+                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, Falseaccess_rights_list)
                 user_roles.append(user_role['name'])
 
         except ValueError:

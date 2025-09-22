@@ -10,10 +10,10 @@ class OpenapiRepository:
         self.api = api
         self.jwtSecretKey = jwtSecretKey
 
-    async def create_routes(repository: ModelRepository=None, model: T=None, routes_info: dict=None, use_access_rights: bool=True, use_ontology: bool=False):
+    async def create_routes(repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, use_access_rights: bool=True, use_ontology: bool=False):
         pass
 
-    async def create_auth_user_routes(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key'):
+    async def create_auth_user_routes(repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key'):
         pass
 
     async def create_access_rights_routes(models: Dict[str, Type[BaseModel]], repository: ModelRepository):

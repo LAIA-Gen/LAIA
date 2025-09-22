@@ -7,7 +7,7 @@ from ...Domain.Openapi.Openapi import OpenAPI
 @asyncinit
 class LaiaFlutter():
 
-    async def __init__(self, openapi, backend_folder_name, app_name: str, use_access_rights: bool):
+    async def __init__(self, openapi, backend_folder_name, app_name: str):
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
 
@@ -24,4 +24,4 @@ class LaiaFlutter():
         
         create_base_files(app_name, self.openapi.models)
         app_path = os.path.join(os.path.dirname(self.openapi_path), app_name)
-        await create_flutter_app(self.openapi , app_name, app_path, models_path, auth_required, use_access_rights)
+        await create_flutter_app(self.openapi , app_name, app_path, models_path, auth_required)

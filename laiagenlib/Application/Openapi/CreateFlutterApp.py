@@ -8,15 +8,15 @@ from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
 
-async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str="", auth_required: bool = False, use_access_rights: bool = True):
+async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str="", auth_required: bool = False):
     subprocess.run("flutter create " + app_name, shell=True)
 
     # TODO: change the following local dart libraries to the ones on the marketç
     await run(f"flutter pub add laia_annotations -C ./{app_name}")
     await run(f"flutter pub add --dev laia_riverpod_custom_generator -C ./{app_name}")
     await run(f"flutter pub add --dev laia_widget_generator -C ./{app_name}")
-    await run(f"flutter pub add collection:^1.18.0 json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 geocoding:^3.0.0 shared_preferences:^2.2.2 -C ./{app_name}")
-    await run(f"flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.0 flutter_lints:^2.0.0 -C ./{app_name}")
+    await run(f"flutter pub add collection json_annotation json_serializable flutter_riverpod http tuple copy_with_extension flutter_map flutter_map_arcgis dio latlong2 flutter_typeahead dart_amqp shared_preferences -C ./{app_name}")
+    await run(f"flutter pub add --dev riverpod_lint build_runner copy_with_extension_gen flutter_lints -C ./{app_name}")
     
     models_dir = os.path.join(f"./{app_name}", "lib", "models")
     screens_dir = os.path.join(f"./{app_name}", "lib", "screens")   
@@ -54,7 +54,7 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
                 f.write(model_file_content)
 
-    home_file_content = home_dart(app_name, openapi.models, use_access_rights)
+    home_file_content = home_dart(app_name, openapi.models)
     with open(os.path.join(screens_dir, 'home.dart'), 'w') as f:
         f.write(home_file_content)
 
