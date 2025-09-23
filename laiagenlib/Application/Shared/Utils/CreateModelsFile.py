@@ -60,16 +60,23 @@ from bson import ObjectId"""
 
         json_schema_extra = {}
 
-        # Primero, todo lo que venga de extensions
         if hasattr(model, "extensions") and model.extensions:
             json_schema_extra.update(model.extensions)
 
-        # Luego, añadimos el @context si hay ontologías
         if context_map:
             json_schema_extra["@context"] = context_map
 
+        has_enum = False
+        if hasattr(model, "properties"):
+            for prop_name, prop in model.properties.items():
+                if isinstance(prop, dict) and "enum" in prop:
+                    has_enum = True
+                    break
+
         if hasattr(model, 'extensions') and model.extensions:
             model_config_line = f"model_config = ConfigDict(json_schema_extra={json_schema_extra})"
+            if has_enum:
+                model_config_line = f"model_config = ConfigDict(json_schema_extra={json_schema_extra}, use_enum_values=True)"
             modified_content = modified_content.replace(f'class {model.model_name}(LaiaBaseModel):',
                                                         f'class {model.model_name}(LaiaBaseModel):\n    {model_config_line}')
         if hasattr(model, 'extensions') and model.extensions.get('x-auth'):

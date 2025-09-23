@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Type
 
 from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import serialize_bson
@@ -17,6 +18,12 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "create", repository)
         _logger.info(new_element)
         await check_access_rights_of_fields(model, 'fields_create', new_element, access_rights_list)
+
+    if isinstance(new_element, dict):
+        clean_element = {k: (v.value if isinstance(v, Enum) else v) for k, v in new_element.items()}
+    else:
+        clean_element = new_element.dict()
+        clean_element = {k: (v.value if isinstance(v, Enum) else v) for k, v in clean_element.items()}
     
     created_element = await repository.post_item(
         model_name,

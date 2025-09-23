@@ -1,6 +1,7 @@
-from typing import Type
+from typing import Annotated, Type, Union, get_origin
 
 from bson import ObjectId
+from fastapi import types
 
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
@@ -9,6 +10,60 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from fastapi.encoders import jsonable_encoder
+from typing import get_args
+
+def _contains_objectid(ann) -> bool:
+    """Detecta ObjectId dentro de Optional/Union/Annotated de forma robusta."""
+    if ann is ObjectId:
+        return True
+
+    origin = get_origin(ann)
+    if origin in (Union, types.UnionType):  # soporta T | None y Optional[T]
+        return any(_contains_objectid(a) for a in get_args(ann))
+
+    if origin is Annotated:
+        # En Annotated, el primer arg es el tipo base; el resto son metadatos
+        base, *_meta = get_args(ann)
+        return _contains_objectid(base)
+
+    return False
+
+def _contains_objectid_stringy(ann) -> bool:
+    """Fallback por string, como pediste: detecta si en el repr aparece ObjectId."""
+    rep = repr(ann)
+    return ("bson.objectid.ObjectId" in rep) or ("ObjectId" in rep)
+
+def convert_objectid_fields(model, values: dict) -> dict:
+    """
+    Convierte a ObjectId los campos tipados como ObjectId/Optional[ObjectId]/
+    Annotated[ObjectId,...]/Optional[Annotated[ObjectId,...]].
+    """
+    for field_name, field in model.model_fields.items():
+        _logger.error(field_name)
+        ann = field.annotation
+        _logger.error(ann)
+
+        # 1) Intento robusto
+        is_oid = _contains_objectid(ann)
+        _logger.error(is_oid)
+
+        # 2) Fallback por string (tu requisito explícito)
+        if not is_oid:
+            is_oid = _contains_objectid_stringy(ann)
+            _logger.error(is_oid)
+
+        if is_oid:
+            v = values.get(field_name, None)
+            _logger.error(v)
+            try:
+                values[field_name] = ObjectId(v)
+                _logger.error(values[field_name])
+            except Exception:
+                # No revientes si llega una string que no es un ObjectId válido
+                # (ej. "", "123", etc.)
+                pass
+
+    return values
 
 async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
@@ -20,11 +75,8 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
     elif not isinstance(updated_values, dict):
         updated_values = dict(updated_values)
 
-    updated_values = jsonable_encoder(
-        updated_values,
-        exclude_none=True,
-        custom_encoder={ObjectId: str}
-    )
+    updated_values = convert_objectid_fields(model, updated_values)
+    _logger.error(updated_values)
 
     model_name = model.__name__.lower()
 
