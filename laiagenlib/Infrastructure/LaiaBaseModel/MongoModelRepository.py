@@ -1,4 +1,4 @@
-from typing import TypeVar, Optional, Dict
+from typing import Any, List, TypeVar, Optional, Dict
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel
@@ -87,4 +87,13 @@ class MongoModelRepository(ModelRepository):
         if deleted_item:
             return individual_serial(deleted_item)
         raise Exception
+    
+    async def aggregate_items(self, model_name: str, pipeline: List[Dict[str, Any]]):
+        collection = self.db[model_name]
+        try:
+            cursor = collection.aggregate(pipeline)
+            results = list_serial(cursor)
+            return results
+        except Exception as e:
+            raise ValueError(f"Error en aggregate_items: {str(e)}")
     

@@ -1,4 +1,4 @@
-from typing import TypeVar, Optional, Dict
+from typing import Any, List, TypeVar, Optional, Dict
 from pydantic import BaseModel
 
 T = TypeVar('T', bound='BaseModel')
@@ -21,4 +21,7 @@ class ModelRepository:
         pass
 
     async def delete_item(model_name: str, item_id: str):
+        pass
+
+    async def aggregate_items(model_name: str, pipeline: List[Dict[str, Any]]):
         pass

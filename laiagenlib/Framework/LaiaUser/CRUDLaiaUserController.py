@@ -1,9 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Body, Depends, HTTPException, status
 from fastapi.routing import APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from typing import TypeVar, Optional, List, Annotated
 from ...Application.LaiaUser import JWTToken
-from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel
+from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, AggregateLaiaBaseModel
 from ...Application.LaiaUser import CreateLaiaUser, UpdateLaiaUser
 from ...Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from ...Domain.LaiaUser.Role import Role
@@ -114,5 +114,25 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, mode
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        
+    @router.post(**routes_info['aggregate'], response_model=dict)
+    async def aggregate_users(
+        pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
+        token: get_auth_dependency() = None
+    ):
+        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = ''
+        if auth_required:
+            user_id = await get_user_id(repository, token, jwtSecretKey)
+
+        try:
+            return await AggregateLaiaBaseModel.aggregate_laia_base_model(
+                pipeline, model, user_roles, repository, user_id, True
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e)
+            )
 
     return router
