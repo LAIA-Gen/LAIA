@@ -1,4 +1,4 @@
-from typing import Type, List
+from typing import Type, List, Union, get_args, get_origin
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
 from ..AccessRights.AccessRights import AccessRight
@@ -29,6 +29,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LAIA',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           color:  Color.fromARGB(255, 255, 255, 255),
@@ -114,9 +115,18 @@ part 'generic_widgets.g.dart';
 class GenericWidgets {}
 """
 
-def home_dart(app_name: str, models: List[OpenAPIModel]):
-    laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
-    import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
+def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool):
+    for model in models:
+      print(f'MODEL: {model.model_name}')
+    if use_access_rights:
+      laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
+    else:
+      laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [Role]])
+    import_statements = '\n'.join([
+        f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
+        for model in models
+        if not model.model_name.startswith("Body_")
+    ])
     return f"""import 'package:{app_name}/config/styles.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
@@ -222,7 +232,10 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       widget = ""
     
     for prop_name, prop_type in inherited_fields:
+      print(f'PROP NAME: {prop_name}')
+      print(f'PROP TYPE: {prop_type}')
       dart_prop_type = pydantic_to_dart_type(prop_type)
+      print(f'DART PROP TYPE: {dart_prop_type}')
       fields += f"  @Field("
       
       if prop_name in frontend_props:
@@ -582,18 +595,29 @@ def pydantic_to_dart_type(pydantic_type: str):
     
     return dart_type
     
-def get_inherited_fields(model: Type[BaseModel]):
+def flatten_type(t) -> str:
+    origin = get_origin(t)
+    args = get_args(t)
+
+    if origin is list or origin is List:
+        inner = flatten_type(args[0]) if args else "dynamic"
+        return f"List[{inner}]"
+
+    if origin is Union and type(None) in args:  # Optional
+        non_none = [a for a in args if a is not type(None)]
+        inner = flatten_type(non_none[0]) if non_none else "dynamic"
+        return f"Optional[{inner}]"
+
+    # casos base
+    if hasattr(t, "__name__"):
+        return t.__name__
+    return str(t)
+
+def get_inherited_fields(model):
     model_fields = []
     for class_in_hierarchy in model.mro():
         if hasattr(class_in_hierarchy, '__annotations__'):
             for field_name, field_type in class_in_hierarchy.__annotations__.items():
-                if not field_name.startswith("_") and field_name not in [field[0] for field in model_fields]:
-                    if hasattr(field_type, '__args__') and len(field_type.__args__) > 0:
-                        unwrapped_type = field_type.__args__[0]
-                        if hasattr(unwrapped_type, '__name__'):
-                            model_fields.append((field_name, unwrapped_type.__name__))
-                        else:
-                            model_fields.append((field_name, str(unwrapped_type)))
-                    else:
-                        model_fields.append((field_name, getattr(field_type, '__name__', str(field_type))))
+                if not field_name.startswith("_") and field_name not in [f[0] for f in model_fields]:
+                    model_fields.append((field_name, flatten_type(field_type)))
     return model_fields
