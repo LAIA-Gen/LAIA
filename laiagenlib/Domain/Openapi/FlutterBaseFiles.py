@@ -1,4 +1,4 @@
-from typing import Type, List, Union, get_args, get_origin
+from typing import Annotated, Type, List, Union, get_args, get_origin
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
 from ..AccessRights.AccessRights import AccessRight
@@ -594,16 +594,26 @@ def flatten_type(t) -> str:
     origin = get_origin(t)
     args = get_args(t)
 
+    # Caso: List
     if origin is list or origin is List:
         inner = flatten_type(args[0]) if args else "dynamic"
         return f"List[{inner}]"
 
-    if origin is Union and type(None) in args:  # Optional
+    # Caso: Optional (Union con None)
+    if origin is Union and type(None) in args:
         non_none = [a for a in args if a is not type(None)]
         inner = flatten_type(non_none[0]) if non_none else "dynamic"
         return f"Optional[{inner}]"
 
-    # casos base
+    # Caso: Annotated -> tomar el primer argumento real
+    if origin is Annotated:
+        return flatten_type(args[0])
+
+    # Caso: ObjectId directo
+    if hasattr(t, "__name__") and t.__name__ == "ObjectId":
+        return "str"
+
+    # Normal
     if hasattr(t, "__name__"):
         return t.__name__
     return str(t)
@@ -613,6 +623,8 @@ def get_inherited_fields(model):
     for class_in_hierarchy in model.mro():
         if hasattr(class_in_hierarchy, '__annotations__'):
             for field_name, field_type in class_in_hierarchy.__annotations__.items():
+                print(f'MODEL NAME: {field_name}')
+                print(f'FLATTEN TYPE: {flatten_type(field_type)}')
                 if not field_name.startswith("_") and field_name not in [f[0] for f in model_fields]:
                     model_fields.append((field_name, flatten_type(field_type)))
     return model_fields
