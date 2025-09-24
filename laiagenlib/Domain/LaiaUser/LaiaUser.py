@@ -1,7 +1,7 @@
 from typing import List
 from pydantic import BaseModel, Field
 
-from laiagenlib.Application import LaiaBaseModel
+from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 
 class LaiaUser(LaiaBaseModel):
     email: str
