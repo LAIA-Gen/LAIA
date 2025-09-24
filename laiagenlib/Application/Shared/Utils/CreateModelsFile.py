@@ -38,15 +38,6 @@ from bson import ObjectId"""
     modified_content = '\n'.join(lines)
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
 
-    class_blocks = re.findall(r'(class\s+\w+\(LaiaBaseModel\):\n(?: {4}.+\n)+)', modified_content)
-
-    create_classes = []
-    for block in class_blocks:
-        create_block = re.sub(r'class\s+(\w+)\(LaiaBaseModel\):', r'class \1Create(BaseModel):', block)
-        create_classes.append(create_block)
-
-    modified_content += '\n\n' + '\n'.join(create_classes)
-
     excluded_models_pattern = "|".join(excluded_models)
     model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearch\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
     modified_content = re.sub(model_pattern, '', modified_content)

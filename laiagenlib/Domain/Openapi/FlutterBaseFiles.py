@@ -116,8 +116,6 @@ class GenericWidgets {}
 """
 
 def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool):
-    for model in models:
-      print(f'MODEL: {model.model_name}')
     if use_access_rights:
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     else:
@@ -232,10 +230,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       widget = ""
     
     for prop_name, prop_type in inherited_fields:
-      print(f'PROP NAME: {prop_name}')
-      print(f'PROP TYPE: {prop_type}')
       dart_prop_type = pydantic_to_dart_type(prop_type)
-      print(f'DART PROP TYPE: {dart_prop_type}')
       fields += f"  @Field("
       
       if prop_name in frontend_props:

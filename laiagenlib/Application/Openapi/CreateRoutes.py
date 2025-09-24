@@ -13,7 +13,6 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
     for openapiModel in openapi.models:
         model_module = import_model(models_path)
         model = getattr(model_module, openapiModel.model_name)
-        model_create = getattr(model_module, f"{openapiModel.model_name}Create", model)
         modelsTypes[openapiModel.model_name] = model
         model_lowercase = openapiModel.model_name.lower()
 
@@ -31,9 +30,9 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):
-            await repositoryAPI.create_auth_user_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required, use_access_rights=use_access_rights)
+            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required, use_access_rights=use_access_rights)
         else:
-            await repositoryAPI.create_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
+            await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
 
     if use_access_rights: await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
