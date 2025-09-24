@@ -27,7 +27,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, model_create: T = None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -35,7 +35,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             admin_role = await search_laia_base_model(0, 1, {"name": "admin"}, {}, Role, ["admin"], repository)
             first_user_values = {"name": "Admin", "email": "admin", "roles": [admin_role['items'][0]['id']]}
             try:
-                await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository)
+                await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository, use_access_rights)
             except Exception as e:
                 _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey)

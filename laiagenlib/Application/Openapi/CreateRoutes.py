@@ -31,7 +31,7 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):
-            await repositoryAPI.create_auth_user_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required)
+            await repositoryAPI.create_auth_user_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required, use_access_rights=use_access_rights)
         else:
             await repositoryAPI.create_routes(repository, model=model, model_create=model_create, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
 
