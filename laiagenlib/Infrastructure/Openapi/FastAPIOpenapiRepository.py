@@ -2,7 +2,9 @@ import bcrypt
 from typing import TypeVar, Type, Dict
 from pydantic import BaseModel
 from fastapi import FastAPI
+
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
+from ...Framework.Storage.CRUDStorageController import CRUDStorageController
 from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
@@ -25,6 +27,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool=True, use_ontology: bool = False):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
+        self.api.include_router(router)
+
+    async def create_storage_routes(self, endpoint_url: str, access_key: str, secret_key: str):
+        router = CRUDStorageController(endpoint_url, access_key, secret_key)
         self.api.include_router(router)
 
     async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True):
