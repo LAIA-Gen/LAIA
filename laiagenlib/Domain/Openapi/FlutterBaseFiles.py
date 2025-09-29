@@ -1,3 +1,4 @@
+from enum import EnumMeta
 from typing import Annotated, Type, List, Union, get_args, get_origin
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
@@ -15,6 +16,8 @@ import 'package:{app_name}/screens/home.dart';"""+"""
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() {
   runApp(
     const ProviderScope(
@@ -30,6 +33,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'LAIA',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           color:  Color.fromARGB(255, 255, 255, 255),
@@ -115,6 +119,185 @@ part 'generic_widgets.g.dart';
 class GenericWidgets {}
 """
 
+def http_client(app_name: str) -> str:
+    return f"""export 'package:http/http.dart'
+    hide Client, get, post, put, delete, patch, head;
+
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/main.dart';
+import 'package:{app_name}/models/user.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class Client extends http.BaseClient {{
+  final http.Client _inner;
+
+  Client([http.Client? inner]) : _inner = inner ?? http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {{
+    Uint8List? savedBody;
+    if (request is http.Request) {{
+      savedBody = request.bodyBytes;
+    }}
+
+    var streamedResponse = await _inner.send(request);
+    var response = await http.Response.fromStream(streamedResponse);
+
+    print('INTERCEPTOR: status code ${{response.statusCode}}');
+    print('INTERCEPTOR: body ${{response.body}}');
+
+    try {{
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded.containsKey("refresh_token")) {{
+        final refreshToken = decoded["refresh_token"];
+        if (refreshToken is String && refreshToken.isNotEmpty) {{
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString("refresh_token", refreshToken);
+          print("Nuevo refresh_token guardado en SharedPreferences");
+        }}
+      }}
+    }} catch (e) {{
+      print("No se pudo parsear el body como JSON: $e");
+    }}
+
+    if (response.statusCode == 401 ||
+        (_hasExpiredToken(response.body))) {{
+      print("Interceptado 401 - intentando refresh token...");
+      final newToken = await handle401();
+      if (newToken != null) {{
+        final cloned = await _cloneRequest(request, newToken, savedBody);
+        streamedResponse = await _inner.send(cloned);
+        response = await http.Response.fromStream(streamedResponse);
+      }}
+    }}
+
+    final newStream =
+        Stream<List<int>>.fromIterable([utf8.encode(response.body)]);
+    return http.StreamedResponse(
+      newStream,
+      response.statusCode,
+      headers: response.headers,
+      request: streamedResponse.request,
+      reasonPhrase: streamedResponse.reasonPhrase,
+    );
+  }}
+
+  bool _hasExpiredToken(String body) {{
+    try {{
+      final decoded = jsonDecode(body);
+      return decoded is Map && decoded['detail'] == "401: Token has expired";
+    }} catch (_) {{
+      return false;
+    }}
+  }}
+
+  Future<http.BaseRequest> _cloneRequest(
+    http.BaseRequest request,
+    String newToken,
+    Uint8List? savedBody,
+  ) async {{
+    final headers = Map<String, String>.from(request.headers);
+    headers['Authorization'] = 'Bearer $newToken';
+
+    if (request is http.Request) {{
+      final newRequest = http.Request(request.method, request.url);
+      newRequest.headers.addAll(headers);
+      if (savedBody != null && savedBody.isNotEmpty) {{
+        newRequest.bodyBytes = savedBody;
+      }}
+      return newRequest;
+    }}
+
+    if (request is http.MultipartRequest) {{
+      final newRequest = http.MultipartRequest(request.method, request.url);
+      newRequest.headers.addAll(headers);
+      newRequest.fields.addAll(request.fields);
+      newRequest.files.addAll(request.files);
+      return newRequest;
+    }}
+
+    throw Exception(
+        'Tipo de request no soportado: ${{request.runtimeType}}');
+  }}
+}}
+
+Future<String?> handle401() async {{
+  final prefs = await SharedPreferences.getInstance();
+  final refreshToken = prefs.getString("refresh_token");
+
+  if (refreshToken == null) {{
+    print("No hay refresh token en SharedPreferences");
+    await prefs.remove("token");
+    await prefs.remove("refresh_token");
+
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const UserLoginWidget()),
+      (route) => false,
+    );
+    return null;
+  }}
+
+  final response = await http.post(
+    Uri.parse("$baseURL/auth/refresh/user/"),
+    headers: {{"Content-Type": "application/json"}},
+    body: jsonEncode({{"refresh_token": refreshToken}}),
+  );
+
+  if (response.statusCode == 200) {{
+    final data = jsonDecode(response.body);
+    final newAccessToken = data["token"];
+    final newRefreshToken = data["refresh_token"];
+
+    if (newAccessToken != null) {{
+      await prefs.setString("token", newAccessToken);
+    }}
+    if (newRefreshToken != null) {{
+      await prefs.setString("refresh_token", newRefreshToken);
+    }}
+
+    print("Token refrescado correctamente");
+    return newAccessToken;
+  }} else {{
+    print("Fallo al refrescar token: ${{response.body}}");
+    return null;
+  }}
+}}
+
+final _defaultClient = Client();
+
+// GET
+Future<http.Response> get(Uri url, {{Map<String, String>? headers}}) =>
+    _defaultClient.get(url, headers: headers);
+
+// POST
+Future<http.Response> post(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.post(url, headers: headers, body: body, encoding: encoding);
+
+// PUT
+Future<http.Response> put(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.put(url, headers: headers, body: body, encoding: encoding);
+
+// DELETE
+Future<http.Response> delete(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.delete(url, headers: headers, body: body, encoding: encoding);
+
+// PATCH
+Future<http.Response> patch(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.patch(url, headers: headers, body: body, encoding: encoding);
+
+// HEAD
+Future<http.Response> head(Uri url, {{Map<String, String>? headers}}) =>
+    _defaultClient.head(url, headers: headers);
+"""
+
 def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool):
     if use_access_rights:
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
@@ -198,6 +381,12 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     fields_constructor = ""
     extra_imports = ""
     inherited_fields = get_inherited_fields(model)
+
+    if isinstance(model, EnumMeta):
+      members = ',\n  '.join([e.name for e in model])
+      return f"""enum {model.__name__} {{
+  {members}
+}}"""
     
     if openapiModel:
       frontend_props = openapiModel.get_frontend_properties()
@@ -274,7 +463,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tuple/tuple.dart';
 import 'package:{app_name}/config/api.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
-import 'package:http/http.dart' as http;
+import 'package:{app_name}/config/http_client.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
 import 'package:collection/collection.dart';
@@ -594,26 +783,21 @@ def flatten_type(t) -> str:
     origin = get_origin(t)
     args = get_args(t)
 
-    # Caso: List
     if origin is list or origin is List:
         inner = flatten_type(args[0]) if args else "dynamic"
         return f"List[{inner}]"
 
-    # Caso: Optional (Union con None)
     if origin is Union and type(None) in args:
         non_none = [a for a in args if a is not type(None)]
         inner = flatten_type(non_none[0]) if non_none else "dynamic"
         return f"Optional[{inner}]"
 
-    # Caso: Annotated -> tomar el primer argumento real
     if origin is Annotated:
         return flatten_type(args[0])
 
-    # Caso: ObjectId directo
     if hasattr(t, "__name__") and t.__name__ == "ObjectId":
         return "str"
 
-    # Normal
     if hasattr(t, "__name__"):
         return t.__name__
     return str(t)
@@ -623,8 +807,6 @@ def get_inherited_fields(model):
     for class_in_hierarchy in model.mro():
         if hasattr(class_in_hierarchy, '__annotations__'):
             for field_name, field_type in class_in_hierarchy.__annotations__.items():
-                print(f'MODEL NAME: {field_name}')
-                print(f'FLATTEN TYPE: {flatten_type(field_type)}')
                 if not field_name.startswith("_") and field_name not in [f[0] for f in model_fields]:
                     model_fields.append((field_name, flatten_type(field_type)))
     return model_fields
