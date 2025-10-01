@@ -23,5 +23,8 @@ class OpenapiRepository:
     async def create_access_rights_routes(models: Dict[str, Type[BaseModel]], repository: ModelRepository):
         pass
 
+    async def create_shard_routes(models: Dict[str, Type[BaseModel]], repository: ModelRepository):
+        pass
+
     async def create_roles_routes(repository: ModelRepository=None):
         pass

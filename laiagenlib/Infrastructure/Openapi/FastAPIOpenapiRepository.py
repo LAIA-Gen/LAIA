@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
 from ...Framework.Storage.CRUDStorageController import CRUDStorageController
 from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
+from ...Framework.Shard.CRUDShardController import CRUDShardController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
@@ -51,6 +52,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_access_rights_routes(self, models: Dict[str, Type[BaseModel]], repository: ModelRepository, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = CRUDAccessRightsController(models=models, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        self.api.include_router(router)
+
+    async def create_shard_routes(self, models: Dict[str, Type[BaseModel]], repository: ModelRepository, auth_required: bool = False, jwtSecretKey: str='secret_key'):
+        router = CRUDShardController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):

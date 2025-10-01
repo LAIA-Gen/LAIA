@@ -37,7 +37,10 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
         if add_storage == True:
             await repositoryAPI.create_storage_routes(endpoint_url_storage, access_key_storage, secret_key_storage)
 
-    if use_access_rights: await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+    if use_access_rights: 
+        await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+
+    await repositoryAPI.create_shard_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     # add extra routes
 
