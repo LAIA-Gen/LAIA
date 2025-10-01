@@ -10,6 +10,7 @@ from ...Domain.LaiaUser.Role import Role
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
+from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 
 
 T = TypeVar('T', bound='LaiaBaseModel')
@@ -111,6 +112,39 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             user_id = await get_user_id(repository, token, jwtSecretKey)
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        
+    @router.get(**routes_info['nice'], response_model=dict, name=f"Get {model_name} by nicename")
+    async def read_element_by_nicename(nicename: str, token: get_auth_dependency() = None):
+        """
+        Devuelve un {model_name} a partir del nicename
+        """
+        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+
+        # si quieres respetar el mismo sistema de access_rights:
+        try:
+            # get_items devuelve (items, total)
+            data = await repository.get_items(
+                model_name,
+                skip=0,
+                limit=1,
+                filters={"nicename": nicename}
+            )
+            if isinstance(data, tuple):
+                items = data[0]
+            elif isinstance(data, dict) and "items" in data:
+                items = data["items"]
+            else:
+                items = data
+
+            if not items:
+                raise HTTPException(status_code=404, detail=f"{model_name} with nicename '{nicename}' not found")
+
+            element = items[0]
+
+            return serialize_bson(element)
+
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         

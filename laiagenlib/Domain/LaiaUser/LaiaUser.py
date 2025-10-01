@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
@@ -7,3 +7,4 @@ class LaiaUser(LaiaBaseModel):
     email: str
     password: str
     roles: List[str] = Field([], x_frontend_relation="Role")
+    nicename: Optional[str] = None
