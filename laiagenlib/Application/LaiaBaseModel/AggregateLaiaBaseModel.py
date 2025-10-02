@@ -24,7 +24,8 @@ async def aggregate_laia_base_model(
     repository: ModelRepository,
     user_id: str = '',
     use_access_rights: bool = True,
-    use_ontology: bool = False
+    use_ontology: bool = False,
+    user_shard: str = ""
 ):
     _logger.info(f"Aggregating {model.__name__} with pipeline: {pipeline}")
 
@@ -39,6 +40,14 @@ async def aggregate_laia_base_model(
         if not any(not access_right.owner for access_right in access_rights_list):
             match_stage = {"$match": {"owner": ObjectId(user_id)}}
             pipeline.insert(0, match_stage)
+
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        if not user_shard:
+            raise ValueError("El usuario no tiene shard asignado, no puede hacer aggregations de modelo shard")
+        shard_match = {"$match": {shard_key: user_shard}}
+        pipeline.insert(0, shard_match)
 
     try:
         results = await repository.aggregate_items(model_name, pipeline)

@@ -6,7 +6,7 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
-async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool):
+async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):
     _logger.info(f"Getting {model.__name__} with ID: {element_id}")
 
     model_name = model.__name__.lower()
@@ -17,6 +17,14 @@ async def read_laia_base_model(element_id: str, model: Type, user_roles: List[st
         item = await repository.get_item(model_name, element_id)
     except ValueError as e:
         raise ValueError(str(e))
+    
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        if not user_shard or user_shard == "":
+            raise ValueError("El usuario no tiene shard asignado, no puede leer este modelo shard")
+        if item.get(shard_key) != user_shard:
+            raise ValueError("No tienes permiso para leer un registro de otra shard")
 
     if "admin" not in user_roles and use_access_rights:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')

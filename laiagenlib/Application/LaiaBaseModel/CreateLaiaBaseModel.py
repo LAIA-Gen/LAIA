@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import Type
 
+from fastapi import HTTPException
+
 from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import serialize_bson
 from laiagenlib.Application.Shared.Utils.Slugify import ensure_unique_nicename, slugify
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
@@ -10,7 +12,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 
-async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool):
+async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):
     _logger.info(f"Creating new {model.__name__} with values: {new_element}")
     
     model_name = model.__name__.lower()
@@ -36,6 +38,16 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         raw_nicename = slugify(clean_element[first_field])
         clean_element['nicename'] = await ensure_unique_nicename(raw_nicename, model_name, repository)
 
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        if not user_shard or user_shard == "":
+            raise HTTPException(
+                status_code=403,
+                detail="El usuario no tiene shard asignado; no puede crear datos en modelos con shard"
+            )
+        clean_element[shard_key] = user_shard
+
+    _logger.error(clean_element)
     created_element = await repository.post_item(model_name, clean_element)
 
     if "admin" not in user_roles and use_access_rights:

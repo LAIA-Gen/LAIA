@@ -2,7 +2,7 @@ from typing import Dict, Any
 
 from fastapi import HTTPException, status
 import bcrypt
-from .JWTToken import create_jwt_token, verify_jwt_token
+from .JWTToken import verify_jwt_token
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
