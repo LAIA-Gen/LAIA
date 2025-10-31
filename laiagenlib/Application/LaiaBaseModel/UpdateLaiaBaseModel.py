@@ -48,7 +48,7 @@ def convert_objectid_fields(model, values: dict) -> dict:
 
     return values
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            
@@ -65,6 +65,26 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
     if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "update", repository)
         await check_access_rights_of_fields(model, 'fields_edit', updated_values, access_rights_list)
+
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        if not user_shard or user_shard == "":
+            raise ValueError("El usuario no tiene shard asignado, no puede actualizar este modelo shard")
+
+        current_items = await repository.get_items(model_name, filters={"_id": ObjectId(element_id)}, limit=1)
+        if isinstance(current_items, tuple):
+            current = current_items[0]
+        else:
+            current = current_items
+        if not current:
+            raise ValueError(f"{model.__name__} with id {element_id} not found")
+
+        current_doc = current[0]
+        if current_doc.get(shard_key) != user_shard:
+            raise ValueError("No tienes permiso para actualizar un registro de otra shard")
+
+        updated_values[shard_key] = user_shard
 
     try:
         updated_element = await repository.put_item(model_name, element_id, updated_values)

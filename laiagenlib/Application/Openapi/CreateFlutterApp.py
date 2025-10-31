@@ -14,7 +14,7 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     # TODO: change the following local dart libraries to the ones on the marketç
     await run(f"flutter pub add laia_annotations -C ./{app_name}")
     await run(f"flutter pub add --dev laia_riverpod_custom_generator -C ./{app_name}")
-    await run(f"flutter pub add --dev laia_widget_generator -C ./{app_name}")
+    #await run(f"flutter pub add --dev laia_widget_generator -C ./{app_name}")
     await run(f"flutter pub add collection:^1.18.0 json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 geocoding:^3.0.0 shared_preferences:^2.2.2 -C ./{app_name}")
     await run(f"flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.0 flutter_lints:^2.0.0 -C ./{app_name}")
     

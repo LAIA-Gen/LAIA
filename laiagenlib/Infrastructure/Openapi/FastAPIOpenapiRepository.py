@@ -2,8 +2,11 @@ import bcrypt
 from typing import TypeVar, Type, Dict
 from pydantic import BaseModel
 from fastapi import FastAPI
+
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
+from ...Framework.Storage.CRUDStorageController import CRUDStorageController
 from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
+from ...Framework.Shard.CRUDShardController import CRUDShardController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
@@ -27,6 +30,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
         self.api.include_router(router)
 
+    async def create_storage_routes(self, endpoint_url: str, access_key: str, secret_key: str):
+        router = CRUDStorageController(endpoint_url, access_key, secret_key)
+        self.api.include_router(router)
+
     async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
@@ -45,6 +52,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_access_rights_routes(self, models: Dict[str, Type[BaseModel]], repository: ModelRepository, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = CRUDAccessRightsController(models=models, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        self.api.include_router(router)
+
+    async def create_shard_routes(self, models: Dict[str, Type[BaseModel]], repository: ModelRepository, auth_required: bool = False, jwtSecretKey: str='secret_key'):
+        router = CRUDShardController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):

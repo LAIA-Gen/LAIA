@@ -26,7 +26,7 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
         token_props = model.model_config.get("json_schema_extra", {}).get("x-token-properties", [])
         token_props = {prop: user.get(prop) for prop in token_props}
 
-        tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey, jwtRefreshSecretKey, token_props)
+        tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey, jwtRefreshSecretKey, token_props, user.get('shard'))
 
         return {
             'user': serialize_bson(user),

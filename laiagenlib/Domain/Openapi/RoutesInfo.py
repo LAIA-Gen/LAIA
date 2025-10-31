@@ -20,6 +20,10 @@ def get_routes_info(model_lowercase: str):
             'path': f"/{model_lowercase}s/",
             'openapi_extra': {}
         },
+        'nice': {
+            'path': f"/nice/{model_lowercase}/{{nicename}}",
+            'openapi_extra': {}
+        },
         'aggregate': {
             'path': f"/{model_lowercase}s/aggregate",
             'openapi_extra': {}
