@@ -8,7 +8,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = ""):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
@@ -20,6 +20,14 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         if not any(not access_right.owner for access_right in access_rights_list):
             _logger.info("HEY")
             filters["owner"] = ObjectId(user_id)
+
+    config = getattr(model, "model_config", {})
+    extra = config.get("json_schema_extra", {})
+
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        filters[shard_key] = user_shard
+        _logger.error(filters)
 
     try:
         items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)

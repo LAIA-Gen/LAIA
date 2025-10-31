@@ -1,6 +1,5 @@
 from typing import Dict, Any
 from .CreateLaiaUser import create_laia_user
-from .JWTToken import create_jwt_token
 from ..Shared.Utils import ValidateEmail, ValidatePassword
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser

@@ -2,6 +2,8 @@ from fastapi import Body, Depends, HTTPException, status
 from fastapi.routing import APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from typing import TypeVar, Optional, List, Annotated
+
+from laiagenlib.Application.Shared.Utils.UserShard import get_user_shard
 from ...Application.LaiaUser import JWTToken
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, AggregateLaiaBaseModel
 from ...Application.LaiaUser import CreateLaiaUser, UpdateLaiaUser
@@ -74,32 +76,36 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
             element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey)
 
         element_full = model(**element_dict)
+        user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await CreateLaiaUser.create_laia_user(dict(element_full), model, user_roles, repository)
+            return await CreateLaiaUser.create_laia_user(dict(element_full), model, user_roles, repository, user_shard)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @router.put(**routes_info['update'], response_model=dict)
     async def update_element(element_id: str, values: model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository)
+            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
     @router.get(**routes_info['read'], response_model=dict)
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @router.delete(**routes_info['delete'], response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, True)
+            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
@@ -110,8 +116,9 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
         user_id = ''
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
+        user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True, user_shard)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
@@ -125,9 +132,11 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
 
+        user_shard = await get_user_shard(token, jwtSecretKey)
+
         try:
             return await AggregateLaiaBaseModel.aggregate_laia_base_model(
-                pipeline, model, user_roles, repository, user_id, True
+                pipeline, model, user_roles, repository, user_id, True, user_shard
             )
         except Exception as e:
             raise HTTPException(

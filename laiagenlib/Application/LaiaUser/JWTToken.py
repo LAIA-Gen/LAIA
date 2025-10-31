@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
 
-def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str, jwtRefreshSecretKey: str, token_props: dict) -> dict:
+def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKey: str, jwtRefreshSecretKey: str, token_props: dict, user_shard: str = None) -> dict:
     """
     Create both an access token and a refresh token for the user.
     Access token lasts 5 minutes.
@@ -11,6 +11,7 @@ def create_jwt_token(user_id: str, user_name: str, user_roles: list, jwtSecretKe
         "user_id": user_id,
         "user_name": user_name,
         "user_roles": user_roles,
+        "shard": user_shard
     }
 
     access_payload = {
