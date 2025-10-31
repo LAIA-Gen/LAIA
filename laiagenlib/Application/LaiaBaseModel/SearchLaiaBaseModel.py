@@ -24,8 +24,6 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     config = getattr(model, "model_config", {})
     extra = config.get("json_schema_extra", {})
 
-    _logger.error(extra)
-
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")
         filters[shard_key] = user_shard
