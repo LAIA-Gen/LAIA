@@ -37,10 +37,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
         try:
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
-            _logger.info(payload)
             
             user_roles_ids = payload.get("user_roles", [])
-            _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:
                 if isinstance(role, str) and len(role) != 24:

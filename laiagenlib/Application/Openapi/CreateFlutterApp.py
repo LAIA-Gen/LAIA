@@ -1,5 +1,6 @@
 import os
 import subprocess
+import textwrap
 import yaml
 import asyncio
 from ...Domain.Openapi.Openapi import OpenAPI
@@ -7,32 +8,66 @@ from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
+from ...Domain.Shared.Utils.logger import _logger
 
 async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str="", auth_required: bool = False, use_access_rights: bool = True):
     subprocess.run("flutter create " + app_name, shell=True)
 
-    # TODO: change the following local dart libraries to the ones on the marketç
-    await run(f"flutter pub add laia_annotations -C ./{app_name}")
-    await run(f"flutter pub add --dev laia_riverpod_custom_generator -C ./{app_name}")
-    #await run(f"flutter pub add --dev laia_widget_generator -C ./{app_name}")
-    await run(f"flutter pub add collection:^1.18.0 json_annotation:^4.8.1 json_serializable:^6.7.1 flutter_riverpod:^2.4.6 http:^1.1.0 tuple:^2.0.2 copy_with_extension:^4.0.0 flutter_map:^6.1.0 flutter_map_arcgis:^2.0.6 dio:^5.4.0 latlong2:^0.9.0 flutter_typeahead:^5.0.0 dart_amqp:^0.2.5 geocoding:^3.0.0 shared_preferences:^2.2.2 -C ./{app_name}")
-    await run(f"flutter pub add --dev riverpod_lint:^2.0.1 build_runner:^2.4.6 copy_with_extension_gen:^4.0.0 flutter_lints:^2.0.0 -C ./{app_name}")
+    pubspec_content = textwrap.dedent(f"""
+name: {app_name}
+description: A new Flutter project.
+
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  laia_annotations: ^0.0.7
+  cupertino_icons: ^1.0.2
+  json_annotation: ^4.8.1
+  json_serializable: ^6.7.1
+  flutter_riverpod: ^2.4.6
+  http: ^1.1.0
+  tuple: ^2.0.2
+  copy_with_extension: ^4.0.0
+  flutter_map: ^6.1.0
+  flutter_map_arcgis: ^2.0.6
+  dio: ^5.4.0
+  latlong2: ^0.9.0
+  flutter_typeahead: ^5.0.0
+  dart_amqp: ^0.2.5
+  geocoding: ^3.0.0
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.6
+  laia_riverpod_custom_generator: ^0.0.12
+  laia_widget_generator: ^0.0.20
+  riverpod_lint: ^2.0.1
+  copy_with_extension_gen: ^4.0.0
+  flutter_lints: ^2.0.0
+
+flutter:
+  assets:
+    - assets/
+  uses-material-design: true
+""")
+    
+    with open(f"{app_name}/pubspec.yaml", "w", encoding="utf-8") as f:
+        f.write(pubspec_content)    
+
+    await run(f"flutter pub get -C ./{app_name}")
     
     models_dir = os.path.join(f"./{app_name}", "lib", "models")
     screens_dir = os.path.join(f"./{app_name}", "lib", "screens")   
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(screens_dir, exist_ok=True)
-
-    assets = "assets/"
-    with open(f"{app_name}/pubspec.yaml", "r") as file:
-        pubspec_content = yaml.safe_load(file)
-    if 'flutter' not in pubspec_content:
-        pubspec_content['flutter'] = {}
-    if 'assets' not in pubspec_content['flutter']:
-        pubspec_content['flutter']['assets'] = []
-    pubspec_content['flutter']['assets'].append(assets)
-    with open(f"{app_name}/pubspec.yaml", "w") as file:
-        yaml.dump(pubspec_content, file)
 
     for openapiModel in openapi.models:
         if openapiModel.model_name.startswith("Body_"):

@@ -147,9 +147,6 @@ class Client extends http.BaseClient {{
     var streamedResponse = await _inner.send(request);
     var response = await http.Response.fromStream(streamedResponse);
 
-    print('INTERCEPTOR: status code ${{response.statusCode}}');
-    print('INTERCEPTOR: body ${{response.body}}');
-
     try {{
       final decoded = jsonDecode(response.body);
       if (decoded is Map && decoded.containsKey("refresh_token")) {{

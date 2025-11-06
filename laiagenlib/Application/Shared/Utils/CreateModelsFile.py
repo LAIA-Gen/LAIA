@@ -22,6 +22,7 @@ from typing import Annotated
 from pydantic import ConfigDict, validator
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser
+from laiagenlib.Domain.Shard.Shard import Shard
 from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
 from laiagenlib.Domain.Shared.Types.objectid_annotation import ObjectIdPydanticAnnotation
 from bson import ObjectId"""
