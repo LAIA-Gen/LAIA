@@ -13,3 +13,4 @@ pymongo
 bcrypt
 
 boto3
+jinja2

@@ -28,3 +28,6 @@ class OpenapiRepository:
 
     async def create_roles_routes(repository: ModelRepository=None):
         pass
+
+    async def create_email_routes(smtp_config: dict = None):
+        pass

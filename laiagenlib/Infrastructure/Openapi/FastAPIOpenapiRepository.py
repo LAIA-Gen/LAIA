@@ -10,6 +10,7 @@ from ...Framework.Shard.CRUDShardController import CRUDShardController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
+from ...Framework.Email.CRUDEmailController import CRUDEmailController
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.LaiaUser.Role import Role
@@ -60,4 +61,8 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = await CRUDRoleController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        self.api.include_router(router)
+
+    async def create_email_routes(self, smtp_config: dict):
+        router = await CRUDEmailController(smtp_config)
         self.api.include_router(router)
