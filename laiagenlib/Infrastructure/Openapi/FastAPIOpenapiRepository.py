@@ -35,7 +35,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDStorageController(endpoint_url, access_key, secret_key)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True, smtp_config: dict = None):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -46,7 +46,8 @@ class FastAPIOpenapiRepository(OpenapiRepository):
                 await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository, use_access_rights)
             except Exception as e:
                 _logger.info(e)
-        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey)
+        _logger.error(f'SMTP CONFIG AUTH USER ROUTES: {smtp_config}')
+        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
         user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)

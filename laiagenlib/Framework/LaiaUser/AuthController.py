@@ -11,7 +11,7 @@ from fastapi import Body
 
 T = TypeVar('T', bound='LaiaUser')
 
-def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh'):
+def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
 
@@ -19,7 +19,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     async def register_user(element: model):
         user_roles=["admin"]
         try:
-            return await RegisterLaiaUser.register(dict(element), model, user_roles, repository)
+            return await RegisterLaiaUser.register(dict(element), model, user_roles, repository, smtp_config)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
