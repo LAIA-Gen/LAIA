@@ -47,8 +47,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   build_runner: ^2.4.6
-  laia_riverpod_custom_generator: ^0.0.12
-  laia_widget_generator: ^0.0.20
+  laia_riverpod_custom_generator:
+    path: /Volumes/DISK/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_riverpod_custom_generator
+  laia_widget_generator:
+    path: /Volumes/DISK/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_widget_generator
   riverpod_lint: ^2.0.1
   copy_with_extension_gen: ^4.0.0
   flutter_lints: ^2.0.0

@@ -336,7 +336,7 @@ class _HomeState extends State<Home> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LAIA'),
+        title: const Text('LAIA_NEW_DESIGN'),
         centerTitle: true,
       ),
       body: Column(
