@@ -27,7 +27,6 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")
         filters[shard_key] = user_shard
-        _logger.error(filters)
 
     try:
         items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)

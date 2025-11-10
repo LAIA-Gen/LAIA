@@ -46,7 +46,6 @@ class FastAPIOpenapiRepository(OpenapiRepository):
                 await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository, use_access_rights)
             except Exception as e:
                 _logger.info(e)
-        _logger.error(f'SMTP CONFIG AUTH USER ROUTES: {smtp_config}')
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
         user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)

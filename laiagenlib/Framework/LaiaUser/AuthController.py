@@ -8,6 +8,7 @@ from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.LaiaUser.Auth import Auth
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from fastapi import Body
+from ...Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='LaiaUser')
 

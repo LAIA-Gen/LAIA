@@ -50,9 +50,7 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
             )
         clean_element[shard_key] = user_shard
 
-    _logger.error(clean_element)
     created_element = await repository.post_item(model_name, clean_element)
-    _logger.error(created_element)
 
     if x_mail_on_register:
         try:

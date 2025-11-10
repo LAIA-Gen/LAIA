@@ -23,6 +23,6 @@ async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     
-    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository, True, user_shard, smtp_config)
+    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository, True, user_shard, smtp_config=smtp_config)
     _logger.info("User created successfully")
     return user

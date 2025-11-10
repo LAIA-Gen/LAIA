@@ -6,7 +6,6 @@ from fastapi import HTTPException
 from ....Domain.Shared.Utils.logger import _logger
 
 async def send_email(to: str, subject: str, template: str, variables: dict, smtp_config: dict):
-    _logger.error(f'SMTP CONFIG: {smtp_config}')
     try:
         templates_dir = smtp_config.get("templates_dir", "backend/backend/email_templates")
         env = Environment(

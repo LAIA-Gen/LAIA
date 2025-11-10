@@ -24,7 +24,7 @@ async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: l
     if existing_users:
         raise ValueError("User with this email already exists")
 
-    user = await create_laia_user({**new_user_data}, model, user_roles, repository, smtp_config)
+    user = await create_laia_user({**new_user_data}, model, user_roles, repository, smtp_config=smtp_config)
     _logger.info("User registered successfully")
 
     return user
