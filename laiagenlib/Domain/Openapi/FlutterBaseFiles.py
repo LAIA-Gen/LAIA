@@ -326,8 +326,143 @@ class _HomeState extends State<Home> {
     NavItem(icon: Icons.grid_view_rounded, label: 'Apps'),
     NavItem(icon: Icons.fact_check_outlined, label: 'Tasks'),
     NavItem(icon: Icons.home_outlined, label: 'Home'),
-    NavItem(icon: Icons.storage_outlined, label: 'Data Sources'),
+    NavItem(icon: Icons.storage_outlined, label: 'Data'),
     NavItem(icon: Icons.add, label: 'Profile'),
+  ];
+
+  final demoSections = [
+    TaskSection(
+      status: TaskStatus.todo,
+      items: [
+        TaskItem(
+          title: 'Review brand guidelines draft',
+          dueDate: DateTime(2025, 1, 17),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 23),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 18),
+          tag: 'Work',
+          priority: TaskPriority.low,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.inProgress,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 15),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 28),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.done,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 5),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 8),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+      ],
+    ),
+  ];
+
+  final demoBoardTasks = <BoardTask>[
+    // To Do
+    BoardTask(
+      title: 'Review brand guidelines draft',
+      status: BoardStatus.todo,
+      progress: 10,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.high,
+      comments: 1,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 30,
+      dueDate: DateTime(2025, 1, 23),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 0,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+    ),
+
+    // In progress
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.inProgress,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 15),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 5,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.inProgress,
+      progress: 75,
+      dueDate: DateTime(2025, 1, 28),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+    ),
+
+    // Done
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 5),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+      checked: true,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 8),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+      checked: true,
+    ),
   ];
 
   @override
@@ -360,6 +495,15 @@ class _HomeState extends State<Home> {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (_index == 0)
+          Expanded(
+            child: Text('Apps View', style: Theme.of(context).textTheme.headlineMedium),
+          ),
+          if (_index == 1)
+          Expanded(
+            child: TasksWidget(sections: demoSections, boardTasks: demoBoardTasks)
+          ),
+          if (_index == 2)
           Expanded(
             child: AppCardsGrid(
               items: [
@@ -400,7 +544,7 @@ class _HomeState extends State<Home> {
                 AppCardItem(
                   title: 'Data Sources',
                   icon: const Icon(Icons.storage_outlined),
-                  onTap: () => debugPrint('Data Sources'),
+                  onTap: () => setState(() => _index = 3),
                 ),
                 AppCardItem(
                   title: 'Finance',
@@ -451,6 +595,18 @@ class _HomeState extends State<Home> {
                 ),
               ],
             )
+          ),
+          if (_index == 3)
+          Expanded(
+            child: dashboardWidget(context)
+          ),
+          if (_index == 3)
+          Expanded(
+            child: dashboardWidget(context)
+          ),
+          if (_index == 4)
+          Expanded(
+            child: Text('Profile View', style: Theme.of(context).textTheme.headlineMedium),
           ),
         ],
       ),
@@ -913,12 +1069,19 @@ class AppColors {{
 
   // Surfaces
   static const Color lavender = Color(0xFFE6E6FA);
-  static const Color bg = Color(0xFFF7F7FD);
+  static const Color bg = Color(0xFFF3F4FA);
   static const Color surface = Color(0xFFFDFBFF);
 
   // Neutrals
   static const Color outline = Color(0xFFD9D9D9);
   static const Color muted = Color(0xFF757575);
+
+  static const Color success = Color(0xFF4CAF50);
+  static const Color successBg = Color(0xFFE8F5E9);
+  static const Color warning = Color(0xFFFFC107);
+  static const Color warningBg = Color(0xFFFFF8E1);
+  static const Color error = Color(0xFFF44336);
+  static const Color errorBg = Color(0xFFFFEBEE);
 }}
 
 class AppTheme {{
