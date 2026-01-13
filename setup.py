@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 setup(
     name='laia-gen-lib',
     packages=find_packages(),
-    version='0.3.32',
+    version='0.3.33',
     description='An AI application generator engine',
     author='Me',
     install_requires=['pymongo', 'pydantic==2.8.0', 'datamodel-code-generator==0.25.8', 'fastapi==0.111.0', 'bcrypt', 'asyncinit', 'pyjwt'],

@@ -12,7 +12,7 @@ async def register(new_user_data: Dict[str, Any], model: LaiaUser, user_roles: l
     name = new_user_data.get('name')
     
     if not email or not password or not name:
-        raise ValueError("Email and password are required for registration")
+        raise ValueError("Email, password and name are required for registration")
 
     if not ValidateEmail.validate_email(email):
         raise ValueError("Invalid email address")
