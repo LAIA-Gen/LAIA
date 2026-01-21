@@ -15,7 +15,7 @@ from bson import ObjectId
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -83,7 +83,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, rout
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
     @router.put(**routes_info['update'], response_model=dict)
-    async def update_element(element_id: str, values: model, token: get_auth_dependency() = None):
+    async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:

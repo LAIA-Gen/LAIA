@@ -41,11 +41,13 @@ def convert_objectid_fields(model, values: dict) -> dict:
 
         if is_oid:
             v = values.get(field_name, None)
-            try:
-                values[field_name] = ObjectId(v)
-            except Exception:
-                pass
-
+            if v is None:
+                continue
+            else:
+                try:
+                    values[field_name] = ObjectId(v)
+                except Exception:
+                    pass
     return values
 
 async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):

@@ -27,15 +27,15 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             raise ValueError("API must be an instance of FastAPI for this implementation")
         super().__init__(api, jwtSecretKey, jwtRefreshSecretKey)
 
-    async def create_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool=True, use_ontology: bool = False):
-        router = CRUDLaiaBaseModelController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
+    async def create_routes(self, repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool=True, use_ontology: bool = False):
+        router = CRUDLaiaBaseModelController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
         self.api.include_router(router)
 
     async def create_storage_routes(self, endpoint_url: str, access_key: str, secret_key: str):
         router = CRUDStorageController(endpoint_url, access_key, secret_key)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True, smtp_config: dict = None):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True, smtp_config: dict = None):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -47,7 +47,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             except Exception as e:
                 _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
-        user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        user_router = CRUDLaiaUserController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
 
