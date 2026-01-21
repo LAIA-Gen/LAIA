@@ -10,6 +10,7 @@ from bson import ObjectId
 
 async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = ""):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
+    _logger.error(f"User roles: {user_roles}")
 
     model_name = model.__name__.lower()
 
