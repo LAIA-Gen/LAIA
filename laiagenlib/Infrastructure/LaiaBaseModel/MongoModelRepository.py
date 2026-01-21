@@ -17,11 +17,9 @@ class MongoModelRepository(ModelRepository):
     def __init__(self, db: Dict[str, any]):
         super().__init__(db)
 
-    def convert_dates_in_query(query: dict):
-        _logger.error(f"Converting dates in query: {query}")
+    def convert_dates_in_query(self, query: dict):
         def conv(v):
             if isinstance(v, str) and "T" in v:
-                _logger.error(f"Converting date string: {v}")
                 if v.endswith("Z"):
                     v2 = v[:-1] + "+00:00"
                 else:
@@ -40,7 +38,6 @@ class MongoModelRepository(ModelRepository):
                 query[k] = conv(v)
 
     async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None):
-        _logger.error(f"Getting items from {model_name} with filters: {filters} and orders: {orders}")
         collection = self.db[model_name]
 
         query = filters or {}
