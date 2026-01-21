@@ -12,9 +12,10 @@ def main_dart(app_name: str, models: List[OpenAPIModel]):
     auth_screens = ', '.join([f"'{model.model_name}': {model.model_name}LoginWidget()" for model in auth_models])
 
     file_content = f"""{import_statements}
-import 'package:{app_name}/screens/home.dart';"""+"""
+import 'package:{app_name}/screens/home.dart';"""+f"""
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:{app_name}/theme/theme.dart';"""+"""
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -34,17 +35,7 @@ class MyApp extends StatelessWidget {
       title: 'LAIA',
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
-      theme: ThemeData(
-        appBarTheme: const AppBarTheme(
-          color:  Color.fromARGB(255, 255, 255, 255),
-        ), 
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.brown),
-        scaffoldBackgroundColor: const Color.fromARGB(244, 255, 255, 255),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.black),
-          bodyMedium: TextStyle(color: Colors.black),
-        ),
-      ),
+      theme: AppTheme.light(),
       home: """+f"""{ "SplashScreen()" if auth_models else "Home()" }"""+""",
     );
   }
@@ -102,6 +93,7 @@ class Styles {
 
 def generic_dart(app_name: str):
     return f"""import 'package:laia_annotations/laia_annotations.dart';
+import 'package:{app_name}/theme/theme.dart';
 import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -309,6 +301,8 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
         if not model.model_name.startswith("Body_")
     ])
     return f"""import 'package:{app_name}/config/styles.dart';
+import 'package:{app_name}/generic/nav_bar.dart';
+import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
@@ -326,51 +320,297 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  int _selectedIndex = 0;
+  int _index = 2;
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  final items = const [
+    NavItem(icon: Icons.grid_view_rounded, label: 'Apps'),
+    NavItem(icon: Icons.fact_check_outlined, label: 'Tasks'),
+    NavItem(icon: Icons.home_outlined, label: 'Home'),
+    NavItem(icon: Icons.storage_outlined, label: 'Data'),
+    NavItem(icon: Icons.add, label: 'Profile'),
+  ];
+
+  final demoSections = [
+    TaskSection(
+      status: TaskStatus.todo,
+      items: [
+        TaskItem(
+          title: 'Review brand guidelines draft',
+          dueDate: DateTime(2025, 1, 17),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 23),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 18),
+          tag: 'Work',
+          priority: TaskPriority.low,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.inProgress,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 15),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 28),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.done,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 5),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 8),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+      ],
+    ),
+  ];
+
+  final demoBoardTasks = <BoardTask>[
+    // To Do
+    BoardTask(
+      title: 'Review brand guidelines draft',
+      status: BoardStatus.todo,
+      progress: 10,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.high,
+      comments: 1,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 30,
+      dueDate: DateTime(2025, 1, 23),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 0,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+    ),
+
+    // In progress
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.inProgress,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 15),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 5,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.inProgress,
+      progress: 75,
+      dueDate: DateTime(2025, 1, 28),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+    ),
+
+    // Done
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 5),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+      checked: true,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 8),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+      checked: true,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LAIA'),
-        centerTitle: true,
+        automaticallyImplyLeading: false,
+        surfaceTintColor: Colors.transparent,
+        title: Image.asset('assets/logo_home.png', height: 20),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: ProfileMenuButton(
+              avatarUrl: null, // o tu URL
+              onViewProfile: () {
+                // Navigator.push(...)
+              },
+              onSettings: () {
+                // Navigator.push(...)
+              },
+              onLogout: () {
+                // tu logout
+              },
+            ),
+          ),
+        ],
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (_index == 0)
           Expanded(
-            child: dashboardWidget(context),
+            child: Text('Apps View', style: Theme.of(context).textTheme.headlineMedium),
+          ),
+          if (_index == 1)
+          Expanded(
+            child: TasksWidget(sections: demoSections, boardTasks: demoBoardTasks)
+          ),
+          if (_index == 2)
+          Expanded(
+            child: AppCardsGrid(
+              items: [
+                AppCardItem(
+                  title: 'Users',
+                  icon: const Icon(Icons.people_alt_outlined),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(pageBuilder: (_, __, ___) => UserListView()),
+                  ),
+                ),
+                AppCardItem(
+                  title: 'Calendar',
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  onTap: () => debugPrint('Calendar'),
+                ),
+                AppCardItem(
+                  title: 'Projects',
+                  icon: const Icon(Icons.folder_open_outlined),
+                  onTap: () => debugPrint('Projects'),
+                ),
+                AppCardItem(
+                  title: 'Mailing',
+                  icon: const Icon(Icons.mail_outline),
+                  onTap: () => debugPrint('Mailing'),
+                ),
+
+                AppCardItem(
+                  title: 'Tasks',
+                  icon: const Icon(Icons.fact_check_outlined),
+                  onTap: () => debugPrint('Tasks'),
+                ),
+                AppCardItem(
+                  title: 'Analytics',
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  onTap: () => debugPrint('Analytics'),
+                ),
+                AppCardItem(
+                  title: 'Data Sources',
+                  icon: const Icon(Icons.storage_outlined),
+                  onTap: () => setState(() => _index = 3),
+                ),
+                AppCardItem(
+                  title: 'Finance',
+                  icon: const Icon(Icons.attach_money_outlined),
+                  onTap: () => debugPrint('Finance'),
+                ),
+
+                AppCardItem(
+                  title: 'AI',
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  onTap: () => debugPrint('AI'),
+                ),
+                AppCardItem(
+                  title: 'Chat',
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  onTap: () => debugPrint('Chat'),
+                ),
+                AppCardItem(
+                  title: 'Dashboard',
+                  icon: const Icon(Icons.dashboard_outlined),
+                  onTap: () => debugPrint('Dashboard'),
+                ),
+                AppCardItem(
+                  title: 'Reports',
+                  icon: const Icon(Icons.description_outlined),
+                  onTap: () => debugPrint('Reports'),
+                ),
+
+                AppCardItem(
+                  title: 'CRM',
+                  icon: const Icon(Icons.settings_outlined),
+                  onTap: () => debugPrint('CRM'),
+                ),
+                AppCardItem(
+                  title: 'Invoice',
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  onTap: () => debugPrint('Invoice'),
+                ),
+                AppCardItem(
+                  title: 'Workflow',
+                  icon: const Icon(Icons.alt_route_outlined),
+                  onTap: () => debugPrint('Workflow'),
+                ),
+                AppCardItem(
+                  title: 'Add',
+                  icon: const Icon(Icons.add),
+                  onTap: () => debugPrint('Add'),
+                ),
+              ],
+            )
+          ),
+          if (_index == 3)
+          Expanded(
+            child: dashboardWidget(context)
+          ),
+          if (_index == 3)
+          Expanded(
+            child: dashboardWidget(context)
+          ),
+          if (_index == 4)
+          Expanded(
+            child: Text('Profile View', style: Theme.of(context).textTheme.headlineMedium),
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_outline_sharp),
-            label: 'Favorites',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_outlined),
-            label: 'Profile',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: const Color.fromARGB(255, 0, 0, 0),
-        onTap: _onItemTapped,
-      ),
+      bottomNavigationBar: LaiaBottomNavBar(items: items, currentIndex: _index, onTap: (i) => setState(() => _index = i))
     );
   }
 }
@@ -456,6 +696,8 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
 
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';
+import 'package:{app_name}/theme/auth_scaffold.dart';
+import 'package:{app_name}/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
@@ -810,3 +1052,518 @@ def get_inherited_fields(model):
                 if not field_name.startswith("_") and field_name not in [f[0] for f in model_fields]:
                     model_fields.append((field_name, flatten_type(field_type)))
     return model_fields
+
+
+def theme_dart():
+    return f"""import 'package:flutter/material.dart';
+
+class AppColors {{
+  // Base
+  static const Color brand900 = Color(0xFF1B003F);
+
+  // Accents
+  static const Color navy = Color(0xFF191970);
+  static const Color indigo = Color(0xFF4B0082);
+  static const Color brand = Color(0xFF9748FF);
+  static const Color blue = Color(0xFF6495ED);
+
+  // Surfaces
+  static const Color lavender = Color(0xFFE6E6FA);
+  static const Color bg = Color(0xFFF3F4FA);
+  static const Color surface = Color(0xFFFDFBFF);
+
+  // Neutrals
+  static const Color outline = Color(0xFFD9D9D9);
+  static const Color muted = Color(0xFF757575);
+
+  static const Color success = Color(0xFF4CAF50);
+  static const Color successBg = Color(0xFFE8F5E9);
+  static const Color warning = Color(0xFFFFC107);
+  static const Color warningBg = Color(0xFFFFF8E1);
+  static const Color error = Color(0xFFF44336);
+  static const Color errorBg = Color(0xFFFFEBEE);
+}}
+
+class AppTheme {{
+  static ThemeData light() {{
+    const cs = ColorScheme(
+      brightness: Brightness.light,
+      primary: AppColors.indigo,
+      onPrimary: Colors.white,
+      primaryContainer: AppColors.lavender,
+      onPrimaryContainer: AppColors.brand900,
+
+      secondary: AppColors.brand,
+      onSecondary: Colors.white,
+      secondaryContainer: AppColors.lavender,
+      onSecondaryContainer: AppColors.brand900,
+
+      tertiary: AppColors.blue,
+      onTertiary: Colors.white,
+      tertiaryContainer: AppColors.lavender,
+      onTertiaryContainer: AppColors.brand900,
+
+      background: AppColors.bg,
+      onBackground: AppColors.brand900,
+
+      surface: AppColors.surface,
+      onSurface: AppColors.brand900,
+      surfaceVariant: AppColors.lavender,
+      onSurfaceVariant: AppColors.muted,
+
+      outline: AppColors.outline,
+      outlineVariant: AppColors.outline,
+
+      error: Color(0xFFB3261E),
+      onError: Colors.white,
+      errorContainer: Color(0xFFF9DEDC),
+      onErrorContainer: Color(0xFF410E0B),
+
+      inverseSurface: AppColors.brand900,
+      onInverseSurface: AppColors.surface,
+      inversePrimary: AppColors.indigo,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      surfaceTint: AppColors.indigo,
+    );
+
+    final radius = BorderRadius.circular(20);
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: cs,
+      scaffoldBackgroundColor: AppColors.surface,
+
+      // Tipografía: ajusta si tienes PublicSans en tu app
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.w600,
+          color: AppColors.indigo
+        ),
+        headlineSmall: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+          color: AppColors.navy
+        ),
+        bodySmall: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.muted
+        ),
+        labelSmall: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.indigo
+        ),
+      ),
+
+      // Card “flotante” como la imagen
+      cardTheme: CardThemeData(
+        color: cs.surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+
+      // Inputs redondos, con relleno suave
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        isDense: true,
+        hintStyle: const TextStyle(color: AppColors.muted),
+        labelStyle: const TextStyle(color: AppColors.muted),
+        prefixIconColor: AppColors.muted,
+        suffixIconColor: AppColors.muted,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.outline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.error),
+        ),
+      ),
+
+      // AppBar minimal (en login casi ni se usa, pero por si acaso)
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        foregroundColor: cs.onBackground,
+      ),
+
+      dividerTheme: DividerThemeData(color: cs.outline, thickness: 1),
+
+      // Botones “pill”
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Por si usas FilledButton (M3)
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Outlined
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.primary,
+          side: BorderSide(color: cs.primary),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Text buttons / links
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: cs.primary,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+
+      // Icon buttons (ojo del password, etc.)
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: AppColors.muted,
+        ),
+      ),
+    );
+  }}
+}}
+"""
+
+def auth_scafold_dart():
+    return f"""import 'package:flutter/material.dart';
+import 'theme.dart';
+
+class AuthScaffold extends StatelessWidget {{
+  final Widget child;
+  final Widget? topLeftBrand;
+
+  const AuthScaffold({{
+    super.key,
+    required this.child,
+    this.topLeftBrand,
+  }});
+
+  @override
+  Widget build(BuildContext context) {{
+    return Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.surface,
+                    AppColors.lavender,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 40, top: 40),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: topLeftBrand ?? const SizedBox.shrink(),
+              ),
+            ),
+          ),
+
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }}
+}}
+"""
+
+def nav_bar_dart(app_name: str):
+    return f"""import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:{app_name}/theme/theme.dart';
+
+class NotchedBottomBar extends StatelessWidget {{
+  final int currentIndex; 
+  final double height;
+  final double radius;
+  final Widget child;
+
+  const NotchedBottomBar({{
+    super.key,
+    required this.currentIndex,
+    required this.child,
+    this.height = 60,
+    this.radius = 34,
+  }});
+
+  double _xForIndex(double width, int i) {{
+    final padding = 16.0;
+    final usable = width - padding * 2;
+    final slot = usable / 5;
+    return padding + slot * (i + 0.5);
+  }}
+
+  @override
+  Widget build(BuildContext context) {{
+    return LayoutBuilder(
+      builder: (context, c) {{
+        final w = c.maxWidth;
+        final notchX = _xForIndex(w, currentIndex);
+
+        return ClipPath(
+          clipper: _BarNotchClipper(
+            notchCenterX: notchX,
+            notchRadius: radius,
+          ),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: AppColors.lavender,
+              borderRadius: BorderRadius.circular(0),
+            ),
+            child: child,
+          ),
+        );
+      }},
+    );
+  }}
+}}
+
+class _BarNotchClipper extends CustomClipper<Path> {{
+  final double notchCenterX;
+  final double notchRadius;
+
+  _BarNotchClipper({{
+    required this.notchCenterX,
+    required this.notchRadius,
+  }});
+
+  @override
+  Path getClip(Size size) {{
+    final r = notchRadius;
+    final cx = notchCenterX.clamp(r + 8, size.width - r - 8);
+
+    final valleyDepth = r * 0.85;
+    final valleyTop = 0.0;
+    final y = valleyTop;
+
+    final left = cx - r;
+    final right = cx + r;
+
+    final path = Path();
+
+    path.moveTo(0, 0);
+
+    path.lineTo(left - 14, y);
+
+    path.quadraticBezierTo(left - 6, y, left, y + 8);
+
+    final arcRect = Rect.fromCircle(
+      center: Offset(cx, y + 8),
+      radius: r,
+    );
+
+    path.arcTo(arcRect, math.pi, -math.pi, false);
+
+    path.quadraticBezierTo(right + 6, y, right + 14, y);
+
+    path.lineTo(size.width, y);
+
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+
+    return path;
+  }}
+
+  @override
+  bool shouldReclip(covariant _BarNotchClipper oldClipper) {{
+    return oldClipper.notchCenterX != notchCenterX ||
+        oldClipper.notchRadius != notchRadius;
+  }}
+}}
+
+class LaiaBottomNavBar extends StatelessWidget {{
+  final List<NavItem> items; // 5
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const LaiaBottomNavBar({{
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  }}) : assert(items.length == 5);
+
+  @override
+  Widget build(BuildContext context) {{
+    final cs = Theme.of(context).colorScheme;
+
+    double _xForIndex(double width, int i) {{
+      const padding = 16.0;
+      final usable = width - padding * 2;
+      final slot = usable / 5;
+      return padding + slot * (i + 0.5);
+    }}
+
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: 104,
+        child: Padding(
+          padding: EdgeInsets.zero,
+          child: LayoutBuilder(
+            builder: (context, constraints) {{
+              final w = constraints.maxWidth;
+              final centerX = _xForIndex(w, currentIndex);
+              const bubbleSize = 58.0;
+              final bubbleLeft = centerX - bubbleSize / 2;
+            return Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeOut,
+                  child: NotchedBottomBar(
+                    key: ValueKey(currentIndex),
+                    currentIndex: currentIndex,
+                    height: 62,
+                    radius: 32,
+                    child: Row(
+                      children: List.generate(items.length, (i) {{
+                        final selected = i == currentIndex;
+                        return Expanded(
+                          child: InkResponse(
+                            onTap: () => onTap(i),
+                            radius: 28,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Icon(
+                                items[i].icon,
+                                color: selected
+                                    ? Colors.transparent
+                                    : AppColors.indigo,
+                              ),
+                            ),
+                          ),
+                        );
+                      }}),
+                    ),
+                  ),
+                ),
+            
+                AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    left: bubbleLeft,
+                    bottom: 8, 
+                    child: Padding(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              items[currentIndex].icon,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            items[currentIndex].label,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.indigo,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                
+              ],
+            );
+            }}
+          ),
+        ),
+      ),
+    );
+  }}
+}}
+
+
+class NavItem {{
+  final IconData icon;
+  final String label;
+  const NavItem({{required this.icon, required this.label}});
+}}
+
+"""

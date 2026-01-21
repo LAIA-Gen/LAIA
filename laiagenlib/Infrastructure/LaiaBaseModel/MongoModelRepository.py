@@ -17,7 +17,30 @@ class MongoModelRepository(ModelRepository):
     def __init__(self, db: Dict[str, any]):
         super().__init__(db)
 
+    def convert_dates_in_query(query: dict):
+        _logger.error(f"Converting dates in query: {query}")
+        def conv(v):
+            if isinstance(v, str) and "T" in v:
+                _logger.error(f"Converting date string: {v}")
+                if v.endswith("Z"):
+                    v2 = v[:-1] + "+00:00"
+                else:
+                    v2 = v
+                try:
+                    return datetime.fromisoformat(v2)
+                except ValueError:
+                    return v
+            return v
+
+        for k, v in list(query.items()):
+            if isinstance(v, dict):
+                for op, vv in list(v.items()):
+                    v[op] = conv(vv)
+            else:
+                query[k] = conv(v)
+
     async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None):
+        _logger.error(f"Getting items from {model_name} with filters: {filters} and orders: {orders}")
         collection = self.db[model_name]
 
         query = filters or {}
@@ -33,6 +56,7 @@ class MongoModelRepository(ModelRepository):
             else:
                 query['_id'] = {'$in': [ObjectId(id_filter)]}
 
+        self.convert_dates_in_query(query)
         items = collection.find(query, skip=skip, limit=limit, sort=sorts)
         serialized_items = list_serial(items)
 

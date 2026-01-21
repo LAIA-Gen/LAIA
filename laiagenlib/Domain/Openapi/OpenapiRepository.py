@@ -17,7 +17,7 @@ class OpenapiRepository:
     async def create_storage_routes(endpoint_url: str, access_key: str, secret_key: str):
         pass
 
-    async def create_auth_user_routes(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh'):
+    async def create_auth_user_routes(repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', smtp_config: dict = None):
         pass
 
     async def create_access_rights_routes(models: Dict[str, Type[BaseModel]], repository: ModelRepository):
@@ -27,4 +27,7 @@ class OpenapiRepository:
         pass
 
     async def create_roles_routes(repository: ModelRepository=None):
+        pass
+
+    async def create_email_routes(smtp_config: dict = None):
         pass

@@ -10,6 +10,7 @@ from ...Framework.Shard.CRUDShardController import CRUDShardController
 from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
+from ...Framework.Email.CRUDEmailController import CRUDEmailController
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.LaiaUser.Role import Role
@@ -34,7 +35,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDStorageController(endpoint_url, access_key, secret_key)
         self.api.include_router(router)
 
-    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True):
+    async def create_auth_user_routes(self, repository: ModelRepository=None, model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True, smtp_config: dict = None):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
@@ -45,7 +46,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
                 await create_laia_base_model({**first_user_values, 'password': password}, model, ["admin"], repository, use_access_rights)
             except Exception as e:
                 _logger.info(e)
-        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey)
+        auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
         user_router = CRUDLaiaUserController(repository=repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
@@ -60,4 +61,8 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = await CRUDRoleController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        self.api.include_router(router)
+
+    async def create_email_routes(self, smtp_config: dict):
+        router = await CRUDEmailController(smtp_config)
         self.api.include_router(router)

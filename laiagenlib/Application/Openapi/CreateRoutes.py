@@ -6,7 +6,23 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False, add_storage: bool = True, endpoint_url_storage: str = "", access_key_storage: str = "", secret_key_storage: str = ""):
+async def create_crud_routes(
+        repositoryAPI: OpenapiRepository=None, 
+        repository: ModelRepository=None, 
+        openapi: OpenAPI=None, 
+        models_path: str="", 
+        routes_path: str="", 
+        jwtSecretKey: str='secret_key', 
+        jwtRefreshSecretKey: str='secret_refresh', 
+        auth_required: bool = False, 
+        use_access_rights: bool = True, 
+        use_ontology: bool = False, 
+        add_storage: bool = True, 
+        endpoint_url_storage: str = "", 
+        access_key_storage: str = "", 
+        secret_key_storage: str = "", 
+        smtp_config: dict = None):
+    
     await repositoryAPI.create_roles_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     modelsTypes = {}
@@ -30,7 +46,7 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                     route.extra = False
 
         if openapiModel.extensions.get(f'x-auth'):
-            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required, use_access_rights=use_access_rights)
+            await repositoryAPI.create_auth_user_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, smtp_config=smtp_config)
         else:
             await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology)
 
@@ -41,6 +57,9 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
         await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     await repositoryAPI.create_shard_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+
+    if smtp_config and smtp_config.get("host"):
+        await repositoryAPI.create_email_routes(smtp_config)
 
     # add extra routes
 
