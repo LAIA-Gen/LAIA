@@ -43,7 +43,12 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         yaml.dump(pubspec_content, file)
 
     for openapiModel in openapi.models:
+        print(f"Generating model: {openapiModel.model_name}")
         if openapiModel.model_name.startswith("Body_"):
+            continue
+
+        if openapiModel.model_name.endswith("Update"):
+            print(f"Skipping model: {openapiModel.model_name}")
             continue
 
         model_module = import_model(models_path)

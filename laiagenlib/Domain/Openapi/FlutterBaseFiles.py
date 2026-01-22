@@ -7,7 +7,7 @@ from ..LaiaUser.Role import Role
 from ...Domain.Shared.Utils.logger import _logger
 
 def main_dart(app_name: str, models: List[OpenAPIModel]):
-    auth_models = [model for model in models if model.extensions.get('x-auth')]
+    auth_models = [model for model in models if model.extensions.get('x-auth') and not model.model_name.startswith("Body_") and not model.model_name.endswith("Update")]
     import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in auth_models])
     auth_screens = ', '.join([f"'{model.model_name}': {model.model_name}LoginWidget()" for model in auth_models])
 
@@ -298,7 +298,7 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     import_statements = '\n'.join([
         f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
         for model in models
-        if not model.model_name.startswith("Body_")
+        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update")
     ])
     return f"""import 'package:{app_name}/config/styles.dart';
 import 'package:{app_name}/generic/nav_bar.dart';
@@ -595,10 +595,6 @@ class _HomeState extends State<Home> {
                 ),
               ],
             )
-          ),
-          if (_index == 3)
-          Expanded(
-            child: dashboardWidget(context)
           ),
           if (_index == 3)
           Expanded(
