@@ -295,11 +295,17 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     else:
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [Role]])
-    import_statements = '\n'.join([
-        f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
-        for model in models
-        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update")
-    ])
+    imports = []
+
+    for model in models:
+        print('IMPORTING MODEL:', model.model_name)
+
+        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update"):
+            imports.append(
+                f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
+            )
+
+    import_statements = '\n'.join(imports)
     return f"""import 'package:{app_name}/config/styles.dart';
 import 'package:{app_name}/generic/nav_bar.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
@@ -694,6 +700,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
 import 'package:laia_annotations/laia_annotations.dart';
 import 'package:{app_name}/theme/auth_scaffold.dart';
 import 'package:{app_name}/theme/theme.dart';
+import 'package:{app_name}/screens/home.dart';
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
@@ -1007,7 +1014,7 @@ def pydantic_to_dart_type(pydantic_type: str):
         'Optional[Polygon]': 'Polygon?',
     }
 
-    dart_type = "dynamic"
+    dart_type = "dynamic?"
 
     if pydantic_type in dart_type_mapping:
         dart_type = dart_type_mapping[pydantic_type]
