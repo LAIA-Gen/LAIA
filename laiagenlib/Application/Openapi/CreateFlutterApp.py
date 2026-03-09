@@ -41,6 +41,8 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         "path": "/Volumes/DISK/backup/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_widget_generator"
     }
 
+    await run(f"flutter pub get ./{app_name}")
+
     with open(pubspec_path, "w") as f:
         yaml.dump(pubspec, f, sort_keys=False)
     
@@ -61,13 +63,14 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         yaml.dump(pubspec_content, file)
 
     for openapiModel in openapi.models:
-        print(f"Generating model: {openapiModel.model_name}")
         if openapiModel.model_name.startswith("Body_"):
             continue
 
         if openapiModel.model_name.endswith("Update"):
             print(f"Skipping model: {openapiModel.model_name}")
             continue
+
+        print(f"Generating model: {openapiModel.model_name}")
 
         model_module = import_model(models_path)
 

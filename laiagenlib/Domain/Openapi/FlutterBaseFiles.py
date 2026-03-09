@@ -315,6 +315,7 @@ import 'package:laia_annotations/laia_annotations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';"""+"""
 
+import 'package:flutter/material.dart';
 part 'home.g.dart';
 
 @homeWidget
