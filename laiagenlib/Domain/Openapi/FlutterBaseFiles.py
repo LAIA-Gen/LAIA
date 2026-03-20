@@ -71,7 +71,7 @@ class SplashScreen extends ConsumerWidget {
     return file_content
 
 def api_dart():
-    return """const String baseURL = 'http://localhost:8000';
+    return """const String baseURL = 'http://localhost:8009';
 //const String baseURL = 'http://10.0.2.2:8000';
 
 // Android emmulator
@@ -298,8 +298,6 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     imports = []
 
     for model in models:
-        print('IMPORTING MODEL:', model.model_name)
-
         if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update"):
             imports.append(
                 f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
@@ -695,7 +693,6 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       if openapiModel.extensions.get('x-auth'):
         auth = 'true'
         extra_imports += f"import 'package:shared_preferences/shared_preferences.dart';\n"
-        extra_imports += f"import 'package:{app_name}/screens/home.dart';\n"
 
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';

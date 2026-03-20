@@ -17,6 +17,8 @@ LAIA_INTERNAL_MODELS = {
 }
 
 async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: str="", models_path: str="", auth_required: bool = False, use_access_rights: bool = True):
+    print("CREATING FLUTTER APP")
+
     subprocess.run("flutter create " + app_name, shell=True)
 
     # TODO: change the following local dart libraries to the ones on the marketç
@@ -34,11 +36,11 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     pubspec.setdefault("dev_dependencies", {})
 
     pubspec["dev_dependencies"]["laia_riverpod_custom_generator"] = {
-        "path": "/Volumes/DISK/backup/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_riverpod_custom_generator"
+        "path": "/laia_flutter_gen/laia_riverpod_custom_generator"
     }
 
     pubspec["dev_dependencies"]["laia_widget_generator"] = {
-        "path": "/Volumes/DISK/backup/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_widget_generator"
+        "path": "/laia_flutter_gen/laia_widget_generator"
     }
 
     await run(f"flutter pub get ./{app_name}")
