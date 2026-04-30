@@ -3,6 +3,8 @@ import subprocess
 import yaml
 import asyncio
 
+from ...Domain.Email.EmailRequest import EmailRequest
+
 from ...Domain.Shard.Shard import Shard
 from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
@@ -12,6 +14,7 @@ from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_mo
 
 LAIA_INTERNAL_MODELS = {
     "Shard": Shard,
+    "EmailRequest": EmailRequest,
     # "AccessRight": AccessRight,  (si quieres unificar aquí también)
     # "Role": Role,
 }
@@ -33,15 +36,23 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
 
     pubspec.setdefault("dev_dependencies", {})
 
+    # pubspec["dev_dependencies"]["laia_riverpod_custom_generator"] = {
+    #     "path": "C:/Users/joelm/OneDrive/Escritorio/LaiaBackend/laia_flutter_gen/laia_riverpod_custom_generator"
+    # }
+
+    # pubspec["dev_dependencies"]["laia_widget_generator"] = {
+    #     "path": "C:/Users/joelm/OneDrive/Escritorio/LaiaBackend/laia_flutter_gen/laia_widget_generator"
+    # }
+
     pubspec["dev_dependencies"]["laia_riverpod_custom_generator"] = {
-        "path": "/Volumes/DISK/backup/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_riverpod_custom_generator"
+        "path": "/laia_flutter_gen/laia_riverpod_custom_generator"
     }
 
     pubspec["dev_dependencies"]["laia_widget_generator"] = {
-        "path": "/Volumes/DISK/backup/Projects/Work/LAIA_Gen/laia_flutter_gen/laia_widget_generator"
+        "path": "/laia_flutter_gen/laia_widget_generator"
     }
 
-    await run(f"flutter pub get ./{app_name}")
+    #await run(f"flutter pub get ./{app_name}")
 
     with open(pubspec_path, "w") as f:
         yaml.dump(pubspec, f, sort_keys=False)

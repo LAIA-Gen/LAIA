@@ -17,7 +17,7 @@ from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 
 T = TypeVar('T', bound='LaiaBaseModel')
 
-def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False):
+def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False, smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -80,7 +80,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
 
-        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard)
+        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
 
     @router.put(**routes_info['update'], response_model=dict)
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):

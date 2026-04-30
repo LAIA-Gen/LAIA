@@ -15,7 +15,7 @@ def main_dart(app_name: str, models: List[OpenAPIModel]):
 import 'package:{app_name}/screens/home.dart';"""+f"""
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:{app_name}/theme/theme.dart';"""+"""
+import 'package:{app_name}/theme/theme_app.dart';"""+"""
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -93,7 +93,7 @@ class Styles {
 
 def generic_dart(app_name: str):
     return f"""import 'package:laia_annotations/laia_annotations.dart';
-import 'package:{app_name}/theme/theme.dart';
+import 'package:{app_name}/theme/theme_app.dart';
 import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -700,7 +700,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 import 'package:{app_name}/theme/auth_scaffold.dart';
-import 'package:{app_name}/theme/theme.dart';
+import 'package:{app_name}/theme/theme_app.dart';
 import 'package:{app_name}/screens/home.dart';
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
@@ -1271,7 +1271,7 @@ class AppTheme {{
 
 def auth_scafold_dart():
     return f"""import 'package:flutter/material.dart';
-import 'theme.dart';
+import 'theme_app.dart';
 
 class AuthScaffold extends StatelessWidget {{
   final Widget child;
@@ -1337,7 +1337,7 @@ class AuthScaffold extends StatelessWidget {{
 def nav_bar_dart(app_name: str):
     return f"""import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:{app_name}/theme/theme.dart';
+import 'package:{app_name}/theme/theme_app.dart';
 
 class NotchedBottomBar extends StatelessWidget {{
   final int currentIndex; 
