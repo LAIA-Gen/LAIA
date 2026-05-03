@@ -36,8 +36,34 @@ class MongoModelRepository(ModelRepository):
                     v[op] = conv(vv)
             else:
                 query[k] = conv(v)
+#JMT
+    def convert_objectids_in_query(self, query: dict):
+        for k, v in list(query.items()):
+            if isinstance(v, str) and len(v) == 24:
+                try:
+                    query[k] = ObjectId(v)
+                except Exception:
+                    pass
+            elif isinstance(v, dict):
+                for op, vv in list(v.items()):
+                    if isinstance(vv, str) and len(vv) == 24:
+                        try:
+                            v[op] = ObjectId(vv)
+                        except Exception:
+                            pass
+                    elif isinstance(vv, list):
+                        new_list = []
+                        for item in vv:
+                            if isinstance(item, str) and len(item) == 24:
+                                try:
+                                    new_list.append(ObjectId(item))
+                                except Exception:
+                                    new_list.append(item)
+                            else:
+                                new_list.append(item)
+                        v[op] = new_list
 
-    async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None):
+    async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None, populate: Optional[List[str]] = None):
         collection = self.db[model_name]
 
         query = filters or {}
@@ -54,10 +80,47 @@ class MongoModelRepository(ModelRepository):
                 query['_id'] = {'$in': [ObjectId(id_filter)]}
 
         self.convert_dates_in_query(query)
-        items = collection.find(query, skip=skip, limit=limit, sort=sorts)
-        serialized_items = list_serial(items)
+        self.convert_objectids_in_query(query)
 
-        total_count = collection.count_documents(query)
+        if populate:
+            pipeline = [{"$match": query}]
+            
+            for field in populate:
+                temp_field = f"_{field}_populated"
+                pipeline.append({
+                    "$lookup": {
+                        "from": field,  # Assuming field name matches collection name
+                        "localField": field,
+                        "foreignField": "_id",
+                        "as": temp_field
+                    }
+                })
+                pipeline.append({
+                    "$addFields": {
+                        field: {
+                            "$cond": {
+                                "if": {"$isArray": f"${field}"},
+                                "then": f"${temp_field}",
+                                "else": {"$arrayElemAt": [f"${temp_field}", 0]}
+                            }
+                        }
+                    }
+                })
+                pipeline.append({"$project": {temp_field: 0}})
+
+            if sorts:
+                pipeline.append({"$sort": sorts})
+            
+            pipeline.append({"$skip": skip})
+            pipeline.append({"$limit": limit})
+
+            items = collection.aggregate(pipeline)
+            serialized_items = list_serial(items)
+            total_count = collection.count_documents(query)
+        else:
+            items = collection.find(query, skip=skip, limit=limit, sort=sorts)
+            serialized_items = list_serial(items)
+            total_count = collection.count_documents(query)
         
         return serialized_items, total_count
     

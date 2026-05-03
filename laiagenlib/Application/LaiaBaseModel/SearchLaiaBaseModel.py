@@ -1,4 +1,4 @@
-from typing import Type, List
+from typing import Type, List, Optional
 from math import ceil
 
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
@@ -7,8 +7,8 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
-
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = ""):
+#JMT
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List[str]] = None):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
@@ -27,9 +27,13 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")
         filters[shard_key] = user_shard
-
+        
+    if "_id" in filters and isinstance(filters["_id"], str):
+        filters["_id"] = ObjectId(filters["_id"])
+    elif "id" in filters and isinstance(filters["id"], str):
+        filters["_id"] = ObjectId(filters.pop("id"))
     try:
-        items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders)
+        items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders, populate=populate)
         if "admin" not in user_roles and use_access_rights:
             allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
             items = [
