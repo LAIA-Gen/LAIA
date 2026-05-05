@@ -8,7 +8,7 @@ from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
-from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
+from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file, embedded_model_dart, flatten_type, embedded_class_name_from_type
 
 LAIA_INTERNAL_MODELS = {
     "Shard": Shard,
@@ -88,7 +88,23 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         model_file_content = model_dart(openapiModel, app_name, model)
         with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
-    
+
+        for prop_name, prop_details in openapiModel.properties.items():
+            if not isinstance(prop_details, dict) or not (prop_details.get('x_embedded') or prop_details.get('x-embedded')):
+                continue
+            ann = model.__annotations__.get(prop_name)
+            if ann is None:
+                continue
+            type_str = flatten_type(ann)
+            embedded_cls_name = embedded_class_name_from_type(type_str)
+            if not embedded_cls_name:
+                continue
+            if hasattr(model_module, embedded_cls_name):
+                embedded_cls = getattr(model_module, embedded_cls_name)
+                embedded_content = embedded_model_dart(embedded_cls_name, app_name, embedded_cls)
+                with open(os.path.join(models_dir, f'{embedded_cls_name.lower()}.dart'), 'w') as f:
+                    f.write(embedded_content)
+
     with open(os.path.join(models_dir, 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
 

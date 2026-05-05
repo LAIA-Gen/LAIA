@@ -136,6 +136,52 @@ def add_update_models_at_end(modified_content: str, models: List[any]) -> str:
 
 T = TypeVar('T', bound='BaseModel')
 
+def _extract_embedded_class_name(field_type: str):
+    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime'}
+    field_type = field_type.strip().strip("'\"")
+    cls_match = (
+        re.match(r'Optional\[(?:List|list)\[(\w+)\]\]', field_type) or
+        re.match(r'(?:List|list)\[(\w+)\]', field_type) or
+        re.match(r'Optional\[(\w+)\]', field_type) or
+        re.match(r'^(\w+)$', field_type)
+    )
+    if not cls_match:
+        return None
+
+    cls_name = cls_match.group(1)
+    return None if cls_name in primitives else cls_name
+
+
+def _get_class_body(modified_content: str, class_name: str):
+    pattern = re.compile(
+        rf'(^class\s+{re.escape(class_name)}\([^\)]*\):\n)(.*?)(?=^\s*class\s|\Z)',
+        re.DOTALL | re.MULTILINE
+    )
+    match = pattern.search(modified_content)
+    return match.group(2) if match else ""
+
+
+def _get_embedded_class_names(modified_content: str, models: List[any]) -> set:
+    embedded_classes = set()
+    for model in models:
+        if not hasattr(model, 'properties'):
+            continue
+        class_body = _get_class_body(modified_content, model.model_name)
+        for prop_name, prop in model.properties.items():
+            if not isinstance(prop, dict) or not (prop.get('x_embedded') or prop.get('x-embedded')):
+                continue
+            m = re.search(
+                rf'^\s+{re.escape(prop_name)}\s*:\s*(.+?)(?:\s*=.*)?$',
+                class_body,
+                re.MULTILINE
+            )
+            if not m:
+                continue
+            cls_name = _extract_embedded_class_name(m.group(1))
+            if cls_name:
+                embedded_classes.add(cls_name)
+    return embedded_classes
+
 def create_models_file(input_file="openapi.yaml", output_file="model.py", models: List[any] = [], excluded_models: List[str] = []):
     # This function uses the datamodel-code-generator for generating the pydantic models given a openapi.yaml file. 
     # The generated file is modified so that the pydantic models extend the LaiaBaseModel, this is necessary for 
@@ -165,6 +211,13 @@ from bson import ObjectId"""
 
     modified_content = '\n'.join(lines)
     modified_content = re.sub(r'class\s+(\w+)\(BaseModel\):', r'class \1(LaiaBaseModel):', modified_content)
+
+    embedded_classes = _get_embedded_class_names(modified_content, models)
+    for cls_name in embedded_classes:
+        modified_content = modified_content.replace(
+            f'class {cls_name}(LaiaBaseModel):',
+            f'class {cls_name}(BaseModel):'
+        )
 
     excluded_models_pattern = "|".join(excluded_models)
     model_pattern = re.compile(rf'class ({excluded_models_pattern}|BodySearch\w+)\(.*?\):.*?(?=class|$)', re.DOTALL)
