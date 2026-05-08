@@ -12,7 +12,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='LaiaUser')
-#JMT
+
 def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
@@ -31,7 +31,10 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
         token: str
         refresh_token: str
 
-    @router.post(f"/auth/register/{model_name}/", response_model=model)
+    class ErrorResponse(BaseModel):
+        detail: str
+
+    @router.post(f"/auth/register/{model_name}/", response_model=None, responses={200: {"model": model}, 400: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
     async def register_user(element: model):
         user_roles=["admin"]
         try:
@@ -43,7 +46,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.post(f"/auth/login/{model_name}/", response_model=LoginResponse)
+    @router.post(f"/auth/login/{model_name}/", response_model=None, responses={200: {"model": LoginResponse}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def login_user(element: Auth):
         try:
             return await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey, jwtRefreshSecretKey)
@@ -54,7 +57,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.get(f"/auth/verify/{model_name}/{{token}}", response_model=VerifyResponse)
+    @router.get(f"/auth/verify/{model_name}/{{token}}", response_model=None, responses={200: {"model": VerifyResponse}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def verify_user(token: str):
         try:
             return await VerifyLaiaUser.verify(token, model, repository, jwtSecretKey)
@@ -63,7 +66,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.post(f"/auth/refresh/{model_name}/", response_model=RefreshResponse)
+    @router.post(f"/auth/refresh/{model_name}/", response_model=None, responses={200: {"model": RefreshResponse}})
     async def refresh_token_route(refresh_token: str = Body(..., embed=True)):
         try:
             return JWTToken.refresh_token(refresh_token, jwtSecretKey, jwtRefreshSecretKey)

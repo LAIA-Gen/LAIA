@@ -27,6 +27,9 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         max_pages: int
         context: Optional[dict] = Field(None, alias="@context")
 
+    class ErrorResponse(BaseModel):
+        detail: str
+
     def get_auth_dependency():
         if auth_required:
             return Annotated[Optional[str], Depends(oauth2_scheme)]
@@ -89,7 +92,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.put(**routes_info['update'], response_model=model)
+    @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -98,7 +101,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get(**routes_info['read'], response_model=model)
+    @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -116,8 +119,8 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-    @router.post(**routes_info['search'], response_model=SearchResponse)
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}, populate: Optional[List[str]] = None):
+    @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
+    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_id = ''
         if auth_required:
@@ -128,7 +131,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.post(**routes_info['aggregate'], response_model=List[dict])
+    @router.post(**routes_info['aggregate'], response_model=None, responses={200: {"model": List[dict]}})
     async def aggregate_users(
         pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
         token: get_auth_dependency() = None

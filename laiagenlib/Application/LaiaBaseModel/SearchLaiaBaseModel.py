@@ -8,7 +8,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 #JMT
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List[str]] = None):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()

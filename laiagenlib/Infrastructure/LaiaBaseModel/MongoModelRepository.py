@@ -85,28 +85,101 @@ class MongoModelRepository(ModelRepository):
         if populate:
             pipeline = [{"$match": query}]
             
-            for field in populate:
-                temp_field = f"_{field}_populated"
+            for entry in populate:
+                # Supports:
+                # 1. Simple string: "user"
+                # 2. Dict: {"id": "userId", "from": "User", "fields": ["name"]}
+                if isinstance(entry, dict):
+                    local_field = entry.get("id") or entry.get("field")
+                    from_col = entry.get("from", local_field)
+                    result_field = entry.get("as", local_field)
+                    fields_to_keep = entry.get("fields", [])
+                else:
+                    local_field = entry
+                    from_col = entry
+                    result_field = entry
+                    fields_to_keep = []
+
+                # Detect actual collection name (case-insensitive fallback)
+                col_names = self.db.list_collection_names()
+                actual_col = from_col
+                if from_col not in col_names:
+                    for c in col_names:
+                        if c.lower() == from_col.lower():
+                            actual_col = c
+                            break
+
+                temp_field = f"_{result_field}_populated"
+                
+                # 1. Type conversion stage
+                pipeline.append({
+                    "$addFields": {
+                        f"{local_field}_as_obj": {
+                            "$cond": {
+                                "if": {"$isArray": f"${local_field}"},
+                                "then": {
+                                    "$map": {
+                                        "input": f"${local_field}",
+                                        "as": "id_val",
+                                        "in": { "$toObjectId": "$$id_val" }
+                                    }
+                                },
+                                "else": {
+                                    "$cond": {
+                                        "if": { "$and": [{ "$ne": [f"${local_field}", None] }, { "$ne": [f"${local_field}", ""] }] },
+                                        "then": { "$toObjectId": f"${local_field}" },
+                                        "else": None
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+
+                # 2. Lookup stage
                 pipeline.append({
                     "$lookup": {
-                        "from": field,  # Assuming field name matches collection name
-                        "localField": field,
+                        "from": actual_col,
+                        "localField": f"{local_field}_as_obj",
                         "foreignField": "_id",
                         "as": temp_field
                     }
                 })
+
+                # 3. Projection stage (if fields are specified)
+                if fields_to_keep:
+                    # Always include _id if not explicitly excluded? 
+                    # Let's just include exactly what the user asked.
+                    projection = {f: f"$$item.{f}" for f in fields_to_keep}
+                    if "_id" not in fields_to_keep and "id" not in fields_to_keep:
+                        projection["_id"] = "$$item._id" # Keep ID by default for consistency
+                    
+                    pipeline.append({
+                        "$set": {
+                            temp_field: {
+                                "$map": {
+                                    "input": f"${temp_field}",
+                                    "as": "item",
+                                    "in": projection
+                                }
+                            }
+                        }
+                    })
+
+                # 4. Final field assignment
                 pipeline.append({
                     "$addFields": {
-                        field: {
+                        result_field: {
                             "$cond": {
-                                "if": {"$isArray": f"${field}"},
+                                "if": {"$isArray": f"${local_field}"},
                                 "then": f"${temp_field}",
                                 "else": {"$arrayElemAt": [f"${temp_field}", 0]}
                             }
                         }
                     }
                 })
-                pipeline.append({"$project": {temp_field: 0}})
+                # Clean up intermediate fields
+                pipeline.append({"$project": {temp_field: 0, f"{local_field}_as_obj": 0}})
 
             if sorts:
                 pipeline.append({"$sort": sorts})
@@ -142,6 +215,7 @@ class MongoModelRepository(ModelRepository):
             item_dict = dict(item)
 
         item_dict.pop('id', None)
+        self.convert_objectids_in_query(item_dict)
 
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
@@ -153,6 +227,7 @@ class MongoModelRepository(ModelRepository):
 
     async def put_item(self, model_name: str, item_id: str, update_fields: dict):
         collection = self.db[model_name]
+        self.convert_objectids_in_query(update_fields)
         update_query = {'$set': update_fields}
         
         updated_item = collection.find_one_and_update(

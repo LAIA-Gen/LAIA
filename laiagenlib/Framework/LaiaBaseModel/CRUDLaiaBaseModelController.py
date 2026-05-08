@@ -29,6 +29,9 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         max_pages: int
         context: Optional[dict] = Field(None, alias="@context")
 
+    class ErrorResponse(BaseModel):
+        detail: str
+
     def get_auth_dependency():
         if auth_required:
             return Annotated[Optional[str], Depends(oauth2_scheme)]
@@ -77,7 +80,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         
         return ObjectId(user_id)
 
-    @router.post(**routes_info['create'], response_model=model)
+    @router.post(**routes_info['create'], response_model=None, responses={200: {"model": model}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
     async def create_element(element: model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         element_dict = element.dict()
@@ -89,7 +92,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
         return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
 
-    @router.put(**routes_info['update'], response_model=model)
+    @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -98,7 +101,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get(**routes_info['read'], response_model=model)
+    @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -116,8 +119,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-    @router.post(**routes_info['search'], response_model=SearchResponse)
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}, populate: Optional[List[str]] = None):
+    @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
+    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_id = ''
         if auth_required:
@@ -128,7 +131,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get(**routes_info['nice'], response_model=model, name=f"Get {model_name} by nicename")
+    @router.get(**routes_info['nice'], response_model=None, responses={200: {"model": model}, 404: {"model": ErrorResponse}}, name=f"Get {model_name} by nicename")
     async def read_element_by_nicename(nicename: str, token: get_auth_dependency() = None):
         """
         Devuelve un {model_name} a partir del nicename
