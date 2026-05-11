@@ -12,7 +12,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='LaiaUser')
-
+#JMT
 def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey: str='secret_key', jwtRefreshSecretKey: str='secret_refresh', smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])

@@ -86,9 +86,6 @@ class MongoModelRepository(ModelRepository):
             pipeline = [{"$match": query}]
             
             for entry in populate:
-                # Supports:
-                # 1. Simple string: "user"
-                # 2. Dict: {"id": "userId", "from": "User", "fields": ["name"]}
                 if isinstance(entry, dict):
                     local_field = entry.get("id") or entry.get("field")
                     from_col = entry.get("from", local_field)
@@ -100,7 +97,6 @@ class MongoModelRepository(ModelRepository):
                     result_field = entry
                     fields_to_keep = []
 
-                # Detect actual collection name (case-insensitive fallback)
                 col_names = self.db.list_collection_names()
                 actual_col = from_col
                 if from_col not in col_names:
@@ -111,7 +107,7 @@ class MongoModelRepository(ModelRepository):
 
                 temp_field = f"_{result_field}_populated"
                 
-                # 1. Type conversion stage
+                # Conversion
                 pipeline.append({
                     "$addFields": {
                         f"{local_field}_as_obj": {
@@ -136,7 +132,7 @@ class MongoModelRepository(ModelRepository):
                     }
                 })
 
-                # 2. Lookup stage
+                # Lookups
                 pipeline.append({
                     "$lookup": {
                         "from": actual_col,
@@ -146,13 +142,11 @@ class MongoModelRepository(ModelRepository):
                     }
                 })
 
-                # 3. Projection stage (if fields are specified)
+                # Projection (if fields are specified)
                 if fields_to_keep:
-                    # Always include _id if not explicitly excluded? 
-                    # Let's just include exactly what the user asked.
                     projection = {f: f"$$item.{f}" for f in fields_to_keep}
                     if "_id" not in fields_to_keep and "id" not in fields_to_keep:
-                        projection["_id"] = "$$item._id" # Keep ID by default for consistency
+                        projection["_id"] = "$$item._id"
                     
                     pipeline.append({
                         "$set": {
@@ -166,7 +160,7 @@ class MongoModelRepository(ModelRepository):
                         }
                     })
 
-                # 4. Final field assignment
+                # Final field assignment
                 pipeline.append({
                     "$addFields": {
                         result_field: {
