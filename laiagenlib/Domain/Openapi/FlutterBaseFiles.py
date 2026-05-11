@@ -710,11 +710,12 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
               print(f"[LAIA Flutter enum import from schema] {model.__name__}.{prop_name} -> {imp.strip()}")
               extra_imports += imp
         if isinstance(prop_yaml, dict) and (prop_yaml.get('x_embedded') or prop_yaml.get('x-embedded')):
-          cls_name = embedded_class_name_from_type(prop_type)
+          cls_name = embedded_class_name_from_type(prop_type) or embedded_class_name_from_annotation(raw_annotation)
           if cls_name:
             dart_prop_type = embedded_dart_type(prop_type, cls_name)
             imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
             if imp not in extra_imports:
+              print(f"[LAIA Flutter embedded import] {model.__name__}.{prop_name} -> {imp.strip()}")
               extra_imports += imp
 
       fields += ")\n"
@@ -1090,13 +1091,42 @@ def embedded_class_name_from_type(type_str: str):
     return None if cls_name in primitives else cls_name
 
 
+def embedded_class_name_from_annotation(annotation):
+    if annotation is None:
+        return None
+
+    if isinstance(annotation, str):
+        return embedded_class_name_from_type(annotation)
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is Annotated:
+        return embedded_class_name_from_annotation(args[0]) if args else None
+
+    if origin is list or origin is List:
+        return embedded_class_name_from_annotation(args[0]) if args else None
+
+    if origin is Union and type(None) in args:
+        non_none = [arg for arg in args if arg is not type(None)]
+        return embedded_class_name_from_annotation(non_none[0]) if non_none else None
+
+    cls_name = getattr(annotation, "__name__", None)
+    if cls_name:
+        return embedded_class_name_from_type(cls_name)
+
+    return embedded_class_name_from_type(str(annotation))
+
+
 def embedded_dart_type(type_str: str, cls_name: str):
     type_str = str(type_str).strip().strip("'\"")
-    if re.match(r'Optional\[(?:List|list)\[\w+\]\]', type_str):
+    if re.match(r'Optional\[(?:List|list)\[\w+\]\]', type_str) or (
+        'Optional' in type_str and ('List[' in type_str or 'list[' in type_str)
+    ):
         return f'List<{cls_name}>?'
-    if re.match(r'(?:List|list)\[\w+\]', type_str):
+    if re.match(r'(?:List|list)\[\w+\]', type_str) or 'List[' in type_str or 'list[' in type_str:
         return f'List<{cls_name}>'
-    if re.match(r'Optional\[\w+\]', type_str):
+    if re.match(r'Optional\[\w+\]', type_str) or 'Optional' in type_str or 'NoneType' in type_str:
         return f'{cls_name}?'
     return cls_name
 
@@ -1237,9 +1267,14 @@ def get_inherited_field_annotations(model):
 def embedded_model_dart(class_name: str, app_name: str, model: Type[BaseModel]) -> str:
     fields = ""
     fields_constructor = ""
-    inherited_fields = get_inherited_fields(model)
+    local_annotations = getattr(model, "__annotations__", {})
+    local_fields = [
+        (field_name, flatten_type(field_type))
+        for field_name, field_type in local_annotations.items()
+        if not field_name.startswith("_")
+    ]
 
-    for prop_name, prop_type in inherited_fields:
+    for prop_name, prop_type in local_fields:
         dart_prop_type = pydantic_to_dart_type(prop_type)
         fields += f"  final {dart_prop_type} {prop_name};\n"
         if '?' in dart_prop_type:
