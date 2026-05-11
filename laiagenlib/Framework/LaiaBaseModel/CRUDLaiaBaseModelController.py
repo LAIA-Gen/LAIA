@@ -1,7 +1,8 @@
 from fastapi import Body, Depends, HTTPException, status
 from fastapi.routing import APIRouter
 from fastapi.security import OAuth2PasswordBearer
-from typing import TypeVar, Optional, List, Annotated
+from typing import TypeVar, Optional, List, Annotated, Any
+from pydantic import BaseModel, Field
 
 from laiagenlib.Application.Shared.Utils.UserShard import get_user_shard
 
@@ -16,11 +17,20 @@ from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 
 
 T = TypeVar('T', bound='LaiaBaseModel')
-
-def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False):
+#JMT
+def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True, use_ontology: bool = False, smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+    class SearchResponse(BaseModel):
+        items: List[model]
+        current_page: int
+        max_pages: int
+        context: Optional[dict] = Field(None, alias="@context")
+
+    class ErrorResponse(BaseModel):
+        detail: str
 
     def get_auth_dependency():
         if auth_required:
@@ -70,7 +80,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         
         return ObjectId(user_id)
 
-    @router.post(**routes_info['create'], response_model=dict)
+    @router.post(**routes_info['create'], response_model=None, responses={200: {"model": model}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
     async def create_element(element: model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         element_dict = element.dict()
@@ -80,9 +90,9 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
 
-        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard)
+        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
 
-    @router.put(**routes_info['update'], response_model=dict)
+    @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -91,7 +101,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get(**routes_info['read'], response_model=dict)
+    @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -109,20 +119,19 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             return f"{model_name} element deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-    @router.post(**routes_info['search'], response_model=dict)
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
+    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         user_id = ''
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get(**routes_info['nice'], response_model=dict, name=f"Get {model_name} by nicename")
+    @router.get(**routes_info['nice'], response_model=None, responses={200: {"model": model}, 404: {"model": ErrorResponse}}, name=f"Get {model_name} by nicename")
     async def read_element_by_nicename(nicename: str, token: get_auth_dependency() = None):
         """
         Devuelve un {model_name} a partir del nicename
@@ -161,7 +170,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.post(**routes_info['aggregate'], response_model=dict)
+    @router.post(**routes_info['aggregate'], response_model=List[dict])
     async def aggregate_users(
         pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
         token: get_auth_dependency() = None
