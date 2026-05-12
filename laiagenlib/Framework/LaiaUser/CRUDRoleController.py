@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.routing import APIRouter
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.LaiaUser import CreateRole
@@ -15,11 +15,14 @@ T = TypeVar('T', bound='LaiaBaseModel')
 async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
     model = Role
     router = APIRouter(tags=[model.__name__])
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    http_bearer = HTTPBearer(auto_error=False)
+
+    def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
+        return credentials.credentials if credentials else None
 
     def get_auth_dependency():
         if auth_required:
-            return Annotated[Optional[str], Depends(oauth2_scheme)]
+            return Annotated[Optional[str], Depends(get_token)]
         else:
             return Optional[str]
         

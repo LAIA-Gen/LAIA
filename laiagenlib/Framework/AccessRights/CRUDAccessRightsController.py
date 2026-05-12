@@ -1,7 +1,7 @@
 from typing import TypeVar, Optional, List, Annotated, Dict, Type
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.AccessRights import CreateAccessRights, UpdateAccessRights
 from ...Application.LaiaUser import JWTToken
@@ -13,11 +13,14 @@ from ...Domain.Shared.Utils.logger import _logger
 def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: ModelRepository, jwtSecretKey: str='secret_key', auth_required: bool = False) -> APIRouter:
     model = AccessRight
     router = APIRouter(tags=["AccessRight"])
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    http_bearer = HTTPBearer(auto_error=False)
+
+    def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
+        return credentials.credentials if credentials else None
 
     def get_auth_dependency():
         if auth_required:
-            return Annotated[Optional[str], Depends(oauth2_scheme)]
+            return Annotated[Optional[str], Depends(get_token)]
         else:
             return Optional[str]
         

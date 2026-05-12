@@ -1,7 +1,7 @@
 from typing import Optional, List, Annotated
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, status, Depends
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ...Domain.LaiaUser.Role import Role
 
 from ...Application.LaiaBaseModel import (
@@ -20,11 +20,14 @@ from ...Domain.Shard.Shard import Shard
 def CRUDShardController(repository: ModelRepository, jwtSecretKey: str='secret_key', auth_required: bool = False) -> APIRouter:
     model = Shard
     router = APIRouter(tags=["Shard"])
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    http_bearer = HTTPBearer(auto_error=False)
+
+    def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
+        return credentials.credentials if credentials else None
 
     def get_auth_dependency():
         if auth_required:
-            return Annotated[Optional[str], Depends(oauth2_scheme)]
+            return Annotated[Optional[str], Depends(get_token)]
         else:
             return Optional[str]
 
