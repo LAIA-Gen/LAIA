@@ -1,6 +1,6 @@
 from typing import TypeVar, Optional, List, Annotated, Dict, Type
-from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, status, Depends, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.AccessRights import CreateAccessRights, UpdateAccessRights
@@ -9,7 +9,7 @@ from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
-
+#JMT
 def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: ModelRepository, jwtSecretKey: str='secret_key', auth_required: bool = False) -> APIRouter:
     model = AccessRight
     router = APIRouter(tags=["AccessRight"])
@@ -17,6 +17,15 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
 
     def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
         return credentials.credentials if credentials else None
+
+    class SearchResponse(BaseModel):
+        items: List[AccessRight]
+        current_page: int
+        max_pages: int
+        context: Optional[dict] = Field(None, alias="@context")
+
+    class ErrorResponse(BaseModel):
+        detail: str
 
     def get_auth_dependency():
         if auth_required:
@@ -47,7 +56,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         
         return user_roles
 
-    @router.post("/accessright/")
+    @router.post("/accessright/", response_model=None, responses={200: {"model": AccessRight}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
     async def create_access_rights_route(new_access_rights: AccessRight, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         model = None
@@ -62,7 +71,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.put("/accessright/{element_id}", response_model=dict)
+    @router.put("/accessright/{element_id}", response_model=None, responses={200: {"model": AccessRight}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_access_rights(element_id: str, values: dict, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -70,7 +79,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get("/accessright/{element_id}", response_model=dict)
+    @router.get("/accessright/{element_id}", response_model=None, responses={200: {"model": AccessRight}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_access_rights(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -86,12 +95,11 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
             return f"AccessRight deleted successfully"
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-    @router.post("/accessrights/", response_model=dict)
-    async def search_access_rights(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+    @router.post("/accessrights/", response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
+    async def search_access_rights(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate)
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

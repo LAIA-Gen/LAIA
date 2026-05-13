@@ -70,7 +70,7 @@ def create_base_files(app_name: str, models: List[any] = []):
         f.write(nav_bar_file_content)
 
     theme_file_content = theme_dart()
-    with open(os.path.join(dart_dir, 'theme', 'theme.dart'), 'w') as f:
+    with open(os.path.join(dart_dir, 'theme', 'theme_app.dart'), 'w') as f:
         f.write(theme_file_content)
 
     auth_scaffold_file_content = auth_scafold_dart()

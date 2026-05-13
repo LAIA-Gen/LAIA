@@ -5,10 +5,13 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from ...Domain.Email.EmailRequest import EmailRequest
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-
+#JMT
 async def CRUDEmailController(smtp_config: dict):
     model = EmailRequest
     router = APIRouter(tags=[model.__name__])
+
+    class EmailResponse(BaseModel):
+        message: str
 
     templates_dir = smtp_config.get("templates_dir", "email_templates")
     env = Environment(
@@ -16,7 +19,7 @@ async def CRUDEmailController(smtp_config: dict):
         autoescape=select_autoescape(["html", "xml"])
     )
 
-    @router.post("/send-email/", response_model=dict)
+    @router.post("/send-email/", response_model=EmailResponse)
     async def send_email(email: EmailRequest):
         try:
             # Renderizado del HTML si hay plantilla
