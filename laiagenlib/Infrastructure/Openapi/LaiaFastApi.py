@@ -2,6 +2,7 @@ import os
 from asyncinit import asyncinit
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from ...Application.Shared.Utils.CreateModelsFile import create_models_file
 from ...Application.Shared.Utils.CreateRoutesFile import create_routes_file
 from ...Application.Openapi.CreateRoutes import create_crud_routes
@@ -37,6 +38,7 @@ class LaiaFastApi():
         
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
+        self._setup_custom_openapi()
         self.repository_instance = repository(db)
         self.repository_api_instance = repositoryAPI(self.api, jwtSecretKey, jwtRefreshSecretKey)
         self.openapi_path = openapi
@@ -86,3 +88,21 @@ class LaiaFastApi():
             access_key_storage, 
             secret_key_storage,
             smtp_config=self.smtp_config)
+
+    def _setup_custom_openapi(self):
+        api = self.api
+
+        def custom_openapi():
+            if api.openapi_schema:
+                return api.openapi_schema
+            schema = get_openapi(title=api.title, version=api.version, routes=api.routes)
+            schemas = schema.get("components", {}).get("schemas", {})
+            hidden = {"HTTPValidationError", "ValidationError"}
+            schema["components"]["schemas"] = {
+                name: s for name, s in schemas.items()
+                if not name.startswith("Body_") and name not in hidden
+            }
+            api.openapi_schema = schema
+            return api.openapi_schema
+
+        api.openapi = custom_openapi

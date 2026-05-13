@@ -2,6 +2,8 @@ import os
 import subprocess
 import yaml
 import asyncio
+from enum import EnumMeta
+from pydantic import BaseModel
 
 from ...Domain.Email.EmailRequest import EmailRequest
 
@@ -10,7 +12,7 @@ from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
-from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file
+from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file, embedded_model_dart, embedded_class_name_from_annotation
 
 LAIA_INTERNAL_MODELS = {
     "Shard": Shard,
@@ -60,7 +62,7 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         yaml.dump(pubspec, f, sort_keys=False)
     
     models_dir = os.path.join(f"./{app_name}", "lib", "models")
-    screens_dir = os.path.join(f"./{app_name}", "lib", "screens")   
+    screens_dir = os.path.join(f"./{app_name}", "lib", "screens")
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(screens_dir, exist_ok=True)
 
@@ -75,7 +77,48 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     with open(f"{app_name}/pubspec.yaml", "w") as file:
         yaml.dump(pubspec_content, file)
 
+    model_module = import_model(models_path)
+    openapi_model_names = {model.model_name for model in openapi.models}
+    embedded_model_names = set()
+
     for openapiModel in openapi.models:
+        if not hasattr(model_module, openapiModel.model_name):
+            continue
+        model = getattr(model_module, openapiModel.model_name)
+        for prop_name, annotation in getattr(model, "__annotations__", {}).items():
+            prop_details = openapiModel.properties.get(prop_name, {})
+            if isinstance(prop_details, dict) and prop_details.get("x_frontend_relation"):
+                continue
+            embedded_cls_name = embedded_class_name_from_annotation(annotation)
+            if not embedded_cls_name or embedded_cls_name not in openapi_model_names:
+                continue
+            embedded_cls = getattr(model_module, embedded_cls_name, None)
+            if (
+                embedded_cls is not None
+                and isinstance(embedded_cls, type)
+                and issubclass(embedded_cls, BaseModel)
+                and not isinstance(embedded_cls, EnumMeta)
+            ):
+                embedded_model_names.add(embedded_cls_name)
+
+    frontend_models = [
+        model for model in openapi.models
+        if model.model_name not in embedded_model_names
+    ]
+
+    home_txt_path = os.path.join(f"./{app_name}", "lib", "home.txt")
+    with open(home_txt_path, 'w') as f:
+        for m in frontend_models:
+            if m.model_name.startswith("Body_") or m.model_name.endswith("Update"):
+                continue
+            cls = getattr(model_module, m.model_name, None)
+            if cls is None and m.model_name in LAIA_INTERNAL_MODELS:
+                cls = LAIA_INTERNAL_MODELS[m.model_name]
+            if cls is None or isinstance(cls, EnumMeta):
+                continue
+            f.write(f"{m.model_name}HomeWidget\n")
+
+    for openapiModel in frontend_models:
         if openapiModel.model_name.startswith("Body_"):
             continue
 
@@ -84,8 +127,6 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             continue
 
         print(f"Generating model: {openapiModel.model_name}")
-
-        model_module = import_model(models_path)
 
         if hasattr(model_module, openapiModel.model_name):
             model = getattr(model_module, openapiModel.model_name)
@@ -99,7 +140,23 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         model_file_content = model_dart(openapiModel, app_name, model)
         with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
-    
+
+        for prop_name, ann in getattr(model, "__annotations__", {}).items():
+            prop_details = openapiModel.properties.get(prop_name, {})
+            has_embedded_extension = isinstance(prop_details, dict) and (
+                prop_details.get('x_embedded') or prop_details.get('x-embedded')
+            )
+            embedded_cls_name = embedded_class_name_from_annotation(ann)
+            if not embedded_cls_name or (
+                not has_embedded_extension and embedded_cls_name not in embedded_model_names
+            ):
+                continue
+            if hasattr(model_module, embedded_cls_name):
+                embedded_cls = getattr(model_module, embedded_cls_name)
+                embedded_content = embedded_model_dart(embedded_cls_name, app_name, embedded_cls)
+                with open(os.path.join(models_dir, f'{embedded_cls_name.lower()}.dart'), 'w') as f:
+                    f.write(embedded_content)
+
     with open(os.path.join(models_dir, 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
 
@@ -111,7 +168,7 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
                 f.write(model_file_content)
 
-    home_file_content = home_dart(app_name, openapi.models, use_access_rights)
+    home_file_content = home_dart(app_name, frontend_models, use_access_rights)
     with open(os.path.join(screens_dir, 'home.dart'), 'w') as f:
         f.write(home_file_content)
 

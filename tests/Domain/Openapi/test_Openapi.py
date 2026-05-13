@@ -55,3 +55,33 @@ class TestOpenAPI:
         assert parser.models[0].properties == models[0].properties
         assert parser.models[1].model_name == models[1].model_name
         assert parser.models[1].properties == models[1].properties
+
+    def test_embedded_models_are_not_root_models(self, tmp_path):
+        input_file = tmp_path / "api.yaml"
+        input_file.write_text("""
+openapi: 3.0.0
+info:
+  title: Embedded model API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        address:
+          x_embedded: true
+          $ref: '#/components/schemas/Address'
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+""")
+
+        parser = OpenAPI(str(input_file))
+
+        assert parser.embedded_model_names == {"Address"}
+        assert [model.model_name for model in parser.models] == ["User"]
