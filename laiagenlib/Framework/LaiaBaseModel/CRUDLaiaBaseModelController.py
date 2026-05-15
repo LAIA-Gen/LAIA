@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from laiagenlib.Application.Shared.Utils.UserShard import get_user_shard
 
-from ...Application.LaiaBaseModel import ReadLaiaBaseModel, CreateLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel, AggregateLaiaBaseModel
+from ...Application.LaiaBaseModel import ReadLaiaBaseModel, CreateLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel, PatchLaiaBaseModel, AggregateLaiaBaseModel
 from ...Application.LaiaUser import JWTToken
 from ...Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from ...Domain.LaiaUser.Role import Role
@@ -101,6 +101,17 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    @router.patch(**routes_info['patch'], response_model=None, responses={200: {"description": "Returns only the patched fields + id"}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
+    async def patch_element(element_id: str, values: dict = Body(...), token: get_auth_dependency() = None):
+        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_shard = await get_user_shard(token, jwtSecretKey)
+        try:
+            return await PatchLaiaBaseModel.patch_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
