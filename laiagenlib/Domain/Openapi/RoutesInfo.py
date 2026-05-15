@@ -12,6 +12,10 @@ def get_routes_info(model_lowercase: str):
             'path': f"/{model_lowercase}/{{element_id}}",
             'openapi_extra': {}
         },
+        'patch': {
+            'path': f"/{model_lowercase}/{{element_id}}",
+            'openapi_extra': {}
+        },
         'delete': {
             'path': f"/{model_lowercase}/{{element_id}}",
             'openapi_extra': {}

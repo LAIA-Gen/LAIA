@@ -234,6 +234,27 @@ class MongoModelRepository(ModelRepository):
             return individual_serial(updated_item)
         raise Exception
 
+    async def patch_item(self, model_name: str, item_id: str, patch_fields: dict):
+        collection = self.db[model_name]
+        self.convert_objectids_in_query(patch_fields)
+        update_query = {'$set': patch_fields}
+
+        updated_item = collection.find_one_and_update(
+            {'_id': ObjectId(item_id)},
+            update_query,
+            return_document=ReturnDocument.AFTER,
+        )
+
+        if not updated_item:
+            raise ValueError(f"{model_name} with ID {item_id} not found")
+
+        # Return only the patched fields + id
+        result = {'id': str(updated_item['_id'])}
+        for field in patch_fields:
+            if field in updated_item:
+                result[field] = updated_item[field]
+        return result
+
     async def delete_item(self, model_name: str, item_id: str):
         collection = self.db[model_name]
         deleted_item = collection.find_one_and_delete({'_id': ObjectId(item_id)})
