@@ -264,6 +264,8 @@ from bson import ObjectId"""
             validator_block = f"""
     @validator({', '.join([repr(f) for f in frontend_fields])}, pre=True)
     def convert_objectid_fields(cls, v):
+        if isinstance(v, list):
+            return [ObjectId(x) for x in v]
         return ObjectId(v)
     """
             modified_content = re.sub(
@@ -273,6 +275,16 @@ from bson import ObjectId"""
             )
 
         for field in frontend_fields:
+            modified_content = re.sub(
+                rf'({field}\s*:\s*)Optional\[(?:List|list)\[str\]\]',
+                rf"\1Optional[List[Annotated[ObjectId, ObjectIdPydanticAnnotation]]]",
+                modified_content
+            )
+            modified_content = re.sub(
+                rf'({field}\s*:\s*)(?:List|list)\[str\]',
+                rf"\1List[Annotated[ObjectId, ObjectIdPydanticAnnotation]]",
+                modified_content
+            )
             modified_content = re.sub(
                 rf'({field}\s*:\s*)Optional\[str\]',
                 rf"\1Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]]",

@@ -83,8 +83,27 @@ class MongoModelRepository(ModelRepository):
         self.convert_objectids_in_query(query)
 
         if populate:
-            pipeline = [{"$match": query}]
-            
+            # Identificar campos populados para saber cómo dividir los filtros
+            populated_fields = set()
+            for entry in populate:
+                if isinstance(entry, dict):
+                    local_field = entry.get("id") or entry.get("field")
+                    result_field = entry.get("as", local_field)
+                else:
+                    result_field = entry
+                populated_fields.add(result_field)
+
+            # Separar filtros base de filtros post-lookup (aquellos con formato "campo_populado.subcampo")
+            base_query = {}
+            post_lookup_query = {}
+            for k, v in query.items():
+                parts = k.split('.', 1)
+                if len(parts) > 1 and parts[0] in populated_fields:
+                    post_lookup_query[k] = v
+                else:
+                    base_query[k] = v
+
+            lookup_stages = []
             for entry in populate:
                 if isinstance(entry, dict):
                     local_field = entry.get("id") or entry.get("field")
@@ -108,7 +127,7 @@ class MongoModelRepository(ModelRepository):
                 temp_field = f"_{result_field}_populated"
                 
                 # Conversion
-                pipeline.append({
+                lookup_stages.append({
                     "$addFields": {
                         f"{local_field}_as_obj": {
                             "$cond": {
@@ -117,13 +136,27 @@ class MongoModelRepository(ModelRepository):
                                     "$map": {
                                         "input": f"${local_field}",
                                         "as": "id_val",
-                                        "in": { "$toObjectId": "$$id_val" }
+                                        "in": {
+                                            "$convert": {
+                                                "input": "$$id_val",
+                                                "to": "objectId",
+                                                "onError": None,
+                                                "onNull": None
+                                            }
+                                        }
                                     }
                                 },
                                 "else": {
                                     "$cond": {
                                         "if": { "$and": [{ "$ne": [f"${local_field}", None] }, { "$ne": [f"${local_field}", ""] }] },
-                                        "then": { "$toObjectId": f"${local_field}" },
+                                        "then": {
+                                            "$convert": {
+                                                "input": f"${local_field}",
+                                                "to": "objectId",
+                                                "onError": None,
+                                                "onNull": None
+                                            }
+                                        },
                                         "else": None
                                     }
                                 }
@@ -133,7 +166,7 @@ class MongoModelRepository(ModelRepository):
                 })
 
                 # Lookups
-                pipeline.append({
+                lookup_stages.append({
                     "$lookup": {
                         "from": actual_col,
                         "localField": f"{local_field}_as_obj",
@@ -148,7 +181,7 @@ class MongoModelRepository(ModelRepository):
                     if "_id" not in fields_to_keep and "id" not in fields_to_keep:
                         projection["_id"] = "$$item._id"
                     
-                    pipeline.append({
+                    lookup_stages.append({
                         "$set": {
                             temp_field: {
                                 "$map": {
@@ -161,7 +194,7 @@ class MongoModelRepository(ModelRepository):
                     })
 
                 # Final field assignment
-                pipeline.append({
+                lookup_stages.append({
                     "$addFields": {
                         result_field: {
                             "$cond": {
@@ -173,7 +206,13 @@ class MongoModelRepository(ModelRepository):
                     }
                 })
                 # Clean up intermediate fields
-                pipeline.append({"$project": {temp_field: 0, f"{local_field}_as_obj": 0}})
+                lookup_stages.append({"$project": {temp_field: 0, f"{local_field}_as_obj": 0}})
+
+            pipeline = [{"$match": base_query}]
+            pipeline.extend(lookup_stages)
+
+            if post_lookup_query:
+                pipeline.append({"$match": post_lookup_query})
 
             if sorts:
                 pipeline.append({"$sort": sorts})
@@ -183,7 +222,17 @@ class MongoModelRepository(ModelRepository):
 
             items = collection.aggregate(pipeline)
             serialized_items = list_serial(items)
-            total_count = collection.count_documents(query)
+
+            if post_lookup_query:
+                count_pipeline = [{"$match": base_query}]
+                count_pipeline.extend(lookup_stages)
+                count_pipeline.append({"$match": post_lookup_query})
+                count_pipeline.append({"$count": "count"})
+                
+                count_res = list(collection.aggregate(count_pipeline))
+                total_count = count_res[0]["count"] if count_res else 0
+            else:
+                total_count = collection.count_documents(query)
         else:
             items = collection.find(query, skip=skip, limit=limit, sort=sorts)
             serialized_items = list_serial(items)
