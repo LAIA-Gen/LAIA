@@ -264,6 +264,8 @@ from bson import ObjectId"""
             validator_block = f"""
     @validator({', '.join([repr(f) for f in frontend_fields])}, pre=True)
     def convert_objectid_fields(cls, v):
+        if isinstance(v, list):
+            return [ObjectId(x) for x in v]
         return ObjectId(v)
     """
             modified_content = re.sub(

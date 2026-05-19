@@ -46,8 +46,10 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         if use_ontology:
             extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
             context = extra.get("@context", {})
-    except Exception:
-        raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
+    except Exception as e:
+        import traceback
+        _logger.error(f"Error occurred while searching {model.__name__}: {traceback.format_exc()}")
+        raise e
     
     serialized_items = []
     for item in items:
