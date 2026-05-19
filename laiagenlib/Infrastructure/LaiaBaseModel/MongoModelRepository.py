@@ -136,13 +136,27 @@ class MongoModelRepository(ModelRepository):
                                     "$map": {
                                         "input": f"${local_field}",
                                         "as": "id_val",
-                                        "in": { "$toObjectId": "$$id_val" }
+                                        "in": {
+                                            "$convert": {
+                                                "input": "$$id_val",
+                                                "to": "objectId",
+                                                "onError": None,
+                                                "onNull": None
+                                            }
+                                        }
                                     }
                                 },
                                 "else": {
                                     "$cond": {
                                         "if": { "$and": [{ "$ne": [f"${local_field}", None] }, { "$ne": [f"${local_field}", ""] }] },
-                                        "then": { "$toObjectId": f"${local_field}" },
+                                        "then": {
+                                            "$convert": {
+                                                "input": f"${local_field}",
+                                                "to": "objectId",
+                                                "onError": None,
+                                                "onNull": None
+                                            }
+                                        },
                                         "else": None
                                     }
                                 }
