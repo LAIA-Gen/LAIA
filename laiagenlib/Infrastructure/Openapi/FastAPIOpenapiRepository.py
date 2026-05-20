@@ -39,7 +39,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         # Create a first user
         users = await search_laia_base_model(0, 1, {"email": "admin"}, {}, model, ["admin"], repository)
         if users['items'] == []:
-            password =  bcrypt.hashpw("admin".encode('utf-8'), bcrypt.gensalt())
+            password =  bcrypt.hashpw("m0ucultur43np3t1t".encode('utf-8'), bcrypt.gensalt())
             admin_role = await search_laia_base_model(0, 1, {"name": "admin"}, {}, Role, ["admin"], repository)
             first_user_values = {"name": "Admin", "email": "admin", "roles": [admin_role['items'][0]['id']]}
             try:
