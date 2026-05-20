@@ -13,17 +13,22 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
+    config = getattr(model, "model_config", {})
+    extra = config.get("json_schema_extra", {}) if isinstance(config, dict) else (getattr(config, "json_schema_extra", {}) or {})
 
-    if "admin" not in user_roles and use_access_rights:
+    is_public = False
+    if isinstance(extra, dict):
+        permissions = extra.get("x-permissions", {})
+        if isinstance(permissions, dict):
+            is_public = permissions.get("search") == []
+
+    if "admin" not in user_roles and use_access_rights and not is_public:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "search", repository)
         _logger.info("USER ID: " + user_id)
         _logger.info(access_rights_list)
         if not any(not access_right.owner for access_right in access_rights_list):
             _logger.info("HEY")
             filters["owner"] = ObjectId(user_id)
-
-    config = getattr(model, "model_config", {})
-    extra = config.get("json_schema_extra", {})
 
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")
@@ -35,7 +40,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         filters["_id"] = ObjectId(filters.pop("id"))
     try:
         items, total_count = await repository.get_items(model_name, skip=skip, limit=limit, filters=filters, orders=orders, populate=populate)
-        if "admin" not in user_roles and use_access_rights:
+        if "admin" not in user_roles and use_access_rights and not is_public:
             allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
             items = [
                 {field: item[field] for field in allowed_fields if field in item}
