@@ -29,10 +29,13 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
     def is_public_operation(model, operation: str) -> bool:
         extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+        _logger.info(f"is_public_operation: model={model.__name__}, extra={extra}")
         permissions = extra.get("x-permissions", {}) if isinstance(extra, dict) else {}
+        _logger.info(f"is_public_operation: permissions={permissions}")
         if not permissions or not isinstance(permissions, dict):
             return False
         val = permissions.get(operation)
+        _logger.info(f"is_public_operation: val for {operation}={val}")
         return val == []
 
     class SearchResponse(BaseModel):
