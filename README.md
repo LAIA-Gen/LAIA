@@ -97,6 +97,7 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 * `x_frontend_relation` Model name of the relation id (String)
 * `x_frontend_uspaceMap` Enaire Uspace regulation enabling (Boolean)
 * `x-embedded` Marks the referenced schema as an embedded object (Boolean)
+* `x-exclude-from-response` Never include this field in any API response (Boolean)
 
 ### Embedded objects
 

@@ -8,6 +8,7 @@ from laiagenlib.Application.Shared.Utils.UserShard import get_user_shard
 
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, CreateLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel, AggregateLaiaBaseModel
 from ...Application.LaiaUser import JWTToken
+from ...Application.Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
@@ -168,7 +169,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
             element = items[0]
 
-            return serialize_bson(element)
+            return serialize_bson(strip_excluded_fields(model, element))
 
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

@@ -7,6 +7,7 @@ from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
+from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from fastapi.encoders import jsonable_encoder
@@ -105,4 +106,4 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         updated_element = {field: updated_element[field] for field in allowed_fields if field in updated_element}
 
     _logger.info(f"{model.__name__} updated successfully")
-    return serialize_bson(updated_element)
+    return serialize_bson(strip_excluded_fields(model, updated_element))

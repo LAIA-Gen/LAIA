@@ -3,6 +3,7 @@ from typing import Type, List
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.GetAllowedFields import get_allowed_fields
+from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
@@ -31,4 +32,4 @@ async def read_laia_base_model(element_id: str, model: Type, user_roles: List[st
         item = {field: item[field] for field in allowed_fields if field in item}
 
     _logger.info(f"{model.__name__} retrieved successfully")
-    return serialize_bson(item)
+    return serialize_bson(strip_excluded_fields(model, item))

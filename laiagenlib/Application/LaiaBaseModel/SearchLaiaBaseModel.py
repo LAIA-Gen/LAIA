@@ -4,6 +4,7 @@ from math import ceil
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.GetAllowedFields import get_allowed_fields
+from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
@@ -49,6 +50,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     except Exception:
         raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
     
+    items = strip_excluded_fields(model, items)
     serialized_items = []
     for item in items:
         serialized_items.append(serialize_bson(item))

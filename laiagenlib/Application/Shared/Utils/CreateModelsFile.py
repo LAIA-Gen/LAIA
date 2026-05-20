@@ -238,6 +238,14 @@ from bson import ObjectId"""
         if context_map:
             json_schema_extra["@context"] = context_map
 
+        excluded_from_response = []
+        if hasattr(model, "properties"):
+            for prop_name, prop in model.properties.items():
+                if isinstance(prop, dict) and (prop.get("x_exclude_from_response") or prop.get("x-exclude-from-response")):
+                    excluded_from_response.append(prop_name)
+        if excluded_from_response:
+            json_schema_extra["x-exclude-from-response"] = excluded_from_response
+
         has_enum = False
         if hasattr(model, "properties"):
             for prop_name, prop in model.properties.items():
@@ -245,7 +253,7 @@ from bson import ObjectId"""
                     has_enum = True
                     break
 
-        if hasattr(model, 'extensions') and model.extensions:
+        if json_schema_extra:
             model_config_line = f"model_config = ConfigDict(json_schema_extra={json_schema_extra})"
             if has_enum:
                 model_config_line = f"model_config = ConfigDict(json_schema_extra={json_schema_extra}, use_enum_values=True)"

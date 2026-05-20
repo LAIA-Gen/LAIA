@@ -8,6 +8,7 @@ from laiagenlib.Application.Shared.Utils.Slugify import ensure_unique_nicename, 
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
+from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Shared.Utils.SendEmail import send_email
@@ -79,4 +80,4 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         created_element = {field: created_element[field] for field in allowed_fields if field in created_element}
 
     _logger.info(f"{model.__name__} created successfully")
-    return serialize_bson(created_element)
+    return serialize_bson(strip_excluded_fields(model, created_element))
