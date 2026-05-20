@@ -97,10 +97,11 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
     @router.post(**routes_info['create'], response_model=None, responses={200: {"model": model}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
     async def create_element(element: model, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "create")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         element_dict = element.dict()
         if auth_required:
-            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey)
+            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey, is_public)
 
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -109,7 +110,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
     @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "update")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard)
@@ -118,7 +120,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         
     @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "read")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
@@ -127,7 +130,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
 
     @router.delete(**routes_info['delete'], response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "delete")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
@@ -152,7 +156,8 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         """
         Devuelve un {model_name} a partir del nicename
         """
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "nice")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
 
         try:
@@ -191,10 +196,11 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
         token: get_auth_dependency() = None
     ):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "aggregate")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_id = ''
         if auth_required:
-            user_id = await get_user_id(repository, token, jwtSecretKey)
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
 
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
