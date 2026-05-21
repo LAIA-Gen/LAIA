@@ -1,7 +1,7 @@
 import re
 
 def update_file(filename: str, classes_info):
-    with open(filename, "r", encoding="utf-8") as file:
+    with open(filename, "r") as file:
         file_content = file.read()
 
     for class_name, fields in classes_info.items():
@@ -55,5 +55,5 @@ def update_file(filename: str, classes_info):
         new_class_block = class_header + new_class_body
         file_content = file_content.replace(old_class_block, new_class_block)
 
-    with open(filename, "w", encoding="utf-8") as file:
+    with open(filename, "w") as file:
         file.write(file_content)
