@@ -6,6 +6,7 @@ twine
 # necessary for testing
 pytest
 pytest-runner
+pytest-asyncio
 
 pydantic
 fastapi

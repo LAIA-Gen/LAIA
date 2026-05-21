@@ -69,6 +69,9 @@ class OpenAPI:
                 properties = schema_definition.get('properties', {})
                 required_properties = schema_definition.get('required', [])
                 extensions = {k: v for k, v in schema_definition.items() if k.startswith('x-')}
+                #JMT
+                if 'permissions' in schema_definition:
+                    extensions['x-permissions'] = schema_definition['permissions']
                 if (model_name in ['AccessRight', 'Role']):
                     self.laia_models.append(OpenAPIModel(model_name, properties, required_properties, extensions))
                 if (model_name not in self.excluded_models and model_name not in self.embedded_model_names and not model_name.startswith("Body_search_element_") and not model_name.startswith("Body_search_access_rights_")):

@@ -24,6 +24,17 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
     def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
         return credentials.credentials if credentials else None
 
+    def is_public_operation(model, operation: str) -> bool:
+        extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+        _logger.info(f"is_public_operation: model={model.__name__}, extra={extra}")
+        permissions = extra.get("x-permissions", {}) if isinstance(extra, dict) else {}
+        _logger.info(f"is_public_operation: permissions={permissions}")
+        if not permissions or not isinstance(permissions, dict):
+            return False
+        val = permissions.get(operation)
+        _logger.info(f"is_public_operation: val for {operation}={val}")
+        return val == []
+
     class SearchResponse(BaseModel):
         items: List[model]
         current_page: int
@@ -39,12 +50,12 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         else:
             return Optional[str]
         
-    async def get_user_roles(repository: ModelRepository=None, token: Optional[str] = None, jwtSecretKey: str = 'secret_key') -> List[str]:
+    async def get_user_roles(repository: ModelRepository=None, token: Optional[str] = None, jwtSecretKey: str = 'secret_key', is_public: bool = False) -> List[str]:
         if not token:
-            if auth_required:
+            if auth_required and not is_public:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authorization header")
             else:
-                return ["admin"]
+                return ["admin"] if not auth_required else []
 
         try:
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
@@ -65,12 +76,12 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         
         return user_roles
 
-    async def get_user_id(repository: ModelRepository=None, token: Optional[str] = None, jwtSecretKey: str = 'secret_key') -> List[str]:
+    async def get_user_id(repository: ModelRepository=None, token: Optional[str] = None, jwtSecretKey: str = 'secret_key', is_public: bool = False) -> Any:
         if not token:
-            if auth_required:
+            if auth_required and not is_public:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authorization header")
             else:
-                return ["admin"]
+                return ["admin"] if not auth_required else None
 
         try:
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
@@ -83,10 +94,11 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
 
     @router.post(**routes_info['create'], response_model=model)
     async def create_element(element: model, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "create")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         element_dict = element.dict()
         if auth_required:
-            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey)
+            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey, is_public)
 
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -97,7 +109,8 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
 
     @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "update")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard)
@@ -106,7 +119,8 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         
     @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "read")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
@@ -115,7 +129,8 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
 
     @router.delete(**routes_info['delete'], response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "delete")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
@@ -124,10 +139,11 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "search")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_id = ''
         if auth_required:
-            user_id = await get_user_id(repository, token, jwtSecretKey)
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True, False, user_shard, populate=populate)
@@ -139,10 +155,11 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
         token: get_auth_dependency() = None
     ):
-        user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        is_public = is_public_operation(model, "aggregate")
+        user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_id = ''
         if auth_required:
-            user_id = await get_user_id(repository, token, jwtSecretKey)
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
 
         user_shard = await get_user_shard(token, jwtSecretKey)
 

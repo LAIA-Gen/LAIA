@@ -85,3 +85,42 @@ components:
 
         assert parser.embedded_model_names == {"Address"}
         assert [model.model_name for model in parser.models] == ["User"]
+
+    def test_permissions_are_parsed(self, tmp_path):
+        input_file = tmp_path / "api.yaml"
+        input_file.write_text("""
+openapi: 3.0.0
+info:
+  title: Permissions model API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    Offer:
+      type: object
+      x-auth: true
+      permissions:
+        post: ["admin", "user"]
+        get: true
+        put: true
+        patch: true
+        delete: true
+        search: []
+        aggregate: false
+      properties:
+        id:
+          type: string
+""")
+
+        parser = OpenAPI(str(input_file))
+        offer_model = next(model for model in parser.models if model.model_name == "Offer")
+        assert offer_model.extensions.get("x-permissions") == {
+            "post": ["admin", "user"],
+            "get": True,
+            "put": True,
+            "patch": True,
+            "delete": True,
+            "search": [],
+            "aggregate": False
+        }
+
