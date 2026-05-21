@@ -87,6 +87,31 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 
 * `x-auth` Add authentication (CRUD + register + login)
 
+### Public routes
+
+By default all routes require authentication. Add a `permissions` block to a model to make specific operations publicly accessible (no token required, no access-rights check).
+
+Set the operation value to an **empty list `[]`** to mark it as public. Omit an operation to keep it protected.
+
+Available operations: `create`, `read`, `update`, `delete`, `search`, `aggregate`, `nice`
+
+```yaml
+components:
+  schemas:
+    Offer:
+      type: object
+      permissions:
+        search: []      # anyone can search, no token needed
+        read: []        # anyone can read by ID
+        # create / update / delete — still require auth
+      properties:
+        title:
+          type: string
+        ...
+```
+
+> **Note:** Use `permissions` (without `x-` prefix) directly on the schema definition. The library maps it internally to `x-permissions`.
+
 ### Field extensions
 
 * `x_frontend_widget` Name of the widget overriding the default (String)
