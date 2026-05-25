@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class Type(Enum):
     Point = 'Point'
@@ -11,6 +11,7 @@ class Type(Enum):
     MultiPolygon = 'MultiPolygon'
 
 class Geometry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
     type: Type = Field(..., description='the geometry type', )
 
 class Feature(BaseModel):
