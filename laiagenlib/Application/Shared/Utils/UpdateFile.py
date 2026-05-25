@@ -30,21 +30,21 @@ def update_file(filename: str, classes_info):
                 if clean_decl.endswith(","):
                     clean_decl = clean_decl[:-1].strip()
                 
-                # Match Field(...) regardless of single/multi line
+                # Match Field(...) regardless of single/multi line using lookahead to locate the correct closing parenthesis
                 pattern = re.compile(
-                    rf"^(\s*){field.name}\s*:\s*{re.escape(field.type)}\s*=\s*Field\(\s*{re.escape(field.field_declaration)}\s*\)",
+                    rf"^(\s*){field.name}\s*:\s*[^=]+?\s*=\s*Field\(.*?\)(?=\s*(?:\r?\n\s{{4}}|\Z))",
                     re.MULTILINE | re.DOTALL
                 )
                 replace_pattern = rf"\1{field.name}: {field.type} = Field({clean_decl}, {', '.join(field.extra)})"
             elif default_value:
                 pattern = re.compile(
-                    rf"^(\s*){field.name}\s*:\s*{re.escape(field.type)}\s*=\s*{re.escape(default_value)}",
+                    rf"^(\s*){field.name}\s*:\s*[^=]+?\s*=\s*{re.escape(default_value)}",
                     re.MULTILINE | re.DOTALL
                 )
                 replace_pattern = rf"\1{field.name}: {field.type} = Field({default_value}, {', '.join(field.extra)})"
             else:
                 pattern = re.compile(
-                    rf"^(\s*){field.name}\s*:\s*{re.escape(field.type)}\s*$",
+                    rf"^(\s*){field.name}\s*:\s*[^=\n\r]+$",
                     re.MULTILINE
                 )
                 replace_pattern = rf"\1{field.name}: {field.type} = Field(..., {', '.join(field.extra)})"
