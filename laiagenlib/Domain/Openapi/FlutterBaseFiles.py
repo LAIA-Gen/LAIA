@@ -680,6 +680,13 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       
       if prop_name in frontend_props:
         frontend_details = frontend_props[prop_name]
+        relation = frontend_details.get('relation')
+        if relation:
+          is_list = 'List[' in str(prop_type) or 'list[' in str(prop_type)
+          if is_list:
+            frontend_details['widget'] = f"{relation}MultiFieldWidget"
+          else:
+            frontend_details['widget'] = f"{relation}FieldWidget"
         for key, value in frontend_details.items():
           if isinstance(value, bool):
             fields += f"{key}: {str(value).lower()}, "
