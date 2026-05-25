@@ -11,6 +11,7 @@ class Type(Enum):
     MultiPolygon = 'MultiPolygon'
 
 class Geometry(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
     type: Type = Field(..., description='the geometry type', )
 
 class Feature(BaseModel):
