@@ -1,4 +1,5 @@
 from fastapi import Body, Depends, HTTPException, status
+from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated, Any
@@ -106,7 +107,10 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
 
-        return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
+        try:
+            return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
+        except Exception as e:
+            handle_exception(e)
 
     @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
@@ -116,7 +120,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         try:
             return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
@@ -126,7 +130,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.delete(**routes_info['delete'], response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
@@ -137,7 +141,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
             return f"{model_name} element deleted successfully"
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
     @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         is_public = is_public_operation(model, "search")
@@ -149,7 +153,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.get(**routes_info['nice'], response_model=None, responses={200: {"model": model}, 404: {"model": ErrorResponse}}, name=f"Get {model_name} by nicename")
     async def read_element_by_nicename(nicename: str, token: get_auth_dependency() = None):
@@ -189,7 +193,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             return serialize_bson(strip_excluded_fields(model, element))
 
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.post(**routes_info['aggregate'], response_model=List[dict])
     async def aggregate_users(
@@ -206,6 +210,6 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         try:
             return await AggregateLaiaBaseModel.aggregate_laia_base_model(pipeline, model, user_roles, repository, user_id, True, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            handle_exception(e)
 
     return router

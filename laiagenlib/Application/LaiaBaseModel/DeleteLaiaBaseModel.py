@@ -5,7 +5,7 @@ from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
-async def delete_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):
+async def delete_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = ""):
     _logger.info(f"Deleting {model.__name__} with ID: {element_id}")
 
     model_name = model.__name__.lower()
