@@ -633,11 +633,15 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     if openapiModel:
       frontend_props = openapiModel.get_frontend_properties()
       try:
-        defaultFields = "defaultFields: " + str(openapiModel.extensions['x-frontend-defaultFields']) + ", "
+        raw_fields = openapiModel.extensions['x-frontend-defaultFields']
+        filtered_fields = [f for f in raw_fields if str(f).lower() != 'password']
+        defaultFields = "defaultFields: " + str(filtered_fields) + ", "
       except KeyError:
         defaultFields = ""
       try:
-        defaultFieldsDetail = "defaultFieldsDetail: " + str(openapiModel.extensions['x-frontend-defaultFieldsDetail']) + ", "
+        raw_detail = openapiModel.extensions['x-frontend-defaultFieldsDetail']
+        filtered_detail = [row for row in raw_detail if not any(isinstance(val, str) and val.lower() == 'password' for val in row)]
+        defaultFieldsDetail = "defaultFieldsDetail: " + str(filtered_detail) + ", "
       except KeyError:
         defaultFieldsDetail = ""
       try:
@@ -662,6 +666,8 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)
+      if prop_name == 'password':
+        dart_prop_type = 'String?'
       raw_annotation = inherited_field_annotations.get(prop_name)
       enum_cls = enum_class_from_annotation(raw_annotation, model)
       print(
