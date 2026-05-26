@@ -20,7 +20,11 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
     
     user = users[0]
 
-    if bcrypt.checkpw(password.encode('utf-8'), user.get('password')):
+    stored_password = user.get('password')
+    if isinstance(stored_password, str):
+        stored_password = stored_password.encode('utf-8')
+
+    if bcrypt.checkpw(password.encode('utf-8'), stored_password):
         _logger.info("User logged in successfully")
 
         token_props = model.model_config.get("json_schema_extra", {}).get("x-token-properties", [])
