@@ -6,7 +6,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[str], repository: ModelRepository):
+async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[str], repository: ModelRepository, user_shard: str = "", smtp_config: dict = None):
     _logger.info("Creating new User")
     email = new_element.get('email')
     password = new_element.get('password')
@@ -22,7 +22,7 @@ async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[
         raise ValueError("User with this email already exists")
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository)
+    
+    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository, True, user_shard, smtp_config=smtp_config)
     _logger.info("User created successfully")
     return user

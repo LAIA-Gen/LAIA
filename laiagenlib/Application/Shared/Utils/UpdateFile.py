@@ -2,25 +2,58 @@ import re
 
 def update_file(filename: str, classes_info):
     with open(filename, "r") as file:
-        file_content = file.readlines()
+        file_content = file.read()
 
     for class_name, fields in classes_info.items():
-        class_pattern = re.compile(r"class\s+" + class_name + r"\((LaiaBaseModel|LaiaUser)\):")
-        in_class = False
+        # Match class block header and body
+        class_pattern = re.compile(
+            rf"(^class\s+{class_name}\((?:LaiaBaseModel|LaiaUser)\):)(.+?)(?=^class\s|\Z)",
+            re.DOTALL | re.MULTILINE
+        )
+        match = class_pattern.search(file_content)
+        if not match:
+            continue
 
-        for i, line in enumerate(file_content):
-            if re.match(class_pattern, line):
-                in_class = True
-            elif in_class and line.strip() == "":
-                in_class = False
+        class_header = match.group(1)
+        class_body = match.group(2)
+        new_class_body = class_body
 
-            if in_class:
-                for field in fields:
-                    field_declaration = f"{field.name}: {field.type} = Field({field.field_declaration})"
-                    replace_pattern = f"{field.name}: {field.type} = Field({field.field_declaration}, {', '.join(field.extra)})"
+        for field in fields:
+            if not field.extra:
+                continue
 
-                    if re.search(re.escape(field_declaration), line):
-                        file_content[i] = re.sub(re.escape(field_declaration), replace_pattern, line)
+            default_value = getattr(field, "default_value", "")
+            
+            # Match the field declaration in class_body
+            if field.field_declaration:
+                clean_decl = field.field_declaration.strip()
+                if clean_decl.endswith(","):
+                    clean_decl = clean_decl[:-1].strip()
+                
+                # Match Field(...) regardless of single/multi line using lookahead to locate the correct closing parenthesis
+                pattern = re.compile(
+                    rf"^(\s*){field.name}\s*:\s*[^=]+?\s*=\s*Field\(.*?\)(?=\s*(?:\r?\n\s{{4}}|\Z))",
+                    re.MULTILINE | re.DOTALL
+                )
+                replace_pattern = rf"\1{field.name}: {field.type} = Field({clean_decl}, {', '.join(field.extra)})"
+            elif default_value:
+                pattern = re.compile(
+                    rf"^(\s*){field.name}\s*:\s*[^=]+?\s*=\s*{re.escape(default_value)}",
+                    re.MULTILINE | re.DOTALL
+                )
+                replace_pattern = rf"\1{field.name}: {field.type} = Field({default_value}, {', '.join(field.extra)})"
+            else:
+                pattern = re.compile(
+                    rf"^(\s*){field.name}\s*:\s*[^=\n\r]+$",
+                    re.MULTILINE
+                )
+                replace_pattern = rf"\1{field.name}: {field.type} = Field(..., {', '.join(field.extra)})"
+
+            new_class_body = pattern.sub(replace_pattern, new_class_body)
+
+        old_class_block = match.group(0)
+        new_class_block = class_header + new_class_body
+        file_content = file_content.replace(old_class_block, new_class_block)
 
     with open(filename, "w") as file:
-        file.writelines(file_content)
+        file.write(file_content)

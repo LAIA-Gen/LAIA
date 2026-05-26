@@ -1,24 +1,35 @@
 from typing import Type, List
+
+from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.GetAllowedFields import get_allowed_fields
+from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
-async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository):
+async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = ""):
     _logger.info(f"Getting {model.__name__} with ID: {element_id}")
 
     model_name = model.__name__.lower()
 
-    if "admin" not in user_roles:
+    if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "read", repository)
     try:
         item = await repository.get_item(model_name, element_id)
     except ValueError as e:
         raise ValueError(str(e))
+    
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    if extra.get("x-shard") and "admin" not in user_roles:
+        shard_key = extra.get("x-shard-key", "region")
+        if not user_shard or user_shard == "":
+            raise ValueError("El usuario no tiene shard asignado, no puede leer este modelo shard")
+        if item.get(shard_key) != user_shard:
+            raise ValueError("No tienes permiso para leer un registro de otra shard")
 
-    if "admin" not in user_roles:
+    if "admin" not in user_roles and use_access_rights:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
         item = {field: item[field] for field in allowed_fields if field in item}
 
     _logger.info(f"{model.__name__} retrieved successfully")
-    return item
+    return serialize_bson(strip_excluded_fields(model, item))
