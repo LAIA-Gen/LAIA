@@ -11,7 +11,7 @@ from ...Application.LaiaUser.ChangePasswordLaiaUser import change_password
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.LaiaUser.Auth import Auth
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
-from ...Domain.LaiaBaseModel import ReadLaiaBaseModel
+from ...Application.LaiaBaseModel import ReadLaiaBaseModel
 from ...Domain.LaiaUser.Role import Role
 
 from ...Domain.Shared.Utils.logger import _logger
