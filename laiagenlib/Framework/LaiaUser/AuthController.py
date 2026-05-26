@@ -131,12 +131,12 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     class ErrorResponse(BaseModel):
         detail: str
 
-    @router.put(f"/auth/change-password/{model_name}/", response_model=None, responses={200: {"model": ChangePasswordResponse}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
+    @router.put(f"/auth/change-password/{model_name}/", response_model=None, name="Change Password", responses={200: {"model": ChangePasswordResponse}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def change_password_route(body: ChangePasswordRequest, credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)):
         """
-        Cambiar la contraseña de un usuario.
-        - Admin: puede cambiar la contraseña de cualquier usuario pasando user_id, sin necesidad de current_password.
-        - Usuario normal: solo puede cambiar su propia contraseña, requiere current_password.
+        Change a user's password.
+        - Admin: can change any user's password by passing user_id, without needing current_password.
+        - Regular user: can only change their own password, requires current_password.
         """
         token = credentials.credentials if credentials else None
         if not token:
