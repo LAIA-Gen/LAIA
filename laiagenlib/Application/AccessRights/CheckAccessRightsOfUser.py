@@ -16,13 +16,14 @@ async def check_access_rights_of_user(model_name: str, roles: List[str], operati
             }
         )
         _logger.info(role)
+        role_filter_value = role[0]['id'] if role else role_name
         access_rights, _ = await repository.get_items(
             "accessright", 
             skip=0, 
             limit=1, 
             filters={
                 "model": model_name,
-                "role": role[0]['id']
+                "role": role_filter_value
             }
         )
 

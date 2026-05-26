@@ -51,7 +51,7 @@ def convert_objectid_fields(model, values: dict) -> dict:
                     pass
     return values
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool, user_shard: str = ""):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = ""):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            

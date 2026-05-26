@@ -14,7 +14,7 @@ from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Shared.Utils.SendEmail import send_email
 from bson import ObjectId
 
-async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool, user_shard: str = "", smtp_config: dict = None):
+async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None):
     _logger.info(f"Creating new {model.__name__} with values: {new_element}")
     
     model_name = model.__name__.lower()

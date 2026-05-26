@@ -1,4 +1,5 @@
 from fastapi import Body, Depends, HTTPException, status
+from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated
@@ -69,7 +70,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         try:
             return await CreateRole.create_role(dict(element), user_roles, repository)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.put("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: dict, token: get_auth_dependency() = None):
@@ -77,7 +78,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         try:
             return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.get("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
@@ -85,7 +86,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, False)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.delete("/role/{element_id}", response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
@@ -94,13 +95,13 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
             return f"Role deleted successfully"
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
     @router.post("/roles/", response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     return router

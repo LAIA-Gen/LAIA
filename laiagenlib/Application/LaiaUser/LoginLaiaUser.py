@@ -28,8 +28,11 @@ async def login(new_user_data: Dict[str, Any], model: LaiaUser, repository: Mode
 
         tokens = create_jwt_token(user.get('id'), user.get('name'), user.get('roles'), jwtSecretKey, jwtRefreshSecretKey, token_props, user.get('shard'))
 
+        user_copy = dict(user)
+        user_copy.pop('password', None)
+
         return {
-            'user': serialize_bson(user),
+            'user': serialize_bson(user_copy),
             'token': tokens['token'],
             'refresh_token': tokens['refresh_token']
         }

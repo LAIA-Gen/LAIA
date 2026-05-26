@@ -1,4 +1,5 @@
 from fastapi import Body, Depends, HTTPException, status
+from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated, Any
@@ -105,7 +106,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         try:
             return await CreateLaiaUser.create_laia_user(dict(element_full), model, user_roles, repository, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
@@ -115,7 +116,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         try:
             return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
@@ -125,7 +126,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.delete(**routes_info['delete'], response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
@@ -136,7 +137,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
             return f"{model_name} element deleted successfully"
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
     @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         is_public = is_public_operation(model, "search")
@@ -148,7 +149,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, True, False, user_shard, populate=populate)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.post(**routes_info['aggregate'], response_model=None, responses={200: {"model": List[dict]}})
     async def aggregate_users(
@@ -168,9 +169,6 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
                 pipeline, model, user_roles, repository, user_id, True, user_shard
             )
         except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=str(e)
-            )
+            handle_exception(e)
 
     return router
