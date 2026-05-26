@@ -704,10 +704,11 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         ref_cls_name = schema_ref_class_name(prop_yaml)
         if ref_cls_name:
           dart_prop_type = embedded_dart_type(prop_type, ref_cls_name)
-          imp = f"import 'package:{app_name}/models/{ref_cls_name.lower()}.dart';\n"
-          if imp not in extra_imports:
-            print(f"[LAIA Flutter schema ref import] {model.__name__}.{prop_name} -> {imp.strip()}")
-            extra_imports += imp
+          if ref_cls_name not in {'Point', 'Polygon', 'LineString', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'Geometry', 'Feature', 'GeometryPoint', 'GeometryPolygon', 'GeometryLineString', 'GeometryMultiPoint', 'GeometryMultiLineString', 'GeometryMultiPolygon'}:
+            imp = f"import 'package:{app_name}/models/{ref_cls_name.lower()}.dart';\n"
+            if imp not in extra_imports:
+              print(f"[LAIA Flutter schema ref import] {model.__name__}.{prop_name} -> {imp.strip()}")
+              extra_imports += imp
         elif isinstance(prop_yaml, dict) and 'enum' in prop_yaml:
           cls_name = embedded_class_name_from_type(prop_type)
           if cls_name:
@@ -720,10 +721,11 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
           cls_name = embedded_class_name_from_type(prop_type) or embedded_class_name_from_annotation(raw_annotation)
           if cls_name:
             dart_prop_type = embedded_dart_type(prop_type, cls_name)
-            imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
-            if imp not in extra_imports:
-              print(f"[LAIA Flutter embedded import] {model.__name__}.{prop_name} -> {imp.strip()}")
-              extra_imports += imp
+            if cls_name not in {'Point', 'Polygon', 'LineString', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'Geometry', 'Feature', 'GeometryPoint', 'GeometryPolygon', 'GeometryLineString', 'GeometryMultiPoint', 'GeometryMultiLineString', 'GeometryMultiPolygon'}:
+              imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
+              if imp not in extra_imports:
+                print(f"[LAIA Flutter embedded import] {model.__name__}.{prop_name} -> {imp.strip()}")
+                extra_imports += imp
 
       fields += ")\n"
       fields += f"  final {dart_prop_type} {prop_name};\n"
