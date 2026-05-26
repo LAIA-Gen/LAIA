@@ -1,6 +1,7 @@
 from typing import TypeVar, Optional, List, Annotated, Dict, Type
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, status, Depends, Body
+from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.AccessRights import CreateAccessRights, UpdateAccessRights
@@ -69,7 +70,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         try:
             return await CreateAccessRights.create_access_rights(repository, dict(new_access_rights), model, user_roles)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.put("/accessright/{element_id}", response_model=None, responses={200: {"model": AccessRight}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_access_rights(element_id: str, values: dict, token: get_auth_dependency() = None):
@@ -77,7 +78,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         try:
             return await UpdateAccessRights.update_access_rights(element_id, repository, values, model, user_roles)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
     @router.get("/accessright/{element_id}", response_model=None, responses={200: {"model": AccessRight}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_access_rights(element_id: str, token: get_auth_dependency() = None):
@@ -85,7 +86,7 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
         try:
             return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.delete("/accessright/{element_id}", response_model=str)
     async def delete_access_rights(element_id: str, token: get_auth_dependency() = None):
@@ -94,13 +95,13 @@ def CRUDAccessRightsController(models: Dict[str, Type[BaseModel]], repository: M
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
             return f"AccessRight deleted successfully"
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
     @router.post("/accessrights/", response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_access_rights(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     return router
