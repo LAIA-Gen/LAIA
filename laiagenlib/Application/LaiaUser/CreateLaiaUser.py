@@ -11,6 +11,11 @@ async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[
     email = new_element.get('email')
     password = new_element.get('password')
 
+    if 'roles' in new_element:
+        roles = new_element['roles']
+        if (isinstance(roles, list) and any(r.lower() == 'admin' for r in roles)) or (isinstance(roles, str) and roles.lower() == 'admin'):
+            raise ValueError("No se puede asignar el rol de admin durante el registro")
+
     if not ValidateEmail.validate_email(email):
         raise ValueError("Invalid email address")
     
