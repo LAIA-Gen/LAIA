@@ -41,7 +41,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 return ["admin"]
         try:
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
-            user_roles_ids = payload.get("user_roles", [])
+            user_roles_ids = payload.get("user_roles") or []
             user_roles = []
             for role in user_roles_ids:
                 if isinstance(role, str) and len(role) != 24:

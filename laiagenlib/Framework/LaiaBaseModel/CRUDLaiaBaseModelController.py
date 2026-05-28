@@ -65,7 +65,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
             _logger.info(payload)
             
-            user_roles_ids = payload.get("user_roles", [])
+            user_roles_ids = payload.get("user_roles") or []
             _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:

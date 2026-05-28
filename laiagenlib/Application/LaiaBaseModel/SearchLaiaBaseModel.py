@@ -55,6 +55,24 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     except Exception:
         raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
     
+    if populate:
+        from ...Domain.Shared.Utils.ModelRegistry import get_model_class
+        for entry in populate:
+            if isinstance(entry, dict):
+                local_field = entry.get("id") or entry.get("field")
+                from_col = entry.get("from", local_field)
+                result_field = entry.get("as", local_field)
+            else:
+                local_field = entry
+                from_col = entry
+                result_field = entry
+
+            populated_model = get_model_class(from_col)
+            if populated_model:
+                for item in items:
+                    if result_field in item and item[result_field] is not None:
+                        item[result_field] = strip_excluded_fields(populated_model, item[result_field])
+
     items = strip_excluded_fields(model, items)
     serialized_items = []
     for item in items:

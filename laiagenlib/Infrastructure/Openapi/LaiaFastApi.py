@@ -1,8 +1,10 @@
 import os
 from asyncinit import asyncinit
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
+from bson.errors import InvalidId
 from ...Application.Shared.Utils.CreateModelsFile import create_models_file
 from ...Application.Shared.Utils.CreateRoutesFile import create_routes_file
 from ...Application.Openapi.CreateRoutes import create_crud_routes
@@ -50,6 +52,13 @@ class LaiaFastApi():
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+        @self.api.exception_handler(InvalidId)
+        async def invalid_objectid_handler(request: Request, exc: InvalidId):
+            return JSONResponse(
+                status_code=500,
+                content={"msg": f"bson.errors.InvalidId: {str(exc)}"}
+            )
         self.smtp_config = {
             "host": smtp_host,
             "port": smtp_port,
@@ -100,7 +109,7 @@ class LaiaFastApi():
             hidden = {"HTTPValidationError", "ValidationError"}
             schema["components"]["schemas"] = {
                 name: s for name, s in schemas.items()
-                if not name.startswith("Body_") and name not in hidden
+                if name not in hidden
             }
             api.openapi_schema = schema
             return api.openapi_schema

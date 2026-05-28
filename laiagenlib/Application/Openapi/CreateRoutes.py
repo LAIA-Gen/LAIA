@@ -35,6 +35,9 @@ async def create_crud_routes(
 
         modelsTypes[openapiModel.model_name] = model
         model_lowercase = openapiModel.model_name.lower()
+        
+        from ...Domain.Shared.Utils.ModelRegistry import register_model
+        register_model(model_lowercase, model)
 
         routes_info = get_routes_info(model_lowercase)
 
