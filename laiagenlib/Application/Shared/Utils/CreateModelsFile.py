@@ -193,7 +193,7 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
 # modified by laia-gen-lib:
 
 from typing import Annotated
-from pydantic import ConfigDict, validator
+from pydantic import ConfigDict, field_validator
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser
 from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon
@@ -270,7 +270,8 @@ from bson import ObjectId"""
 
         if frontend_fields:
             validator_block = f"""
-    @validator({', '.join([repr(f) for f in frontend_fields])}, pre=True)
+    @field_validator({', '.join([repr(f) for f in frontend_fields])}, mode='before')
+    @classmethod
     def convert_objectid_fields(cls, v, info):
         from bson.errors import InvalidId
         try:
