@@ -271,13 +271,17 @@ from bson import ObjectId"""
         if frontend_fields:
             validator_block = f"""
     @validator({', '.join([repr(f) for f in frontend_fields])}, pre=True)
-    def convert_objectid_fields(cls, v):
-        if isinstance(v, list):
-            return [ObjectId(x) for x in v]
-        return ObjectId(v)
+    def convert_objectid_fields(cls, v, field):
+        from bson.errors import InvalidId
+        try:
+            if isinstance(v, list):
+                return [ObjectId(x) for x in v]
+            return ObjectId(v)
+        except InvalidId as e:
+            raise ValueError(f"{{field.name}} ==> bson.errors.InvalidId: {{str(e)}}")
     """
             modified_content = re.sub(
-                rf'(class {model.model_name}\(LaiaBaseModel\):)',
+                rf'(class {model.model_name}\((?:LaiaBaseModel|LaiaUser)\):)',
                 rf'\1{validator_block}',
                 modified_content
             )
