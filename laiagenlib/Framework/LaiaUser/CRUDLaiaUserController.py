@@ -104,7 +104,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await CreateLaiaUser.create_laia_user(dict(element_full), model, user_roles, repository, user_shard)
+            return await CreateLaiaUser.create_laia_user(element_full.dict(), model, user_roles, repository, user_shard)
         except Exception as e:
             handle_exception(e)
 

@@ -63,6 +63,15 @@ class MongoModelRepository(ModelRepository):
                                 new_list.append(item)
                         v[op] = new_list
 
+    def convert_enums_in_query(self, data: any) -> any:
+        if isinstance(data, Enum):
+            return data.value
+        elif isinstance(data, dict):
+            return {k: self.convert_enums_in_query(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self.convert_enums_in_query(v) for v in data]
+        return data
+
     async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None, populate: Optional[List[str]] = None):
         collection = self.db[model_name]
 
@@ -259,6 +268,7 @@ class MongoModelRepository(ModelRepository):
 
         item_dict.pop('id', None)
         self.convert_objectids_in_query(item_dict)
+        item_dict = self.convert_enums_in_query(item_dict)
 
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
@@ -271,6 +281,7 @@ class MongoModelRepository(ModelRepository):
     async def put_item(self, model_name: str, item_id: str, update_fields: dict):
         collection = self.db[model_name]
         self.convert_objectids_in_query(update_fields)
+        update_fields = self.convert_enums_in_query(update_fields)
         update_query = {'$set': update_fields}
         
         updated_item = collection.find_one_and_update(

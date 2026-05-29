@@ -85,7 +85,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
     async def register_user(element: model):
         user_roles=["admin"]
         try:
-            return await RegisterLaiaUser.register(dict(element), model, user_roles, repository, smtp_config)
+            return await RegisterLaiaUser.register(element.dict(), model, user_roles, repository, smtp_config)
         except ValueError as e:
             if "already exists" in str(e):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
