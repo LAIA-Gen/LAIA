@@ -106,6 +106,23 @@ class LaiaFastApi():
                 return api.openapi_schema
             schema = get_openapi(title=api.title, version=api.version, routes=api.routes)
             schemas = schema.get("components", {}).get("schemas", {})
+            
+            if hasattr(self, 'openapi') and self.openapi:
+                orig_models = {m.model_name: m for m in self.openapi.models + self.openapi.laia_models}
+                for schema_name, schema_definition in schemas.items():
+                    orig_model = orig_models.get(schema_name)
+                    if orig_model:
+                        for ext_key, ext_val in orig_model.extensions.items():
+                            schema_definition[ext_key] = ext_val
+                        
+                        properties = schema_definition.get('properties', {})
+                        field_extensions = orig_model.get_field_extensions()
+                        for prop_name, prop_def in properties.items():
+                            orig_exts = field_extensions.get(prop_name, {})
+                            if isinstance(prop_def, dict):
+                                for ext_key, ext_val in orig_exts.items():
+                                    prop_def[ext_key] = ext_val
+
             hidden = {"HTTPValidationError", "ValidationError"}
             schema["components"]["schemas"] = {
                 name: s for name, s in schemas.items()
