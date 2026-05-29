@@ -110,7 +110,8 @@ class LaiaFastApi():
             if hasattr(self, 'openapi') and self.openapi:
                 orig_models = {m.model_name: m for m in self.openapi.models + self.openapi.laia_models}
                 for schema_name, schema_definition in schemas.items():
-                    orig_model = orig_models.get(schema_name)
+                    clean_name = schema_name.replace('-Input', '').replace('-Output', '').replace('-Update', '').replace('Update', '')
+                    orig_model = orig_models.get(clean_name)
                     if orig_model:
                         for ext_key, ext_val in orig_model.extensions.items():
                             schema_definition[ext_key] = ext_val
