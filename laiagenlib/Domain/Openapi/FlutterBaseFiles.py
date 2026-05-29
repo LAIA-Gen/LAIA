@@ -10,8 +10,17 @@ from ...Domain.Shared.Utils.logger import _logger
 
 def main_dart(app_name: str, models: List[OpenAPIModel]):
     auth_models = [model for model in models if model.extensions.get('x-auth') and not model.model_name.startswith("Body_") and not model.model_name.endswith("Update")]
-    import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in auth_models])
-    auth_screens = ', '.join([f"'{model.model_name}': {model.model_name}LoginWidget()" for model in auth_models])
+    
+    clean_auth_models = []
+    seen = set()
+    for m in auth_models:
+        c_name = m.model_name.replace('-Input', '').replace('-Output', '')
+        if c_name not in seen:
+            seen.add(c_name)
+            clean_auth_models.append((c_name, m))
+
+    import_statements = '\n'.join([f"import 'package:{app_name}/models/{name.lower()}.dart';" for name, _ in clean_auth_models])
+    auth_screens = ', '.join([f"'{name}': {name}LoginWidget()" for name, _ in clean_auth_models])
 
     file_content = f"""{import_statements}
 import 'package:{app_name}/screens/home.dart';"""+f"""
@@ -38,17 +47,17 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       theme: AppTheme.light(),
-      home: """+f"""{ "SplashScreen()" if auth_models else "Home()" }"""+""",
+      home: """+f"""{ "SplashScreen()" if clean_auth_models else "Home()" }"""+""",
     );
   }
 }
 """
-    if auth_models:
+    if clean_auth_models:
       file_content = file_content + """
 class SplashScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<bool> tokenVerificationResult = ref.watch(verifyToken"""+f"""{auth_models[0].model_name}"""+"""Provider);
+    final AsyncValue<bool> tokenVerificationResult = ref.watch(verifyToken"""+f"""{clean_auth_models[0][0]}"""+"""Provider);
 
     return Scaffold(
       body: tokenVerificationResult.when(
@@ -56,7 +65,7 @@ class SplashScreen extends ConsumerWidget {
           if (isValid) {
             return Home();
           } else {
-            return """+f"""{ ''.join([auth_models[0].model_name, 'LoginWidget();']) if len(auth_models) == 1 else f"DynamicLogInScreen(widgetMap: const {{ {auth_screens} }});"}"""+"""
+            return """+f"""{ ''.join([clean_auth_models[0][0], 'LoginWidget();']) if len(clean_auth_models) == 1 else f"DynamicLogInScreen(widgetMap: const {{ {auth_screens} }});"}"""+"""
           }
         },
         loading: () => Center(
@@ -298,12 +307,16 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     else:
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [Role]])
     imports = []
+    seen = set()
 
     for model in models:
         if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update"):
-            imports.append(
-                f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';"
-            )
+            clean_name = model.model_name.replace('-Input', '').replace('-Output', '')
+            if clean_name not in seen:
+                seen.add(clean_name)
+                imports.append(
+                    f"import 'package:{app_name}/models/{clean_name.lower()}.dart';"
+                )
 
     import_statements = '\n'.join(imports)
     return f"""import 'package:{app_name}/config/styles.dart';
@@ -619,6 +632,34 @@ class _HomeState extends State<Home> {
 }
 """
 
+def get_all_sub_dependencies(model_cls, seen_classes=None):
+    if seen_classes is None:
+        seen_classes = set()
+    if not isinstance(model_cls, type):
+        return set()
+    if isinstance(model_cls, EnumMeta):
+        return set()
+    if model_cls in seen_classes:
+        return set()
+    seen_classes.add(model_cls)
+    
+    dependencies = set()
+    annotations = get_inherited_field_annotations(model_cls)
+    model_module = sys.modules.get(model_cls.__module__)
+    
+    for field_name, field_type in annotations.items():
+        ref_cls_name = embedded_class_name_from_annotation(field_type)
+        if ref_cls_name:
+            ref_cls = getattr(model_module, ref_cls_name, None) if model_module else None
+            if ref_cls:
+                is_pydantic_model = isinstance(ref_cls, type) and issubclass(ref_cls, BaseModel)
+                is_enum = isinstance(ref_cls, EnumMeta)
+                if is_pydantic_model or is_enum:
+                    dependencies.add(ref_cls)
+                    if is_pydantic_model:
+                        dependencies.update(get_all_sub_dependencies(ref_cls, seen_classes))
+    return dependencies
+
 def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[BaseModel]=None):
     fields = ""
     fields_constructor = ""
@@ -629,6 +670,27 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     if isinstance(model, EnumMeta):
       print(f"[LAIA Flutter enum] generating standalone enum {model.__name__} -> {model.__name__.lower()}.dart")
       return enum_dart(model, include_import=True)
+
+    # Collect transitive sub-dependencies
+    try:
+        sub_deps = get_all_sub_dependencies(model)
+        for dep in sub_deps:
+            if dep == model:
+                continue
+            dep_name = dep.__name__
+            dep_name_clean = dep_name.replace('-Input', '').replace('-Output', '')
+            ignored_imports = {
+                'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+                'multilinestring', 'multipolygon', 'geometry', 'feature',
+                'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+                'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+            }
+            if dep_name_clean.lower() not in ignored_imports:
+                imp = f"import 'package:{app_name}/models/{dep_name_clean.lower()}.dart';\n"
+                if imp not in extra_imports:
+                    extra_imports += imp
+    except Exception as e:
+        print(f"[LAIA error collecting sub-dependencies] {e}")
     
     if openapiModel:
       frontend_props = openapiModel.get_frontend_properties()
@@ -666,8 +728,21 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)
-      if prop_name == 'password':
-        dart_prop_type = 'String?'
+      
+      # Determine if the field is excluded from response (needs to be optional in Dart)
+      model_config = getattr(model, "model_config", {}) or {}
+      json_schema_extra = model_config.get("json_schema_extra", {}) or {}
+      excluded_fields = json_schema_extra.get("x-exclude-from-response", []) if isinstance(json_schema_extra, dict) else []
+      is_excluded = prop_name in excluded_fields
+      if openapiModel:
+        prop_yaml = openapiModel.properties.get(prop_name, {})
+        if isinstance(prop_yaml, dict) and (prop_yaml.get('x-exclude-from-response') or prop_yaml.get('x_exclude_from_response')):
+          is_excluded = True
+      
+      if is_excluded:
+        if not dart_prop_type.endswith('?'):
+          dart_prop_type = f"{dart_prop_type}?"
+          
       raw_annotation = inherited_field_annotations.get(prop_name)
       enum_cls = enum_class_from_annotation(raw_annotation, model)
       print(
@@ -708,9 +783,15 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       if openapiModel:
         prop_yaml = openapiModel.properties.get(prop_name, {})
         ref_cls_name = schema_ref_class_name(prop_yaml)
+        ignored_imports = {
+            'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+            'multilinestring', 'multipolygon', 'geometry', 'feature',
+            'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+            'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+        }
         if ref_cls_name:
           dart_prop_type = embedded_dart_type(prop_type, ref_cls_name)
-          if ref_cls_name not in {'Point', 'Polygon', 'LineString', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'Geometry', 'Feature', 'GeometryPoint', 'GeometryPolygon', 'GeometryLineString', 'GeometryMultiPoint', 'GeometryMultiLineString', 'GeometryMultiPolygon'}:
+          if ref_cls_name.lower() not in ignored_imports:
             imp = f"import 'package:{app_name}/models/{ref_cls_name.lower()}.dart';\n"
             if imp not in extra_imports:
               print(f"[LAIA Flutter schema ref import] {model.__name__}.{prop_name} -> {imp.strip()}")
@@ -719,15 +800,16 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
           cls_name = embedded_class_name_from_type(prop_type)
           if cls_name:
             dart_prop_type = embedded_dart_type(prop_type, cls_name)
-            imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
-            if imp not in extra_imports:
-              print(f"[LAIA Flutter enum import from schema] {model.__name__}.{prop_name} -> {imp.strip()}")
-              extra_imports += imp
+            if cls_name.lower() not in ignored_imports:
+              imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
+              if imp not in extra_imports:
+                print(f"[LAIA Flutter enum import from schema] {model.__name__}.{prop_name} -> {imp.strip()}")
+                extra_imports += imp
         if isinstance(prop_yaml, dict) and (prop_yaml.get('x_embedded') or prop_yaml.get('x-embedded')):
           cls_name = embedded_class_name_from_type(prop_type) or embedded_class_name_from_annotation(raw_annotation)
           if cls_name:
             dart_prop_type = embedded_dart_type(prop_type, cls_name)
-            if cls_name not in {'Point', 'Polygon', 'LineString', 'MultiPoint', 'MultiLineString', 'MultiPolygon', 'Geometry', 'Feature', 'GeometryPoint', 'GeometryPolygon', 'GeometryLineString', 'GeometryMultiPoint', 'GeometryMultiLineString', 'GeometryMultiPolygon'}:
+            if cls_name.lower() not in ignored_imports:
               imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
               if imp not in extra_imports:
                 print(f"[LAIA Flutter embedded import] {model.__name__}.{prop_name} -> {imp.strip()}")
@@ -1282,6 +1364,7 @@ def get_inherited_field_annotations(model):
 def embedded_model_dart(class_name: str, app_name: str, model: Type[BaseModel]) -> str:
     fields = ""
     fields_constructor = ""
+    extra_imports = ""
     local_annotations = getattr(model, "__annotations__", {})
     local_fields = [
         (field_name, flatten_type(field_type))
@@ -1297,12 +1380,33 @@ def embedded_model_dart(class_name: str, app_name: str, model: Type[BaseModel]) 
         else:
             fields_constructor += f"    required this.{prop_name},\n"
 
+    # Collect transitive sub-dependencies
+    try:
+        sub_deps = get_all_sub_dependencies(model)
+        for dep in sub_deps:
+            if dep == model:
+                continue
+            dep_name = dep.__name__
+            dep_name_clean = dep_name.replace('-Input', '').replace('-Output', '')
+            ignored_imports = {
+                'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+                'multilinestring', 'multipolygon', 'geometry', 'feature',
+                'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+                'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+            }
+            if dep_name_clean.lower() not in ignored_imports:
+                imp = f"import 'package:{app_name}/models/{dep_name_clean.lower()}.dart';\n"
+                if imp not in extra_imports:
+                    extra_imports += imp
+    except Exception as e:
+        print(f"[LAIA error collecting embedded sub-dependencies] {e}")
+
     if fields_constructor:
         fields_constructor = fields_constructor[:-2]
 
     return f"""import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
-
+{extra_imports}
 part '{class_name.lower()}.g.dart';
 
 @JsonSerializable()

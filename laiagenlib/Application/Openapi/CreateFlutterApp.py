@@ -78,13 +78,14 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         yaml.dump(pubspec_content, file)
 
     model_module = import_model(models_path)
-    openapi_model_names = {model.model_name for model in openapi.models}
+    openapi_model_names = {model.model_name.replace('-Input', '').replace('-Output', '') for model in openapi.models}
     embedded_model_names = set()
 
     for openapiModel in openapi.models:
-        if not hasattr(model_module, openapiModel.model_name):
+        model_name_clean = openapiModel.model_name.replace('-Input', '').replace('-Output', '')
+        if not hasattr(model_module, model_name_clean):
             continue
-        model = getattr(model_module, openapiModel.model_name)
+        model = getattr(model_module, model_name_clean)
         for prop_name, annotation in getattr(model, "__annotations__", {}).items():
             prop_details = openapiModel.properties.get(prop_name, {})
             if isinstance(prop_details, dict) and prop_details.get("x_frontend_relation"):
@@ -103,21 +104,27 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
 
     frontend_models = [
         model for model in openapi.models
-        if model.model_name not in embedded_model_names
+        if model.model_name.replace('-Input', '').replace('-Output', '') not in embedded_model_names
     ]
 
     home_txt_path = os.path.join(f"./{app_name}", "lib", "home.txt")
     with open(home_txt_path, 'w') as f:
+        seen_home = set()
         for m in frontend_models:
             if m.model_name.startswith("Body_") or m.model_name.endswith("Update"):
                 continue
-            cls = getattr(model_module, m.model_name, None)
-            if cls is None and m.model_name in LAIA_INTERNAL_MODELS:
-                cls = LAIA_INTERNAL_MODELS[m.model_name]
+            model_name_clean = m.model_name.replace('-Input', '').replace('-Output', '')
+            if model_name_clean in seen_home:
+                continue
+            seen_home.add(model_name_clean)
+            cls = getattr(model_module, model_name_clean, None)
+            if cls is None and model_name_clean in LAIA_INTERNAL_MODELS:
+                cls = LAIA_INTERNAL_MODELS[model_name_clean]
             if cls is None or isinstance(cls, EnumMeta):
                 continue
-            f.write(f"{m.model_name}HomeWidget\n")
+            f.write(f"{model_name_clean}HomeWidget\n")
 
+    generated_models = set()
     for openapiModel in frontend_models:
         if openapiModel.model_name.startswith("Body_"):
             continue
@@ -126,19 +133,25 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             print(f"Skipping model: {openapiModel.model_name}")
             continue
 
-        print(f"Generating model: {openapiModel.model_name}")
+        model_name_clean = openapiModel.model_name.replace('-Input', '').replace('-Output', '')
+        if model_name_clean in generated_models:
+            print(f"Skipping already generated model: {model_name_clean}")
+            continue
+        generated_models.add(model_name_clean)
 
-        if hasattr(model_module, openapiModel.model_name):
-            model = getattr(model_module, openapiModel.model_name)
+        print(f"Generating model: {model_name_clean}")
 
-        elif openapiModel.model_name in LAIA_INTERNAL_MODELS:
-            model = LAIA_INTERNAL_MODELS[openapiModel.model_name]
+        if hasattr(model_module, model_name_clean):
+            model = getattr(model_module, model_name_clean)
+
+        elif model_name_clean in LAIA_INTERNAL_MODELS:
+            model = LAIA_INTERNAL_MODELS[model_name_clean]
 
         else:
             continue  # Skip models that are not found
 
         model_file_content = model_dart(openapiModel, app_name, model)
-        with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
+        with open(os.path.join(models_dir, f'{model_name_clean.lower()}.dart'), 'w') as f:
             f.write(model_file_content)
 
         for prop_name, ann in getattr(model, "__annotations__", {}).items():
