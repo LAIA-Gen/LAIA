@@ -6,7 +6,7 @@ from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 class LaiaUser(LaiaBaseModel):
     email: str
     password: str
-    roles: List[str] = Field([], x_frontend_relation="Role")
+    roles: List = Field([], x_frontend_relation="Role")
     nicename: Optional[str] = None
     shard: Optional[str] = Field(
         None,

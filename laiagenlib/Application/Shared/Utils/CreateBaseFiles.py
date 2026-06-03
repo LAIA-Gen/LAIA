@@ -30,6 +30,7 @@ def create_base_files(app_name: str, models: List[any] = []):
 
     local_image_path = os.path.join(current_dir, 'logo.png')
     local_image_path_home = os.path.join(current_dir, 'logo_home.png')
+    favicon_path = os.path.join(current_dir, 'logo_favicon.png')
 
     shutil.copyfile(
         local_image_path,
@@ -39,6 +40,14 @@ def create_base_files(app_name: str, models: List[any] = []):
     shutil.copyfile(
         local_image_path_home,
         os.path.join(assets_dir, 'logo_home.png')
+    )
+
+    web_dir = os.path.join(app_name, 'web')
+    os.makedirs(web_dir, exist_ok=True)
+
+    shutil.copyfile(
+        favicon_path,
+        os.path.join(web_dir, 'favicon.png')
     )
 
     directories = ['config', 'generic', 'models', 'screens', 'theme']
