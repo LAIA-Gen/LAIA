@@ -718,6 +718,21 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         widget = "widget: '" + str(openapiModel.extensions['x-frontend-widget']) + "', "
       except KeyError:
         widget = ""
+      try:
+        raw_tabs = openapiModel.extensions.get('x-frontend-tabs')
+        if raw_tabs:
+            tab_elements = []
+            for tab in raw_tabs:
+                label = tab.get('label', '')
+                fields_list = tab.get('fields', [])
+                fields_str = ", ".join([f'"{f}"' for f in fields_list])
+                tab_elements.append(f'ElementTab(label: "{label}", fields: [{fields_str}])')
+            tabs_str = "tabs: [" + ", ".join(tab_elements) + "], "
+        else:
+            tabs_str = ""
+      except Exception as e:
+        print(f"[LAIA error parsing x-frontend-tabs] {e}")
+        tabs_str = ""
     else:
       frontend_props = {}
       defaultFields = ""
@@ -725,6 +740,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       widgetDistributionDetail = ""
       pageSize = ""
       widget = ""
+      tabs_str = ""
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)
@@ -856,7 +872,7 @@ part '{model_name.lower()}.g.dart';
 @RiverpodGenAnnotation(auth: {auth})
 @HomeWidgetElementGenAnnotation()
 @ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
-@ElementWidgetGen({defaultFieldsDetail}{widgetDistributionDetail}auth: {auth})
+@ElementWidgetGen({defaultFieldsDetail}{widgetDistributionDetail}{tabs_str}auth: {auth})
 @CopyWith()
 class {model_name} {{
 {fields}
