@@ -847,6 +847,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       if openapiModel.extensions.get('x-auth'):
         auth = 'true'
         extra_imports += f"import 'package:shared_preferences/shared_preferences.dart';\n"
+        extra_imports += f"import 'package:package_info_plus/package_info_plus.dart';\n"
 
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';
