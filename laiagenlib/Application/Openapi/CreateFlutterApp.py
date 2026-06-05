@@ -26,6 +26,17 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
 
     subprocess.run("flutter create " + app_name, shell=True)
 
+    # Environment Configurations
+    project_config_dir = os.path.join(app_name, 'lib/config')
+
+    #if not os.path.exists(os.path.join(project_config_dir, '.env.development')):
+    #    with open(os.path.join(project_config_dir, '.env.development'), 'w') as f:
+    #        f.write('API_URL=http://localhost:8000')
+        
+    if not os.path.exists(os.path.join(project_config_dir, '.env.production')):
+        with open(os.path.join(project_config_dir, '.env.production'), 'w') as f:
+            f.write('API_URL=http://localhost:8009')
+
     # TODO: change the following local dart libraries to the ones on the marketç
     await run(f"flutter pub add laia_annotations -C ./{app_name}")
     #await run(f"flutter pub add --dev laia_riverpod_custom_generator -C ./{app_name}")

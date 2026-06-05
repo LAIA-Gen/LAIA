@@ -82,7 +82,7 @@ class SplashScreen extends ConsumerWidget {
     return file_content
 
 def api_dart():
-    return """const String baseURL = 'http://localhost:8009';
+    return """const String baseURL = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8000');
 //const String baseURL = 'http://10.0.2.2:8000';
 
 // Android emmulator
