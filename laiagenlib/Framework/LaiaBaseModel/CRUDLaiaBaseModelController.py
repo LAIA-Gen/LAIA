@@ -118,7 +118,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard)
+            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
         except Exception as e:
             handle_exception(e)
         

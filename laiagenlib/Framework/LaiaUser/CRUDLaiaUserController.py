@@ -17,7 +17,7 @@ from bson import ObjectId
 
 T = TypeVar('T', bound='LaiaBaseModel')
 #JMT
-def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
+def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, update_model: T=None, routes_info: dict=None, jwtSecretKey: str='secret_key', auth_required: bool = False, smtp_config: dict = None):
     model_name = model.__name__.lower()
     router = APIRouter(tags=[model.__name__])
     http_bearer = HTTPBearer(auto_error=False)
@@ -104,7 +104,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await CreateLaiaUser.create_laia_user(element_full.dict(), model, user_roles, repository, user_shard)
+            return await CreateLaiaUser.create_laia_user(element_full.dict(), model, user_roles, repository, user_shard, smtp_config)
         except Exception as e:
             handle_exception(e)
 
@@ -114,7 +114,7 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
         try:
-            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard)
+            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard, smtp_config)
         except Exception as e:
             handle_exception(e)
         

@@ -7,7 +7,7 @@ from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 from .ResolveRoles import resolve_role_ids
 
-async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser, user_roles: list, crud_instance: ModelRepository, user_shard: str = ""):
+async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser, user_roles: list, crud_instance: ModelRepository, user_shard: str = "", smtp_config: dict = None):
     _logger.info("Updating new User")
 
     if hasattr(updated_values, "dict"): 
@@ -39,6 +39,6 @@ async def update_laia_user(element_id:str, updated_values: dict, model: LaiaUser
             hashed_password = bcrypt.hashpw(updated_values['password'].encode('utf-8'), bcrypt.gensalt())
             updated_values['password'] = hashed_password.decode('utf-8')
 
-    user = await update_laia_base_model(element_id, {**updated_values}, model, user_roles, crud_instance, True, user_shard)
+    user = await update_laia_base_model(element_id, {**updated_values}, model, user_roles, crud_instance, True, user_shard, smtp_config)
     _logger.info("User updated successfully")
     return user

@@ -11,6 +11,7 @@ from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
 from ...Framework.Email.CRUDEmailController import CRUDEmailController
+from ...Framework.Hooks.RundeckController import RundeckController
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.LaiaUser.Role import Role
@@ -47,7 +48,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             except Exception as e:
                 _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
-        user_router = CRUDLaiaUserController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        user_router = CRUDLaiaUserController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, smtp_config=smtp_config)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
 
@@ -65,4 +66,8 @@ class FastAPIOpenapiRepository(OpenapiRepository):
 
     async def create_email_routes(self, smtp_config: dict):
         router = await CRUDEmailController(smtp_config)
+        self.api.include_router(router)
+
+    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository):
+        router = RundeckController(smtp_config=smtp_config, repository=repository)
         self.api.include_router(router)
