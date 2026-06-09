@@ -25,6 +25,8 @@ def main_dart(app_name: str, models: List[OpenAPIModel]):
     file_content = f"""{import_statements}
 import 'package:{app_name}/screens/home.dart';"""+f"""
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:{app_name}/theme/theme_app.dart';"""+"""
 
@@ -47,6 +49,16 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       theme: AppTheme.light(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('es'),
+      ],
       home: """+f"""{ "SplashScreen()" if clean_auth_models else "Home()" }"""+""",
     );
   }
@@ -114,6 +126,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutter_map;
 import 'package:{app_name}/models/geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'dart:convert';"""+"""
 
 part 'generic_widgets.g.dart';
@@ -733,6 +746,12 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       except Exception as e:
         print(f"[LAIA error parsing x-frontend-tabs] {e}")
         tabs_str = ""
+      try:
+        raw_format = openapiModel.extensions.get('x_frontend_format')
+        format = f"format: '{raw_format}', "
+      except Exception as e:
+        print(f"[LAIA error parsing x-frontend-format] {e}")
+        format = ""
     else:
       frontend_props = {}
       defaultFields = ""
