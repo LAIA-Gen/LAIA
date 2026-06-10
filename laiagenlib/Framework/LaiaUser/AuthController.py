@@ -114,28 +114,23 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
         except Exception as e:
             handle_exception(e)
             
-    @router.put(f"/auth/activate/{model_name}/{{user_id}}", summary="Activate user from frontend")
+    @router.get(f"/auth/activate/{model_name}/{{user_id}}", summary="Activate user and redirect to frontend")
     async def activate_user(user_id: str):
         """
-        Activa directament l'usuari (sense necessitar token de sessió) usant el seu ID.
-        Ideal perquè el frontend el cridi via API.
+        Activa directament l'usuari usant el seu ID
+        i redirigeix a l'URL de producció o frontend corresponent.
         """
         try:
             user = await repository.get_item(model_name=model_name, item_id=user_id)
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-                
-            if not user.get("validated", False):
+            if user and not user.get("validated", False):
                 await repository.put_item(
                     model_name=model_name,
                     item_id=user_id,
                     update_fields={"validated": True}
                 )
-                _logger.info(f"User {user_id} activated via frontend request")
+                _logger.info(f"User {user_id} activated via direct link")
             
-            return {"valid": True, "message": "User validated successfully"}
-        except HTTPException as e:
-            raise e
+            return RedirectResponse(url="https://moucul.tilingpt.com/")
         except Exception as e:
             handle_exception(e)
         
