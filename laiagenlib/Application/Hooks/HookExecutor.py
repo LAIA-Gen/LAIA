@@ -144,27 +144,30 @@ async def _expand_wildcard_params(params: dict, element: dict, repository=None) 
 
         # Crear còpia dels params substituint wildcards
         expanded_params = _replace_wildcard_in_params(
-            params, wildcard_field, wildcard_subfield, referenced_data
+            params, wildcard_field, referenced_data
         )
         expanded.append(expanded_params)
 
     return expanded
 
 
-def _replace_wildcard_in_params(params: dict, field: str, subfield: str, data: dict) -> dict:
-    """Substitueix {{field.*.subfield}} pel valor real de data[subfield]."""
+def _replace_wildcard_in_params(params: dict, field: str, data: dict) -> dict:
+    """Substitueix qualsevol {{field.*.subfield}} pels valors reals de data[subfield]."""
     import copy
     new_params = copy.deepcopy(params)
-    pattern = f"{{{{{field}.*.{subfield}}}}}"
-    replacement = str(data.get(subfield, ""))
+    pattern = re.compile(f"\\{{\\{{{field}\\.\\*\\.(\\w+)\\}}\\}}")
+
+    def replacer(match):
+        sub = match.group(1)
+        return str(data.get(sub, ""))
 
     for key, value in new_params.items():
-        if isinstance(value, str) and pattern in value:
-            new_params[key] = value.replace(pattern, replacement)
+        if isinstance(value, str):
+            new_params[key] = pattern.sub(replacer, value)
         elif isinstance(value, dict):
             for k, v in value.items():
-                if isinstance(v, str) and pattern in v:
-                    value[k] = v.replace(pattern, replacement)
+                if isinstance(v, str):
+                    value[k] = pattern.sub(replacer, v)
 
     return new_params
 
