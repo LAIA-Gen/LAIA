@@ -11,9 +11,11 @@ from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
 from ...Framework.Email.CRUDEmailController import CRUDEmailController
+from ...Framework.Shared.GeocodingController import GeocodingController
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.LaiaUser.Role import Role
+from ...Domain.GeoLocation.GeoLocation import GeoLocation
 from ...Application.LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from ...Application.LaiaBaseModel.SearchLaiaBaseModel import search_laia_base_model
 from ...Domain.Shared.Utils.logger import _logger
@@ -66,3 +68,9 @@ class FastAPIOpenapiRepository(OpenapiRepository):
     async def create_email_routes(self, smtp_config: dict):
         router = await CRUDEmailController(smtp_config)
         self.api.include_router(router)
+
+    async def create_geolocation_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
+        crud_router = CRUDLaiaBaseModelController(repository=repository, model=GeoLocation, update_model=GeoLocation, routes_info=None, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=False, use_ontology=False)
+        self.api.include_router(crud_router)
+        geocoding_router = GeocodingController()
+        self.api.include_router(geocoding_router)
