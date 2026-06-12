@@ -36,7 +36,8 @@ class LaiaFastApi():
             smtp_user: str = "",
             smtp_password: str = "",
             smtp_tls: bool = True,
-            templates_dir: str = "email_templates"):
+            templates_dir: str = "email_templates",
+            add_geolocation: bool = True):
         
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
@@ -96,7 +97,8 @@ class LaiaFastApi():
             endpoint_url_storage, 
             access_key_storage, 
             secret_key_storage,
-            smtp_config=self.smtp_config)
+            smtp_config=self.smtp_config,
+            add_geolocation=add_geolocation)
 
     def _setup_custom_openapi(self):
         api = self.api
