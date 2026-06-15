@@ -1,34 +1,34 @@
-# GeoLocation Module Integration
+# Integració del mòdul GeoLocation
 
-This document outlines the recent architectural changes made to integrate the custom geocoding features into the core LAIA framework. 
+En aquest document s'expliquen els canvis que hem fet per integrar les funcions de geocoding a dins del core de LAIA.
 
-Previously, features like route distance calculation and address-to-GeoJSON conversion were tightly coupled to specific projects (like MouCultura) under custom router setups. We have decoupled these features and introduced a standard, modular `GeoLocation` addon that can be toggled on or off directly from the generator configuration.
+Fins ara, les funcions per calcular distàncies o passar adreces a GeoJSON estaven clavades en projectes específics (com el MouCultura) amb rutes fetes a mida. El que hem fet ara és separar tot això i crear un addon de `GeoLocation` modular que es pot activar o desactivar directament des de la configuració del generador.
 
-## What changed?
+## Què hem canviat?
 
-1. **Implicit Domain Model**  
-   We introduced `GeoLocation.py` under the `Domain/GeoLocation` directory. It inherits from `LaiaBaseModel` and acts as a standard schema for any location-based data (storing address strings, latitudes, longitudes, and optional GeoJSON structures). 
+1. **Model de domini implícit**  
+   Hem creat `GeoLocation.py` dins de `Domain/GeoLocation`. Aquest model hereta de `LaiaBaseModel` i ens serveix d'esquema estàndard per guardar qualsevol dada de localització (carrers, latituds, longituds i estructures GeoJSON opcionals).
 
-2. **Route Registration**  
-   We expanded the OpenAPI repository interfaces (`OpenapiRepository` and `FastAPIOpenapiRepository`) with a new method: `create_geolocation_routes`. When called, this method does two things:
-   - Mounts standard CRUD operations for the `GeoLocation` collection.
-   - Mounts the custom geocoding endpoints (`/geocode/geojson` and `/geocode/route-distance`) previously handled by standalone routers.
+2. **Registre de rutes**  
+   Hem afegit un mètode nou a les interfícies de l'OpenAPI (`OpenapiRepository` i `FastAPIOpenapiRepository`) que es diu `create_geolocation_routes`. Aquesta funció s'encarrega de dues coses:
+   - Muntar el CRUD típic per a la col·lecció `GeoLocation`.
+   - Muntar les rutes custom de geocoding (`/geocode/geojson` i `/geocode/route-distance`) que abans anaven a part.
 
-3. **Opt-in Addon System**  
-   To align with the framework's vision of having a modular backoffice where features can be enabled on demand, the `GeoLocation` module is no longer forced onto every project. In `CreateRoutes.py`, we added a new `add_geolocation` boolean flag to the `create_crud_routes` function. 
+3. **Sistema d'addons**  
+   La idea del framework és tenir un backoffice on puguis activar només el que necessites. Per això, el mòdul de `GeoLocation` ja no s'empassa per defecte a tots els projectes. A `CreateRoutes.py` hem ficat un paràmetre `add_geolocation` a la funció `create_crud_routes`.
    
-   Just like the `smtp_config` triggers the email routes or `add_storage` enables S3/Cloudinary storage, setting `add_geolocation=True` will inject the location models and routing logic into the generated backend.
+   De la mateixa manera que `smtp_config` aixeca el tema dels correus o `add_storage` activa l'emmagatzematge, posant `add_geolocation=True` injectarem tot el que fa falta per als mapes al backend que estiguem generant.
 
-## Usage
+## Com fer-ho servir?
 
-When generating a new backend or setting up the router initialization, simply pass the flag:
+Quan generis un backend nou o preparis la càrrega de rutes, només has de passar-li el paràmetre així:
 
 ```python
 await create_crud_routes(
     repositoryAPI=repositoryAPI,
-    # ... other config
+    # ... altres paràmetres
     add_geolocation=True
 )
 ```
 
-By keeping it toggleable, we ensure the framework stays lightweight for projects that don't need map integrations, while providing a plug-and-play solution for those that do.
+Fent-ho opcional ens assegurem que el framework no pesi més del compte en projectes on no calguin mapes, però que alhora sigui super fàcil d'endollar on sí que facin falta.
