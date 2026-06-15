@@ -1,0 +1,7 @@
+
+metrics:
+  - name: expired_trips
+    collection: offer
+    type: count
+    filters:
+      statusOffer: expired

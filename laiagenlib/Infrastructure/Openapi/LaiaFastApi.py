@@ -100,6 +100,28 @@ class LaiaFastApi():
             smtp_config=self.smtp_config,
             add_geolocation=add_geolocation)
 
+        # Inject Geocoding and Stats automatically into the LAIA FastApi
+        from ...Framework.Shared.GeocodingController import GeocodingController
+        from ...Framework.Stats.StatsController import StatsController
+
+        self.api.include_router(GeocodingController())
+
+        user_model_name = None
+        for model in self.openapi.models:
+            if model.extensions.get(f'x-auth'):
+                user_model_name = model.model_name
+                break
+        
+        if user_model_name:
+            metrics_file = os.path.join(os.path.dirname(self.openapi_path), "metrics.yaml")
+            if not os.path.exists(metrics_file):
+                metrics_file = None
+            
+            class DummyUserModel:
+                __name__ = user_model_name
+                
+            self.api.include_router(StatsController(self.repository_instance, DummyUserModel, metrics_file))
+
     def _setup_custom_openapi(self):
         api = self.api
 

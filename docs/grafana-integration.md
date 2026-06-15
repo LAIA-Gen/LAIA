@@ -6,22 +6,9 @@ El framework proporciona endpoints integrados para métricas estándar de usuari
 
 ## 1. Configurar Estadísticas Base de Usuarios
 
-Para obtener las estadísticas automáticas de usuarios, simplemente incluye el `StatsController` en el enrutador de tu aplicación FastAPI.
+¡Buenas noticias! **No tienes que configurar absolutamente nada de código**.
 
-En tu punto de entrada principal (ej. `main.py` o tu archivo de rutas principal), importa y registra el controlador pasándole tu instancia del repositorio y tu modelo de Usuario:
-
-```python
-from fastapi import FastAPI
-from laiagenlib.Framework.Stats import StatsController
-from your_project.Domain.UserModel import UserModel
-
-app = FastAPI()
-
-# repository es tu instancia configurada de ModelRepository
-app.include_router(
-    StatsController(repository=repository, user_model=UserModel)
-)
-```
+El framework LAIA inyecta automáticamente el `StatsController` y el `GeocodingController` en el enrutador de tu aplicación al compilarla.
 
 Esto expone automáticamente el endpoint:
 - `GET /stats/users`
@@ -97,17 +84,7 @@ metrics:
 ```
 
 ### Inicializando el archivo YAML
-Solo tienes que pasarle la ruta del archivo al controlador cuando lo inicialices en tu `main.py`:
-
-```python
-app.include_router(
-    StatsController(
-        repository=repository, 
-        user_model=UserModel, 
-        metrics_file="metrics.yaml"  # LAIA registrará dinámicamente todo lo del YAML
-    )
-)
-```
+¡LAIA lo hace todo por ti! Solo tienes que crear el archivo `metrics.yaml` en la misma carpeta donde tengas tu `api.yaml`. Al arrancar el servidor, LAIA lo detectará y registrará todo automáticamente.
 
 Las métricas definidas en el YAML aparecerán automáticamente en `/stats/custom/{nombre}` exactamente igual que si las hubieras programado en Python.
 
