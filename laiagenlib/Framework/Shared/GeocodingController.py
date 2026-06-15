@@ -19,7 +19,6 @@ def GeocodingController():
             
             params = {
                 'q': address, 
-                'polygon_geojson': '1', 
                 'format': 'jsonv2'
             }
 
@@ -31,10 +30,15 @@ def GeocodingController():
             if not results:
                 raise HTTPException(status_code=404, detail="No geocoding results found")
             
-            geojson_data = results[0].get("geojson")
-            if not geojson_data:
-                raise HTTPException(status_code=404, detail="GeoJSON data not found for this address")
+            lat = results[0].get("lat")
+            lon = results[0].get("lon")
+            if not lat or not lon:
+                raise HTTPException(status_code=404, detail="Coordinates not found for this address")
 
+            geojson_data = {
+                "type": "Point",
+                "coordinates": [float(lon), float(lat)]
+            }
             return JSONResponse(content=geojson_data, status_code=200)
 
         except httpx.RequestError as e:

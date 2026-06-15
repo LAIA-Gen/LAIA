@@ -1,27 +1,27 @@
 # Integració del mòdul GeoLocation
 
-En aquest document s'expliquen els canvis que hem fet per integrar les funcions de geocoding a dins del core de LAIA.
+Canvis de les funcions de geocoding a dins del core de LAIA.
 
-Fins ara, les funcions per calcular distàncies o passar adreces a GeoJSON estaven clavades en projectes específics (com el MouCultura) amb rutes fetes a mida. El que hem fet ara és separar tot això i crear un addon de `GeoLocation` modular que es pot activar o desactivar directament des de la configuració del generador.
+Prèviament, les funcions per calcular distàncies o convertir adreces a GeoJSON estaven vinculades a projectes específics (com MouCultura) amb rutes fetes a mida. Actualment, s'han desacoblat aquestes funcions per crear un addon de `GeoLocation` modular que es pot activar o desactivar directament des de la configuració del generador.
 
-## Què hem canviat?
+## Canvis realitzats
 
 1. **Model de domini implícit**  
-   Hem creat `GeoLocation.py` dins de `Domain/GeoLocation`. Aquest model hereta de `LaiaBaseModel` i ens serveix d'esquema estàndard per guardar qualsevol dada de localització (carrers, latituds, longituds i estructures GeoJSON opcionals).
+   S'ha creat l'arxiu `GeoLocation.py` dins del directori `Domain/GeoLocation`. Aquest model hereta de `LaiaBaseModel` i actua com a esquema estàndard per emmagatzemar qualsevol dada de localització (adreces, latituds, longituds i estructures GeoJSON opcionals).
 
 2. **Registre de rutes**  
-   Hem afegit un mètode nou a les interfícies de l'OpenAPI (`OpenapiRepository` i `FastAPIOpenapiRepository`) que es diu `create_geolocation_routes`. Aquesta funció s'encarrega de dues coses:
-   - Muntar el CRUD típic per a la col·lecció `GeoLocation`.
-   - Muntar les rutes custom de geocoding (`/geocode/geojson` i `/geocode/route-distance`) que abans anaven a part.
+   S'ha afegit un mètode nou a les interfícies de l'OpenAPI (`OpenapiRepository` i `FastAPIOpenapiRepository`) anomenat `create_geolocation_routes`. Aquesta funció s'encarrega de dues tasques:
+   - Muntar les operacions CRUD estàndard per a la col·lecció `GeoLocation`.
+   - Muntar les rutes personalitzades de geocoding (`/geocode/geojson` i `/geocode/route-distance`) que anteriorment es gestionaven en routers independents.
 
 3. **Sistema d'addons**  
-   La idea del framework és tenir un backoffice on puguis activar només el que necessites. Per això, el mòdul de `GeoLocation` ja no s'empassa per defecte a tots els projectes. A `CreateRoutes.py` hem ficat un paràmetre `add_geolocation` a la funció `create_crud_routes`.
+   Amb l'objectiu d'alinear-se amb la visió del framework de disposar d'un backoffice on es puguin activar funcions sota demanda, el mòdul de `GeoLocation` ja no s'inclou per defecte a tots els projectes. A l'arxiu `CreateRoutes.py`, s'ha afegit un paràmetre booleà `add_geolocation` a la funció `create_crud_routes`.
    
-   De la mateixa manera que `smtp_config` aixeca el tema dels correus o `add_storage` activa l'emmagatzematge, posant `add_geolocation=True` injectarem tot el que fa falta per als mapes al backend que estiguem generant.
+   De la mateixa manera que `smtp_config` habilita les rutes de correu o `add_storage` activa l'emmagatzematge, establir `add_geolocation=True` injectarà els models de localització i la lògica de rutes al backend generat.
 
-## Com fer-ho servir?
+## Mode d'ús
 
-Quan generis un backend nou o preparis la càrrega de rutes, només has de passar-li el paràmetre així:
+En generar un backend nou o inicialitzar les rutes, s'ha de passar el paràmetre corresponent:
 
 ```python
 await create_crud_routes(
@@ -31,4 +31,4 @@ await create_crud_routes(
 )
 ```
 
-Fent-ho opcional ens assegurem que el framework no pesi més del compte en projectes on no calguin mapes, però que alhora sigui super fàcil d'endollar on sí que facin falta.
+En mantenir-ho de forma opcional, s'assegura que el framework continuï sent lleuger per a projectes que no requereixen integracions de mapes, alhora que proporciona una solució directa per a aquells que sí ho necessiten.
