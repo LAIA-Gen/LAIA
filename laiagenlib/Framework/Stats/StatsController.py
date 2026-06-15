@@ -2,15 +2,56 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone, timedelta
 from typing import TypeVar, Type
+import os
+import yaml
 
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from ...Domain.Shared.Utils.logger import _logger
 from .MetricsRegistry import LaiaMetricsRegistry
 from pydantic import BaseModel
 
 T = TypeVar('T', bound=BaseModel)
 
-def StatsController(repository: ModelRepository, user_model: Type[T] = None):
+def StatsController(repository: ModelRepository, user_model: Type[T] = None, metrics_file: str = None):
     router = APIRouter(tags=["Stats"])
+
+    if metrics_file and os.path.exists(metrics_file):
+        try:
+            with open(metrics_file, "r", encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+            
+            metrics = data.get("metrics", []) if data else []
+            for m in metrics:
+                name = m.get("name")
+                collection = m.get("collection")
+                m_type = m.get("type", "count")
+                
+                if not name or not collection:
+                    continue
+                
+                if m_type == "count":
+                    filters = m.get("filters", {})
+                    def make_count_callback(col, flt, metric_name):
+                        async def metric_callback():
+                            count = repository.db[col].count_documents(flt)
+                            return {metric_name: count}
+                        return metric_callback
+                    
+                    LaiaMetricsRegistry.register_metric(name, make_count_callback(collection, filters, name))
+                    
+                elif m_type == "aggregate":
+                    pipeline = m.get("pipeline", [])
+                    def make_agg_callback(col, pipe, metric_name):
+                        async def metric_callback():
+                            res = await repository.aggregate_items(col, pipe)
+                            return {metric_name: res}
+                        return metric_callback
+                    
+                    LaiaMetricsRegistry.register_metric(name, make_agg_callback(collection, pipeline, name))
+
+        except Exception as e:
+            _logger.error(f"Failed to load metrics from {metrics_file}: {str(e)}")
+
 
     @router.get("/stats/users")
     async def get_users_stats():

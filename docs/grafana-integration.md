@@ -1,14 +1,14 @@
-# LAIA Grafana Integration Guide
+# Guía de Integración de Grafana con LAIA
 
-This guide explains how to expose analytics and metrics from your LAIA-based backend directly to Grafana. 
+Esta guía explica cómo exponer analíticas y métricas directamente a Grafana desde tu backend basado en LAIA.
 
-The framework provides built-in endpoints for standard user metrics (total users, active users, users by role) and a dynamic registry to expose custom business metrics without cluttering your core architecture.
+El framework proporciona endpoints integrados para métricas estándar de usuarios (total de usuarios, usuarios activos, usuarios por rol) y un registro dinámico para exponer métricas de negocio personalizadas sin ensuciar la arquitectura central.
 
-## 1. Setup Built-in User Statistics
+## 1. Configurar Estadísticas Base de Usuarios
 
-To get automatic user statistics, include the `StatsController` in your FastAPI app router.
+Para obtener las estadísticas automáticas de usuarios, simplemente incluye el `StatsController` en el enrutador de tu aplicación FastAPI.
 
-In your main entry point (e.g. `main.py` or your primary router file), import and register the controller by passing your repository instance and your User model:
+En tu punto de entrada principal (ej. `main.py` o tu archivo de rutas principal), importa y registra el controlador pasándole tu instancia del repositorio y tu modelo de Usuario:
 
 ```python
 from fastapi import FastAPI
@@ -17,35 +17,35 @@ from your_project.Domain.UserModel import UserModel
 
 app = FastAPI()
 
-# repository is your configured instance of ModelRepository
+# repository es tu instancia configurada de ModelRepository
 app.include_router(
     StatsController(repository=repository, user_model=UserModel)
 )
 ```
 
-This automatically exposes the endpoint:
+Esto expone automáticamente el endpoint:
 - `GET /stats/users`
 
-The response includes:
-- `total_users`: Overall user count.
-- `users_by_role`: Users grouped by their assigned roles.
-- `active_users`: Both daily (DAU) and monthly (MAU) active user counts.
+La respuesta incluye:
+- `total_users`: Recuento total de usuarios.
+- `users_by_role`: Usuarios agrupados por los roles que tengan asignados.
+- `active_users`: Recuento de usuarios activos, tanto diarios (DAU) como mensuales (MAU).
 
-**Note on Active Users:** 
-The DAU and MAU calculations rely on the `lastLoginAt` field inside the user model. The LAIA framework handles updating this field automatically during the login process, so you don't need to manually track user sessions for this to work.
+**Nota sobre los Usuarios Activos:**
+Los cálculos de DAU y MAU dependen del campo `lastLoginAt` dentro del modelo de usuario. El framework LAIA se encarga de actualizar este campo de manera automática durante el proceso de login, por lo que no necesitas rastrear las sesiones de los usuarios manualmente para que esto funcione.
 
-## 2. Registering Custom Business Metrics
+## 2. Registrar Métricas de Negocio Personalizadas
 
-Every project has specific domain metrics (e.g., number of completed trips, total sales, open tickets). Instead of building one-off controllers for each metric, use the `LaiaMetricsRegistry`.
+Cada proyecto tiene métricas de dominio específicas (ej. número de viajes completados, ventas totales, tickets abiertos). En lugar de construir controladores de un solo uso para cada métrica, utiliza el `LaiaMetricsRegistry`.
 
-### Writing the Metric Logic
+### Escribir la lógica de la métrica
 
-Create an async function in your project that queries the database and calculates the data you want to expose. It should return a dictionary.
+Crea una función asíncrona en tu proyecto que consulte la base de datos y calcule los datos que quieres exponer. Debe devolver un diccionario.
 
 ```python
 # your_project/Metrics/Trips.py
 async def get_trips_stats():
-    # Example logic using your repository
+    # Lógica de ejemplo usando tu repositorio
     total_trips = await repository.count("trips")
     completed = await repository.count("trips", {"status": "completed"})
     
@@ -55,9 +55,9 @@ async def get_trips_stats():
     }
 ```
 
-### Registering the Metric
+### Registrar la Métrica
 
-During the startup phase of your application, register the function with a unique metric name:
+Durante la fase de arranque de tu aplicación, registra la función con un nombre de métrica único:
 
 ```python
 from laiagenlib.Framework.Stats import LaiaMetricsRegistry
@@ -66,18 +66,57 @@ from your_project.Metrics.Trips import get_trips_stats
 LaiaMetricsRegistry.register_metric("trips", get_trips_stats)
 ```
 
-This dynamically creates the following endpoint:
+Esto crea de forma dinámica el siguiente endpoint:
 - `GET /stats/custom/trips`
 
-The route will execute your function and return the resulting JSON object. 
-You can also list all registered custom metrics by fetching `GET /stats/custom`.
+La ruta ejecutará tu función y devolverá el objeto JSON resultante.
+También puedes listar todas las métricas personalizadas registradas haciendo una petición a `GET /stats/custom`.
 
-## 3. Configuring Grafana
+## 3. Configuración de Métricas "Low-Code" (YAML)
 
-To visualize this data in Grafana:
+Si prefieres no escribir código Python para cada métrica, LAIA te permite definirlas de forma declarativa usando un archivo YAML (por ejemplo, `metrics.yaml`).
 
-1. Install the **Infinity** or **JSON API** data source plugin in your Grafana instance.
-2. Add a new Data Source pointing to your backend's base URL.
-3. In your Grafana Dashboard, create a new panel and select the JSON/Infinity plugin.
-4. Set the path to the specific endpoint you want to query (e.g., `/stats/users` or `/stats/custom/trips`).
-5. Map the incoming JSON fields to Grafana metrics using JSONPath (for example, `$.active_users.daily` to plot DAU).
+### Ejemplo de `metrics.yaml`
+```yaml
+metrics:
+  # Ejemplo de operación 'count'
+  - name: completed_trips
+    collection: offer
+    type: count
+    filters:
+      statusOffer: "expired"
+      
+  # Ejemplo de operación 'aggregate'
+  - name: users_by_city
+    collection: user
+    type: aggregate
+    pipeline:
+      - $group:
+          _id: "$city"
+          total: { $sum: 1 }
+```
+
+### Inicializando el archivo YAML
+Solo tienes que pasarle la ruta del archivo al controlador cuando lo inicialices en tu `main.py`:
+
+```python
+app.include_router(
+    StatsController(
+        repository=repository, 
+        user_model=UserModel, 
+        metrics_file="metrics.yaml"  # LAIA registrará dinámicamente todo lo del YAML
+    )
+)
+```
+
+Las métricas definidas en el YAML aparecerán automáticamente en `/stats/custom/{nombre}` exactamente igual que si las hubieras programado en Python.
+
+## 4. Configurar Grafana
+
+Para visualizar estos datos en Grafana:
+
+1. Instala el plugin de origen de datos **Infinity** o **JSON API** en tu instancia de Grafana.
+2. Añade un nuevo *Data Source* apuntando a la URL base de tu backend.
+3. En tu Dashboard de Grafana, crea un nuevo panel y selecciona el plugin JSON/Infinity.
+4. Establece la ruta al endpoint específico que quieres consultar (ej. `/stats/users` o `/stats/custom/trips`).
+5. Mapea los campos JSON entrantes a métricas de Grafana usando JSONPath (por ejemplo, `$.active_users.daily` para graficar el DAU).
