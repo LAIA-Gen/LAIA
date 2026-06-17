@@ -63,17 +63,17 @@ También puedes listar todas las métricas personalizadas registradas haciendo u
 
 Si prefieres no escribir código Python para cada métrica, LAIA te permite definirlas de forma declarativa usando un archivo YAML (por ejemplo, `metrics.yaml`).
 
-### Ejemplo de `metrics.yaml`
+### Exemple de `metrics.yaml`
 ```yaml
 metrics:
-  # Ejemplo de operación 'count'
+  # Exemple 'count'
   - name: completed_trips
     collection: offer
     type: count
     filters:
       statusOffer: "expired"
       
-  # Ejemplo de operación 'aggregate'
+  # Exemple 'aggregate'
   - name: users_by_city
     collection: user
     type: aggregate
