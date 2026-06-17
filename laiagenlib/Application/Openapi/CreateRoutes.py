@@ -6,7 +6,7 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False):
+async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True):
     await repositoryAPI.create_roles_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     modelsTypes = {}
@@ -23,6 +23,8 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                 if route.extensions.get(f'x-{action}-{model_lowercase}') or route.path == routes_info[action]['path']:
                     routes_info[action] = {
                         'path': route.path,
+                        'summary': route.summary or routes_info[action].get('summary'),
+                        'description': route.summary or routes_info[action].get('description'),
                         'openapi_extra': route.extensions
                     }
                     route.extra = False
@@ -34,7 +36,8 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
         else:
             await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
-    await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+    if use_access_rights:
+        await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     # add extra routes
 
@@ -57,7 +60,8 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
                             route_path = route.path.strip('/')
                             function_name = route.method.lower() + '_' + route_path.replace('/', '_').replace('{', '').replace('}', '')
                             if function_name not in ''.join(lines):
-                                function_code = f"""    @router.{route.method.lower()}("/{route_path}", openapi_extra={route.extensions})
+                                route_summary = route.summary or function_name.replace("_", " ").title()
+                                function_code = f"""    @router.{route.method.lower()}("/{route_path}", summary={route_summary!r}, description={route_summary!r}, openapi_extra={route.extensions})
     async def {function_name}():
         return {{"message": "This is an extra route!"}}
 

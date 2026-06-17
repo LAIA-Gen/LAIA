@@ -50,7 +50,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
     if not admin_role:
         await CreateRole.create_role({"name": "admin"}, ["admin"], repository)
 
-    @router.post("/role/", response_model=dict)
+    @router.post("/role/", response_model=dict, summary="Create Role", description="Create a new Role element.")
     async def create_element(element: Role, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -58,7 +58,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.put("/role/{element_id}", response_model=dict)
+    @router.put("/role/{element_id}", response_model=dict, summary="Update Role", description="Update an existing Role element by id.")
     async def update_element(element_id: str, values: dict, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -66,7 +66,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
         
-    @router.get("/role/{element_id}", response_model=dict)
+    @router.get("/role/{element_id}", response_model=dict, summary="Read Role", description="Read an existing Role element by id.")
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -74,7 +74,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.delete("/role/{element_id}", response_model=str)
+    @router.delete("/role/{element_id}", response_model=str, summary="Delete Role", description="Delete an existing Role element by id.")
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
@@ -83,7 +83,7 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-    @router.post("/roles/", response_model=dict)
+    @router.post("/roles/", response_model=dict, summary="Search Role", description="Search Role elements.")
     async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
