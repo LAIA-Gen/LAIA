@@ -1355,6 +1355,10 @@ def enum_class_from_annotation(annotation, model=None):
     return annotation if isinstance(annotation, EnumMeta) else None
     
 def flatten_type(t) -> str:
+    if isinstance(t, str):
+        t = re.sub(r'Annotated\[\s*ObjectId\s*,\s*[^\]]+\s*\]', 'str', t)
+        t = t.replace('ObjectId', 'str')
+
     origin = get_origin(t)
     args = get_args(t)
 
