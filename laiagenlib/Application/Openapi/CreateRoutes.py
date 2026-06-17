@@ -6,7 +6,7 @@ from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.Shared.Utils.ImportModel import import_model
 from ...Domain.Shared.Utils.logger import _logger
 
-async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False):
+async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: ModelRepository=None, openapi: OpenAPI=None, models_path: str="", routes_path: str="", jwtSecretKey: str='secret_key', auth_required: bool = False, use_access_rights: bool = True):
     await repositoryAPI.create_roles_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     modelsTypes = {}
@@ -34,7 +34,8 @@ async def create_crud_routes(repositoryAPI: OpenapiRepository=None, repository: 
         else:
             await repositoryAPI.create_routes(repository, model=model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
-    await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+    if use_access_rights:
+        await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     # add extra routes
 

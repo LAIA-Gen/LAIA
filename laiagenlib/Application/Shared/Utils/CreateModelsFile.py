@@ -21,6 +21,7 @@ def create_models_file(input_file="openapi.yaml", output_file="model.py", models
 from pydantic import ConfigDict
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.LaiaUser.LaiaUser import LaiaUser
+from laiagenlib.Domain.Shared.Types.objectid_annotation import ObjectIdPydanticAnnotation
 from laiagenlib.Domain.GeoJSON.Geometry import Type, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon"""
 
     with open(output_file, 'r') as f:
