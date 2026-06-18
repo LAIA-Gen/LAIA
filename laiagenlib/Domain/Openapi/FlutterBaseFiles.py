@@ -799,10 +799,13 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         relation = frontend_details.get('relation')
         if relation:
           is_list = 'List[' in str(prop_type) or 'list[' in str(prop_type)
+          is_optional = 'Optional[' in str(prop_type) or 'None' in str(prop_type)
           if is_list:
             frontend_details['widget'] = f"{relation}MultiFieldWidget"
+            dart_prop_type = 'List<dynamic>?' if is_optional else 'List<dynamic>'
           else:
             frontend_details['widget'] = f"{relation}FieldWidget"
+            dart_prop_type = 'dynamic?' if is_optional else 'dynamic'
         for key, value in frontend_details.items():
           if isinstance(value, bool):
             fields += f"{key}: {str(value).lower()}, "
