@@ -1,7 +1,24 @@
 
 metrics:
-  - name: expired_trips
+  - name: expired_offers
     collection: offer
     type: count
     filters:
       statusOffer: expired
+
+  - name: active_offers
+    collection: offer
+    type: count
+    filters:
+      statusOffer: active
+
+  - name: offers_by_status
+    collection: offer
+    type: aggregate
+    pipeline:
+      - $group:
+          _id: "$statusOffer"
+          total:
+            $sum: 1
+      - $sort:
+          total: -1
