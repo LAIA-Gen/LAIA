@@ -68,6 +68,6 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = await CRUDEmailController(smtp_config, repository, jwtSecretKey)
         self.api.include_router(router)
 
-    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository):
-        router = RundeckController(smtp_config=smtp_config, repository=repository)
+    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
+        router = RundeckController(smtp_config=smtp_config, repository=repository, jwtSecretKey=jwtSecretKey)
         self.api.include_router(router)

@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from ...Application.Hooks.Lambdas.SendMailLambda import send_mail_lambda
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
+from ...Application.LaiaUser import JWTToken
+from ...Domain.LaiaUser.Role import Role
+from ...Application.LaiaBaseModel import ReadLaiaBaseModel
 from ...Domain.Shared.Utils.logger import _logger
 
 
@@ -27,13 +31,44 @@ class BulkEmailResponse(BaseModel):
     errors: List[str] = []
 
 
-def RundeckController(smtp_config: dict, repository: ModelRepository):
+def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretKey: str):
     router = APIRouter(tags=["Hooks"])
+
+    http_bearer = HTTPBearer(auto_error=False)
+
+    def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
+        return credentials.credentials if credentials else None
+
+    async def verify_admin(token: str = Depends(get_token)):
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing or invalid authorization header")
+        
+        try:
+            payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
+            user_roles_ids = payload.get("user_roles") or []
+            
+            user_roles = []
+            for role in user_roles_ids:
+                if isinstance(role, str) and len(role) != 24:
+                    user_roles.append(role)
+                else:
+                    user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
+                    user_roles.append(user_role['name'])
+            
+            if "admin" not in user_roles:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin token required")
+                
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+        
+        return True
+
 
     @router.post(
         "/api/hooks/send-bulk-email/",
         response_model=BulkEmailResponse,
-        summary="Envia emails massivament (per Rundeck o tasques programades)"
+        summary="Envia emails massivament (per Rundeck o tasques programades)",
+        dependencies=[Depends(verify_admin)]
     )
     async def send_bulk_email(request: BulkEmailRequest):
         """
