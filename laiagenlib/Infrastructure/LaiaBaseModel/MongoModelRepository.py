@@ -305,8 +305,16 @@ class MongoModelRepository(ModelRepository):
         collection = self.db[model_name]
         try:
             cursor = collection.aggregate(pipeline)
-            results = list_serial(cursor)
+            # Fetch raw dicts, convert _id to id if present
+            results = []
+            for item in cursor:
+                if '_id' in item:
+                    item['id'] = str(item['_id'])
+                    del item['_id']
+                results.append(item)
             return results
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             raise ValueError(f"Error en aggregate_items: {str(e)}")
     

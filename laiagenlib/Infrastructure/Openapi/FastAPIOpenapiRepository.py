@@ -64,8 +64,8 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = await CRUDRoleController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
-    async def create_email_routes(self, smtp_config: dict):
-        router = await CRUDEmailController(smtp_config)
+    async def create_email_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
+        router = await CRUDEmailController(smtp_config, repository, jwtSecretKey)
         self.api.include_router(router)
 
     async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository):
