@@ -46,7 +46,7 @@ def StatsController(
                     pipeline = m.get("pipeline", [])
                     def make_agg_callback(col, pipe, metric_name):
                         async def metric_callback():
-                            res = await repository.aggregate_items(col, pipe)
+                            res = list(repository.db[col].aggregate(pipe))
                             return {metric_name: res}
                         return metric_callback
                     
@@ -68,15 +68,17 @@ def StatsController(
                 else user_model.__name__.lower()
             )
             
+            collection = repository.db[model_name]
+            
             # Total users
-            _, total_users = await repository.get_items(model_name=model_name, limit=0)
+            total_users = collection.count_documents({})
 
             # Users by role
             role_pipeline = [
                 { "$unwind": { "path": "$roles", "preserveNullAndEmptyArrays": True } },
                 { "$group": { "_id": "$roles", "count": { "$sum": 1 } } }
             ]
-            roles_data = await repository.aggregate_items(model_name, role_pipeline)
+            roles_data = list(collection.aggregate(role_pipeline))
             
             roles_count = {}
             for r in roles_data:
@@ -94,14 +96,14 @@ def StatsController(
                 { "$match": { "lastLoginAt": { "$gte": one_day_ago } } },
                 { "$count": "count" }
             ]
-            dau_res = await repository.aggregate_items(model_name, dau_pipeline)
+            dau_res = list(collection.aggregate(dau_pipeline))
             dau = dau_res[0]["count"] if dau_res else 0
 
             mau_pipeline = [
                 { "$match": { "lastLoginAt": { "$gte": thirty_days_ago } } },
                 { "$count": "count" }
             ]
-            mau_res = await repository.aggregate_items(model_name, mau_pipeline)
+            mau_res = list(collection.aggregate(mau_pipeline))
             mau = mau_res[0]["count"] if mau_res else 0
 
             return JSONResponse({
