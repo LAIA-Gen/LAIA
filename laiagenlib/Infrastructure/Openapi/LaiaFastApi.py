@@ -114,11 +114,14 @@ class LaiaFastApi():
             metrics_file = os.path.join(os.path.dirname(self.openapi_path), "metrics.yaml")
             if not os.path.exists(metrics_file):
                 metrics_file = None
-            
-            class DummyUserModel:
-                __name__ = user_model_name
-                
-            self.api.include_router(StatsController(self.repository_instance, DummyUserModel, metrics_file))
+
+            self.api.include_router(
+                StatsController(
+                    self.repository_instance,
+                    user_model_name,
+                    metrics_file,
+                )
+            )
 
     def _setup_custom_openapi(self):
         api = self.api

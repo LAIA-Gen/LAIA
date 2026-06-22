@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime, timezone, timedelta
-from typing import TypeVar, Type
+from typing import TypeVar, Type, Union
 import os
 import yaml
 
@@ -12,7 +12,10 @@ from pydantic import BaseModel
 
 T = TypeVar('T', bound=BaseModel)
 
-def StatsController(repository: ModelRepository, user_model: Type[T] = None, metrics_file: str = None):
+def StatsController(
+        repository: ModelRepository,
+        user_model: Union[Type[T], str] = None,
+        metrics_file: str = None):
     router = APIRouter(tags=["Stats"])
 
     if metrics_file and os.path.exists(metrics_file):
@@ -59,7 +62,11 @@ def StatsController(repository: ModelRepository, user_model: Type[T] = None, met
             raise HTTPException(status_code=500, detail="user_model not configured for StatsController")
         
         try:
-            model_name = user_model.__name__.lower()
+            model_name = (
+                user_model.lower()
+                if isinstance(user_model, str)
+                else user_model.__name__.lower()
+            )
             
             # Total users
             _, total_users = await repository.get_items(model_name=model_name, limit=0)
