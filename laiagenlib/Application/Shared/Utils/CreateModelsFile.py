@@ -275,8 +275,10 @@ from bson import ObjectId"""
     def convert_objectid_fields(cls, v, info):
         from bson.errors import InvalidId
         try:
+            if v is None or v == "" or v == "null":
+                return None
             if isinstance(v, list):
-                return [ObjectId(x) for x in v]
+                return [ObjectId(x) for x in v if x is not None and x != "" and x != "null"]
             return ObjectId(v)
         except InvalidId as e:
             raise ValueError(f"{{info.field_name}} ==> bson.errors.InvalidId: {{str(e)}}")
