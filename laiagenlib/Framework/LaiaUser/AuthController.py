@@ -126,7 +126,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 await repository.put_item(
                     model_name=model_name,
                     item_id=user_id,
-                    update_fields={"validated": True}
+                    update_fields={"validated": True, "verified": True}
                 )
                 _logger.info(f"User {user_id} activated via direct link")
             
