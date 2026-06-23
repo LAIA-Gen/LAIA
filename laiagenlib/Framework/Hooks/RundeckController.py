@@ -1,8 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import List, Optional
 from ...Application.Hooks.Lambdas.SendMailLambda import send_mail_lambda
+from ...Application.Hooks.TripRatingEmails import (
+    DEFAULT_LOCALE,
+    DEFAULT_SUBJECT,
+    DEFAULT_TEMPLATE,
+    send_trip_rating_emails,
+)
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Application.LaiaUser import JWTToken
 from ...Domain.LaiaUser.Role import Role
@@ -29,6 +35,8 @@ class BulkEmailResponse(BaseModel):
     message: str
     sent_count: int
     errors: List[str] = []
+    count: int = 0
+    events: List[dict] = []
 
 
 def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretKey: str):
@@ -63,6 +71,26 @@ def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretK
         
         return True
 
+
+    @router.get(
+        "/trips/rating",
+        summary="Envia emails de valoracio per matches completats",
+    )
+    async def send_trip_rating(
+        dry_run: bool = Query(False, description="Prepare recipients without sending emails"),
+        force: bool = Query(False, description="Include matches already marked as emailed"),
+        days_after_event: int = Query(2, ge=0),
+    ):
+        return await send_trip_rating_emails(
+            repository=repository,
+            smtp_config=smtp_config,
+            subject=DEFAULT_SUBJECT,
+            template=DEFAULT_TEMPLATE,
+            locale=DEFAULT_LOCALE,
+            days_after_event=days_after_event,
+            force=force,
+            dry_run=dry_run,
+        )
 
     @router.post(
         "/api/hooks/send-bulk-email/",
@@ -99,6 +127,26 @@ def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretK
                     errors.append(f"Failed for {recipient.email}: {str(e)}")
 
         elif request.auto_discover:
+            if request.template == DEFAULT_TEMPLATE or request.filters.get("type") == "trip_ratings":
+                result = await send_trip_rating_emails(
+                    repository=repository,
+                    smtp_config=smtp_config,
+                    subject=request.subject,
+                    template=request.template,
+                    locale=request.locale,
+                    days_after_event=int(request.filters.get("days_after_event", 2)),
+                    force=bool(request.filters.get("force", False)),
+                    dry_run=bool(request.filters.get("dry_run", False)),
+                    review_base_url=request.filters.get("review_base_url"),
+                )
+                return BulkEmailResponse(
+                    message=result["message"],
+                    sent_count=result["sent_count"],
+                    errors=result["errors"],
+                    count=result["count"],
+                    events=result["events"],
+                )
+
             # Mode 2: Auto-discover — busca Offers i Demands
             try:
                 # Buscar Offers completades (status full/cancelled/expired)
