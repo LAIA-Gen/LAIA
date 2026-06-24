@@ -105,19 +105,21 @@ async def send_trip_rating_emails(
             mouer = await _find_by_id(repository, "user", offer.get("userId") or offer.get("owner"))
             seeker = await _find_by_id(repository, "user", demand.get("userId"))
 
-            if mouer:
-                recipients.append(("mouer", mouer))
-            else:
+            if not mouer:
                 errors.append(f"Match {match_id}: mouer user not found")
-
-            if seeker:
-                recipients.append(("seeker", seeker))
-            else:
+            if not seeker:
                 errors.append(f"Match {match_id}: seeker user not found")
 
+            if mouer and seeker:
+                recipients = [
+                    ("mouer", mouer, "seeker", seeker),
+                    ("seeker", seeker, "mouer", mouer),
+                ]
+
             match_sent = 0
-            for role, user in recipients:
+            for role, user, rated_role, rated_user in recipients:
                 user_id = _doc_id(user)
+                rated_user_id = _doc_id(rated_user)
                 email = user.get("email", "")
                 if not email:
                     errors.append(f"Match {match_id}: {role} {user_id} has no email")
@@ -131,12 +133,22 @@ async def send_trip_rating_emails(
                 context = {
                     "username": user.get("name", ""),
                     "role": role,
+                    "ratedUserId": rated_user_id,
+                    "ratedUserName": rated_user.get("name", ""),
+                    "ratedUserRole": rated_role,
                     "matchId": match_id,
                     "offerId": _doc_id(offer),
                     "demandId": _doc_id(demand),
                     "eventId": event_id,
                     "tripTitle": event.get("title", ""),
-                    "reviewUrl": _build_review_url(review_base, match_id, user_id, role),
+                    "reviewUrl": _build_review_url(
+                        review_base,
+                        match_id,
+                        user_id,
+                        role,
+                        rated_user_id,
+                        rated_role,
+                    ),
                 }
 
                 recipient_info = {
@@ -144,6 +156,9 @@ async def send_trip_rating_emails(
                     "name": user.get("name", ""),
                     "email": email,
                     "role": role,
+                    "ratedUserId": rated_user_id,
+                    "ratedUserName": rated_user.get("name", ""),
+                    "ratedUserRole": rated_role,
                     "reviewUrl": context["reviewUrl"],
                 }
                 match_entry["recipients"].append(recipient_info)
@@ -157,7 +172,7 @@ async def send_trip_rating_emails(
                 try:
                     await send_func(
                         to=email,
-                        subject=subject,
+                        subject=_rating_subject(subject, rated_user),
                         template=template,
                         context=context,
                         smtp_config=smtp_config,
@@ -270,9 +285,30 @@ def _review_base_url(review_base_url: Optional[str], smtp_config: dict) -> str:
     return DEFAULT_REVIEW_BASE_URL
 
 
-def _build_review_url(base_url: str, match_id: str, user_id: str, role: str) -> str:
+def _build_review_url(
+    base_url: str,
+    match_id: str,
+    reviewer_id: str,
+    reviewer_role: str,
+    rated_user_id: str,
+    rated_user_role: str,
+) -> str:
     separator = "&" if "?" in base_url else "?"
-    return f"{base_url}{separator}{urlencode({'matchId': match_id, 'userId': user_id, 'role': role})}"
+    query = {
+        "matchId": match_id,
+        "reviewerId": reviewer_id,
+        "reviewerRole": reviewer_role,
+        "ratedUserId": rated_user_id,
+        "ratedRole": rated_user_role,
+    }
+    return f"{base_url}{separator}{urlencode(query)}"
+
+
+def _rating_subject(default_subject: str, rated_user: dict) -> str:
+    rated_name = rated_user.get("name", "").strip()
+    if rated_name:
+        return f"Valora la teva experiència amb {rated_name}"
+    return default_subject
 
 
 def _append_unique(items: list, item: dict, key: str):

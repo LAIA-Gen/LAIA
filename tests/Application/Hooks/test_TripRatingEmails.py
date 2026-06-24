@@ -99,6 +99,19 @@ async def test_send_trip_rating_emails_sends_to_mouer_and_seeker():
     assert {email["to"] for email in sent} == {"marta@example.com", "pau@example.com"}
     assert sent[0]["template"] == "mail.valoracio.html"
     assert all("reviewUrl" in email["context"] for email in sent)
+    by_recipient = {email["to"]: email for email in sent}
+    mouer_context = by_recipient["marta@example.com"]["context"]
+    seeker_context = by_recipient["pau@example.com"]["context"]
+    assert mouer_context["role"] == "mouer"
+    assert mouer_context["ratedUserName"] == "Pau"
+    assert mouer_context["ratedUserRole"] == "seeker"
+    assert "reviewerId=mouer-1" in mouer_context["reviewUrl"]
+    assert "ratedUserId=seeker-1" in mouer_context["reviewUrl"]
+    assert seeker_context["role"] == "seeker"
+    assert seeker_context["ratedUserName"] == "Marta"
+    assert seeker_context["ratedUserRole"] == "mouer"
+    assert by_recipient["marta@example.com"]["subject"] == "Valora la teva experiència amb Pau"
+    assert by_recipient["pau@example.com"]["subject"] == "Valora la teva experiència amb Marta"
     assert repo.updates == [
         ("match", "match-1", {"ratingEmailSentAt": "2026-06-23T10:00:00+00:00"})
     ]
