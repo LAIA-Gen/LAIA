@@ -80,6 +80,10 @@ def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretK
         dry_run: bool = Query(False, description="Prepare recipients without sending emails"),
         force: bool = Query(False, description="Include matches already marked as emailed"),
         days_after_event: int = Query(2, ge=0),
+        review_base_url: Optional[str] = Query(
+            None,
+            description="Frontend URL that opens the public feedback form",
+        ),
     ):
         return await send_trip_rating_emails(
             repository=repository,
@@ -90,6 +94,7 @@ def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretK
             days_after_event=days_after_event,
             force=force,
             dry_run=dry_run,
+            review_base_url=review_base_url,
         )
 
     @router.post(

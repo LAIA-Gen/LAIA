@@ -107,6 +107,7 @@ async def test_send_trip_rating_emails_sends_to_mouer_and_seeker():
     assert mouer_context["ratedUserRole"] == "seeker"
     assert "reviewerId=mouer-1" in mouer_context["reviewUrl"]
     assert "ratedUserId=seeker-1" in mouer_context["reviewUrl"]
+    assert mouer_context["reviewUrl"].startswith("https://app.example.com/?")
     assert seeker_context["role"] == "seeker"
     assert seeker_context["ratedUserName"] == "Marta"
     assert seeker_context["ratedUserRole"] == "mouer"

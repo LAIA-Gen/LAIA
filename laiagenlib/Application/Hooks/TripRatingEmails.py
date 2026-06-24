@@ -9,7 +9,7 @@ from ...Domain.Shared.Utils.logger import _logger
 DEFAULT_SUBJECT = "Valora la teva experiencia a MouCultura"
 DEFAULT_TEMPLATE = "mail.valoracio.html"
 DEFAULT_LOCALE = "ca"
-DEFAULT_REVIEW_BASE_URL = "https://moucultura.cat/feedback"
+DEFAULT_REVIEW_BASE_URL = "https://moucul.tilingpt.com/"
 
 
 async def send_trip_rating_emails(
@@ -281,7 +281,7 @@ def _review_base_url(review_base_url: Optional[str], smtp_config: dict) -> str:
         return review_base_url
     configured = (smtp_config or {}).get("review_base_url") or (smtp_config or {}).get("frontend_url")
     if configured:
-        return f"{configured.rstrip('/')}/feedback"
+        return f"{configured.rstrip('/')}/"
     return DEFAULT_REVIEW_BASE_URL
 
 
