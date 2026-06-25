@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status, Body, Depends
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import RedirectResponse
 from typing import TypeVar, Optional, List
 from pydantic import BaseModel
 
@@ -110,6 +111,26 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
             return await VerifyLaiaUser.verify(token, model, repository, jwtSecretKey)
         except HTTPException as e:
             raise e
+        except Exception as e:
+            handle_exception(e)
+            
+    @router.get(f"/auth/activate/{model_name}/{{user_id}}", summary="Activate user and redirect to frontend")
+    async def activate_user(user_id: str):
+        """
+        Activa directament l'usuari usant el seu ID
+        i redirigeix a l'URL de producció o frontend corresponent.
+        """
+        try:
+            user = await repository.get_item(model_name=model_name, item_id=user_id)
+            if user and not user.get("validated", False):
+                await repository.put_item(
+                    model_name=model_name,
+                    item_id=user_id,
+                    update_fields={"validated": True, "verified": True}
+                )
+                _logger.info(f"User {user_id} activated via direct link")
+            
+            return RedirectResponse(url="https://moucul.tilingpt.com/")
         except Exception as e:
             handle_exception(e)
         

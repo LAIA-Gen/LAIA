@@ -13,6 +13,8 @@ from ...Domain.Shared.Utils.logger import _logger
 from fastapi.encoders import jsonable_encoder
 from typing import get_args
 
+from ...Application.Hooks.HookExecutor import execute_hooks
+
 def _contains_objectid(ann) -> bool:
     if ann is ObjectId:
         return True
@@ -51,7 +53,7 @@ def convert_objectid_fields(model, values: dict) -> dict:
                     pass
     return values
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = ""):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            
@@ -91,6 +93,10 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
 
     try:
         updated_element = await repository.put_item(model_name, element_id, updated_values)
+        
+        # Execute postupdate hooks (e.g. sendMail on status change)
+        await execute_hooks("postupdate", model, updated_element, smtp_config, repository)
+        
     except KeyError as e:
         _logger.exception("Field error while updating %s: %s", model.__name__, e)
         raise ValueError(f"Invalid field(s) in update: {e}") from e

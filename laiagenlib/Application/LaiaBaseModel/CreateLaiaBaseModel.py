@@ -11,7 +11,9 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
-from ...Application.Shared.Utils.SendEmail import send_email
+from ...Application.Hooks.HookExecutor import execute_hooks
+# Auto-register sendMail lambda
+import laiagenlib.Application.Hooks.Lambdas.SendMailLambda
 from bson import ObjectId
 
 async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None):
@@ -25,7 +27,7 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
     default_fields = extra.get("x-frontend-defaultFields", [])
     first_field = default_fields[0] if default_fields else None
 
-    x_mail_on_register = extra.get("x-mail-on-register", False)
+
 
     if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "create", repository)
@@ -53,26 +55,12 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
 
     created_element = await repository.post_item(model_name, clean_element)
 
-    if x_mail_on_register:
-        try:
-            to_address = clean_element['email']
-            if to_address:
-                await send_email(
-                    to=to_address,
-                    subject=f"Registro completado en {model.__name__}",
-                    template="welcome.html",
-                    variables={
-                        "username": clean_element['name'],
-                        "link": f"https://laiagen.io/verify/{created_element['id']}"
-                    },
-                    smtp_config=smtp_config
-                )
-                _logger.info(f"Email de bienvenida enviado a {to_address}")
-            else:
-                _logger.warning(f"No se encontró campo 'email' en {model.__name__}")
-        except Exception as e:
-            _logger.error(f"Error al enviar email de registro: {str(e)}")
-        
+    # Execute postsave hooks (e.g. sendMail on register)
+    await execute_hooks(
+        "postsave", model,
+        {**clean_element, "id": created_element.get("id", "")},
+        smtp_config, repository
+    )
 
     if "admin" not in user_roles and use_access_rights:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')

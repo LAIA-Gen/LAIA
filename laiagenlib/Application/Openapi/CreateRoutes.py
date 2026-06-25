@@ -70,7 +70,8 @@ async def create_crud_routes(
     await repositoryAPI.create_shard_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     if smtp_config and smtp_config.get("host"):
-        await repositoryAPI.create_email_routes(smtp_config)
+        await repositoryAPI.create_email_routes(smtp_config, repository, jwtSecretKey)
+        await repositoryAPI.create_hook_routes(smtp_config, repository, jwtSecretKey)
 
     # add extra routes
 

@@ -33,7 +33,7 @@ async def verify(token: str, model: LaiaUser, repository: ModelRepository, jwtSe
         await repository.put_item(
             model_name=model.__name__.lower(),
             item_id=user_id,
-            update_fields={"validated": True}
+            update_fields={"validated": True, "verified": True}
         )
         _logger.info("User validated")
     else:

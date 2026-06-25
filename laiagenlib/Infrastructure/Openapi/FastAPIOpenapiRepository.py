@@ -3,6 +3,7 @@ from typing import TypeVar, Type, Dict
 from pydantic import BaseModel
 from fastapi import FastAPI
 
+from ...Framework.Hooks.RundeckController import RundeckController
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
 from ...Framework.Storage.CRUDStorageController import CRUDStorageController
 from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
@@ -50,7 +51,7 @@ class FastAPIOpenapiRepository(OpenapiRepository):
             except Exception as e:
                 _logger.info(e)
         auth_router = AuthController(repository=repository, model=model, jwtSecretKey=jwtSecretKey, jwtRefreshSecretKey=jwtRefreshSecretKey, smtp_config=smtp_config)
-        user_router = CRUDLaiaUserController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+        user_router = CRUDLaiaUserController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, smtp_config=smtp_config)
         self.api.include_router(auth_router)
         self.api.include_router(user_router)
 
@@ -62,12 +63,16 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDShardController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
+    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
+        router = RundeckController(smtp_config=smtp_config, repository=repository, jwtSecretKey=jwtSecretKey)
+        self.api.include_router(router)
+
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = await CRUDRoleController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
-    async def create_email_routes(self, smtp_config: dict):
-        router = await CRUDEmailController(smtp_config)
+    async def create_email_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
+        router = await CRUDEmailController(smtp_config, repository, jwtSecretKey)
         self.api.include_router(router)
 
     async def create_geolocation_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
