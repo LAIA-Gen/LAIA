@@ -36,7 +36,8 @@ class LaiaFastApi():
             smtp_user: str = "",
             smtp_password: str = "",
             smtp_tls: bool = True,
-            templates_dir: str = "email_templates"):
+            templates_dir: str = "email_templates",
+            add_geolocation: bool = True):
         
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
@@ -96,7 +97,31 @@ class LaiaFastApi():
             endpoint_url_storage, 
             access_key_storage, 
             secret_key_storage,
-            smtp_config=self.smtp_config)
+            smtp_config=self.smtp_config,
+            add_geolocation=add_geolocation)
+
+        # Inject Stats automatically into the LAIA FastApi
+        # Note: GeocodingController is already registered via FastAPIOpenapiRepository.create_geolocation_routes
+        from ...Framework.Stats.StatsController import StatsController
+
+        user_model_name = None
+        for model in self.openapi.models:
+            if model.extensions.get(f'x-auth'):
+                user_model_name = model.model_name
+                break
+        
+        if user_model_name:
+            metrics_file = os.path.join(os.path.dirname(self.openapi_path), "metrics.yaml")
+            if not os.path.exists(metrics_file):
+                metrics_file = None
+
+            self.api.include_router(
+                StatsController(
+                    self.repository_instance,
+                    user_model_name,
+                    metrics_file,
+                )
+            )
 
     def _setup_custom_openapi(self):
         api = self.api

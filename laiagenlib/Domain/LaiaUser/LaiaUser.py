@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 
@@ -16,3 +17,4 @@ class LaiaUser(LaiaBaseModel):
         x_frontend_editable=True,
         x_frontend_placeholder="Introduce la región"
     )
+    lastLoginAt: Optional[datetime] = None

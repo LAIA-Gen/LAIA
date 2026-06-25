@@ -55,9 +55,9 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     #     "path": "C:/Users/joelm/OneDrive/Escritorio/LaiaBackend/laia_flutter_gen/laia_riverpod_custom_generator"
     # }
 
-    # pubspec["dev_dependencies"]["laia_widget_generator"] = {
-    #     "path": "C:/Users/joelm/OneDrive/Escritorio/LaiaBackend/laia_flutter_gen/laia_widget_generator"
-    # }
+    pubspec["dev_dependencies"]["laia_widget_generator"] = {
+        "path": "C:/Users/joelm/OneDrive/Escritorio/LaiaBackend/laia_flutter_gen/laia_widget_generator"
+     }
 
     pubspec["dev_dependencies"]["laia_riverpod_custom_generator"] = {
         "path": "/laia_flutter_gen/laia_riverpod_custom_generator"

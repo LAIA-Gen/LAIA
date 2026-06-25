@@ -1,0 +1,98 @@
+
+metrics:
+  - name: expired_offers
+    collection: offer
+    type: count
+    filters:
+      statusOffer: expired
+
+  - name: active_offers
+    collection: offer
+    type: count
+    filters:
+      statusOffer: active
+
+  - name: offers_by_status
+    collection: offer
+    type: aggregate
+    pipeline:
+      - $group:
+          _id: "$statusOffer"
+          total:
+            $sum: 1
+      - $sort:
+          total: -1
+
+  - name: trip_stats
+    collection: site
+    type: aggregate
+    params:
+      activityId:
+        type: objectId
+        required: true
+    pipeline:
+      - $match:
+          activityId: "{{activityId}}"
+      - $lookup:
+          from: offer
+          localField: _id
+          foreignField: siteId
+          as: offers
+      - $lookup:
+          from: demand
+          localField: offers._id
+          foreignField: offerId
+          as: demands
+      - $facet:
+          totals:
+            - $project:
+                offers_count:
+                  $size: "$offers"
+                demands_count:
+                  $size: "$demands"
+                accepted_users_count:
+                  $sum:
+                    $map:
+                      input: "$offers"
+                      as: offer
+                      in:
+                        $size:
+                          $ifNull:
+                            - "$$offer.acceptedUserIds"
+                            - []
+            - $group:
+                _id: null
+                total_sites:
+                  $sum: 1
+                total_offers:
+                  $sum: "$offers_count"
+                total_demands:
+                  $sum: "$demands_count"
+                total_accepted_users:
+                  $sum: "$accepted_users_count"
+            - $project:
+                _id: 0
+                total_sites: 1
+                total_offers: 1
+                total_demands: 1
+                total_accepted_users: 1
+          offers_by_status:
+            - $unwind:
+                path: "$offers"
+                preserveNullAndEmptyArrays: false
+            - $group:
+                _id: "$offers.statusOffer"
+                total:
+                  $sum: 1
+            - $sort:
+                total: -1
+          demands_by_status:
+            - $unwind:
+                path: "$demands"
+                preserveNullAndEmptyArrays: false
+            - $group:
+                _id: "$demands.statusDemand"
+                total:
+                  $sum: 1
+            - $sort:
+                total: -1

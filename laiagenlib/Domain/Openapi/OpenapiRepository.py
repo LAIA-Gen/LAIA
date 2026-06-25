@@ -31,3 +31,6 @@ class OpenapiRepository:
 
     async def create_email_routes(smtp_config: dict = None):
         pass
+
+    async def create_geolocation_routes(repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
+        pass

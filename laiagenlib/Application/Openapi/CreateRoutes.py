@@ -21,9 +21,13 @@ async def create_crud_routes(
         endpoint_url_storage: str = "", 
         access_key_storage: str = "", 
         secret_key_storage: str = "", 
-        smtp_config: dict = None):
+        smtp_config: dict = None,
+        add_geolocation: bool = False):
     
     await repositoryAPI.create_roles_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
+    
+    if add_geolocation:
+        await repositoryAPI.create_geolocation_routes(repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
 
     modelsTypes = {}
     for openapiModel in openapi.models:
