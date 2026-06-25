@@ -3,6 +3,7 @@ from typing import TypeVar, Type, Dict
 from pydantic import BaseModel
 from fastapi import FastAPI
 
+from ...Framework.Hooks.RundeckController import RundeckController
 from ...Framework.LaiaBaseModel.CRUDLaiaBaseModelController import CRUDLaiaBaseModelController
 from ...Framework.Storage.CRUDStorageController import CRUDStorageController
 from ...Framework.AccessRights.CRUDAccessRightsController import CRUDAccessRightsController
@@ -11,10 +12,12 @@ from ...Framework.LaiaUser.AuthController import AuthController
 from ...Framework.LaiaUser.CRUDLaiaUserController import CRUDLaiaUserController
 from ...Framework.LaiaUser.CRUDRoleController import CRUDRoleController
 from ...Framework.Email.CRUDEmailController import CRUDEmailController
-from ...Framework.Hooks.RundeckController import RundeckController
+from ...Framework.Shared.GeocodingController import GeocodingController
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
+from ...Domain.Openapi.RoutesInfo import get_routes_info
 from ...Domain.LaiaUser.Role import Role
+from ...Domain.GeoLocation.GeoLocation import GeoLocation
 from ...Application.LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from ...Application.LaiaBaseModel.SearchLaiaBaseModel import search_laia_base_model
 from ...Domain.Shared.Utils.logger import _logger
@@ -60,6 +63,10 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDShardController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
 
+    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
+        router = RundeckController(smtp_config=smtp_config, repository=repository, jwtSecretKey=jwtSecretKey)
+        self.api.include_router(router)
+
     async def create_roles_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
         router = await CRUDRoleController(repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
         self.api.include_router(router)
@@ -68,6 +75,9 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = await CRUDEmailController(smtp_config, repository, jwtSecretKey)
         self.api.include_router(router)
 
-    async def create_hook_routes(self, smtp_config: dict, repository: ModelRepository, jwtSecretKey: str='secret_key'):
-        router = RundeckController(smtp_config=smtp_config, repository=repository, jwtSecretKey=jwtSecretKey)
-        self.api.include_router(router)
+    async def create_geolocation_routes(self, repository: ModelRepository=None, auth_required: bool = False, jwtSecretKey: str='secret_key'):
+        routes_info = get_routes_info('geolocation')
+        crud_router = CRUDLaiaBaseModelController(repository=repository, model=GeoLocation, update_model=GeoLocation, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=False, use_ontology=False)
+        self.api.include_router(crud_router)
+        geocoding_router = GeocodingController()
+        self.api.include_router(geocoding_router)
