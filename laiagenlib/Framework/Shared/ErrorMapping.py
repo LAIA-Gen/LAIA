@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from bson.errors import InvalidId
+from pymongo.errors import DuplicateKeyError
 
 
 def handle_exception(e: Exception):
@@ -42,6 +43,12 @@ def handle_exception(e: Exception):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+
+    if isinstance(e, DuplicateKeyError):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Duplicate entry: {str(e)}"
         )
 
     raise HTTPException(
