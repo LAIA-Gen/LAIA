@@ -133,7 +133,7 @@ class MongoModelRepository(ModelRepository):
                             actual_col = c
                             break
 
-                temp_field = f"_{result_field}_populated"
+                temp_field = f"_{result_field.replace('.', '_')}_populated"
                 
                 # Conversion
                 lookup_stages.append({
