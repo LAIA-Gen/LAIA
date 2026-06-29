@@ -75,6 +75,7 @@ def RundeckController(smtp_config: dict, repository: ModelRepository, jwtSecretK
     @router.get(
         "/trips/rating",
         summary="Envia emails de valoracio per matches completats",
+        dependencies=[Depends(verify_admin)]
     )
     async def send_trip_rating(
         dry_run: bool = Query(False, description="Prepare recipients without sending emails"),
