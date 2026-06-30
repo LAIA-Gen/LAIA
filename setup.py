@@ -7,7 +7,7 @@ setup(
     package_data={
         "laiagenlib": ["**/*.png", "**/*.jpg", "**/*.svg"], 
     },
-    version='0.9.47',
+    version='0.9.48',
     description='An AI application generator engine',
     author='Me',
     install_requires=['pymongo', 'pydantic==2.8.0', 'datamodel-code-generator==0.25.8', 'fastapi==0.111.0', 'bcrypt', 'asyncinit', 'pyjwt'],
