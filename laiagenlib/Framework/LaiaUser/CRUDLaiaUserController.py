@@ -113,8 +113,15 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         is_public = is_public_operation(model, "update")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        
+        use_access_rights = True
+        if auth_required and not is_public:
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
+            if str(user_id) == str(element_id):
+                use_access_rights = False
+
         try:
-            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard, smtp_config)
+            return await UpdateLaiaUser.update_laia_user(element_id, values, model, user_roles, repository, user_shard, smtp_config, use_access_rights)
         except Exception as e:
             handle_exception(e)
         
@@ -123,8 +130,15 @@ def CRUDLaiaUserController(repository: ModelRepository=None, model: T=None, upda
         is_public = is_public_operation(model, "read")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        
+        use_access_rights = True
+        if auth_required and not is_public:
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
+            if str(user_id) == str(element_id):
+                use_access_rights = False
+
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, True, user_shard)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
         except Exception as e:
             handle_exception(e)
 
