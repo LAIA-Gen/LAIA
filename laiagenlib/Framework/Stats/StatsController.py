@@ -234,7 +234,7 @@ def StatsController(
     async def get_custom_metric(metric_name: str, request: Request):
         return await _get_custom_metric_response(metric_name, request)
 
-    @router.get("/stats/custom/{metric_name}/by-activity")
+    @router.get("/stats/custom/{metric_name}/by-event")
     async def get_custom_metric_by_activity(
             metric_name: str,
             request: Request,
