@@ -7,11 +7,12 @@ from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
-async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = ""):
+async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", user_id: str = ""):
     _logger.info(f"Getting {model.__name__} with ID: {element_id}")
 
     model_name = model.__name__.lower()
 
+    access_rights_list = []
     if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "read", repository)
     try:
@@ -26,6 +27,21 @@ async def read_laia_base_model(element_id: str, model: Type, user_roles: List[st
             raise ValueError("El usuario no tiene shard asignado, no puede leer este modelo shard")
         if item.get(shard_key) != user_shard:
             raise ValueError("No tienes permiso para leer un registro de otra shard")
+
+    if "admin" not in user_roles and use_access_rights and not any(not access_right.owner for access_right in access_rights_list):
+        owner_fields = extra.get("x-owner-fields", ["owner"]) if isinstance(extra, dict) else ["owner"]
+        is_owner = False
+        for field in owner_fields:
+            val = item.get(field)
+            if isinstance(val, list):
+                if any(str(v) == str(user_id) for v in val):
+                    is_owner = True
+                    break
+            elif str(val) == str(user_id):
+                is_owner = True
+                break
+        if not is_owner:
+            raise PermissionError("No tienes permiso para leer este registro, no eres el propietario")
 
     if "admin" not in user_roles and use_access_rights:
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')

@@ -117,8 +117,11 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         is_public = is_public_operation(model, "update")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        user_id = ''
+        if auth_required:
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
+            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard, smtp_config, user_id=str(user_id))
         except Exception as e:
             handle_exception(e)
         
@@ -127,8 +130,11 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         is_public = is_public_operation(model, "read")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        user_id = ''
+        if auth_required:
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard, user_id=str(user_id))
         except Exception as e:
             handle_exception(e)
 
@@ -137,8 +143,11 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         is_public = is_public_operation(model, "delete")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        user_id = ''
+        if auth_required:
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard)
+            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard, user_id=str(user_id))
             return f"{model_name} element deleted successfully"
         except Exception as e:
             handle_exception(e)

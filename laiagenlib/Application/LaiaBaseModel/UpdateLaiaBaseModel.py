@@ -53,7 +53,7 @@ def convert_objectid_fields(model, values: dict) -> dict:
                     pass
     return values
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None, user_id: str = ""):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            
@@ -67,16 +67,16 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
 
     model_name = model.__name__.lower()
 
+    access_rights_list = []
     if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "update", repository)
         await check_access_rights_of_fields(model, 'fields_edit', updated_values, access_rights_list)
 
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
-    if extra.get("x-shard") and "admin" not in user_roles:
-        shard_key = extra.get("x-shard-key", "region")
-        if not user_shard or user_shard == "":
-            raise ValueError("El usuario no tiene shard asignado, no puede actualizar este modelo shard")
+    needs_shard_check = extra.get("x-shard") and "admin" not in user_roles
+    needs_owner_check = "admin" not in user_roles and use_access_rights and not any(not access_right.owner for access_right in access_rights_list)
 
+    if needs_shard_check or needs_owner_check:
         current_items = await repository.get_items(model_name, filters={"_id": ObjectId(element_id)}, limit=1)
         if isinstance(current_items, tuple):
             current = current_items[0]
@@ -86,10 +86,29 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
             raise ValueError(f"{model.__name__} with id {element_id} not found")
 
         current_doc = current[0]
-        if current_doc.get(shard_key) != user_shard:
-            raise ValueError("No tienes permiso para actualizar un registro de otra shard")
 
-        updated_values[shard_key] = user_shard
+        if needs_shard_check:
+            shard_key = extra.get("x-shard-key", "region")
+            if not user_shard or user_shard == "":
+                raise ValueError("El usuario no tiene shard asignado, no puede actualizar este modelo shard")
+            if current_doc.get(shard_key) != user_shard:
+                raise ValueError("No tienes permiso para actualizar un registro de otra shard")
+            updated_values[shard_key] = user_shard
+            
+        if needs_owner_check:
+            owner_fields = extra.get("x-owner-fields", ["owner"]) if isinstance(extra, dict) else ["owner"]
+            is_owner = False
+            for field in owner_fields:
+                val = current_doc.get(field)
+                if isinstance(val, list):
+                    if any(str(v) == str(user_id) for v in val):
+                        is_owner = True
+                        break
+                elif str(val) == str(user_id):
+                    is_owner = True
+                    break
+            if not is_owner:
+                raise PermissionError("No tienes permiso para actualizar este registro, no eres el propietario")
 
     try:
         updated_element = await repository.put_item(model_name, element_id, updated_values)

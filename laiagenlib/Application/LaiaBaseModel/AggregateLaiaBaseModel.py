@@ -38,7 +38,12 @@ async def aggregate_laia_base_model(
         _logger.info("USER ID: " + str(user_id))
         _logger.info(access_rights_list)
         if not any(not access_right.owner for access_right in access_rights_list):
-            match_stage = {"$match": {"owner": ObjectId(user_id)}}
+            extra_tmp = getattr(model, "model_config", {}).get("json_schema_extra", {})
+            owner_fields = extra_tmp.get("x-owner-fields", ["owner"]) if isinstance(extra_tmp, dict) else ["owner"]
+            if len(owner_fields) == 1:
+                match_stage = {"$match": {owner_fields[0]: ObjectId(user_id)}}
+            else:
+                match_stage = {"$match": {"$or": [{field: ObjectId(user_id)} for field in owner_fields]}}
             pipeline.insert(0, match_stage)
 
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
