@@ -28,7 +28,11 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         _logger.info(access_rights_list)
         if not any(not access_right.owner for access_right in access_rights_list):
             _logger.info("HEY")
-            filters["owner"] = ObjectId(user_id)
+            owner_fields = extra.get("x-owner-fields", ["owner"])
+            if len(owner_fields) == 1:
+                filters[owner_fields[0]] = ObjectId(user_id)
+            else:
+                filters["$or"] = [{field: ObjectId(user_id)} for field in owner_fields]
 
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")

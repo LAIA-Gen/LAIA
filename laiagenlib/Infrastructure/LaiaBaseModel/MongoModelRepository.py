@@ -292,7 +292,7 @@ class MongoModelRepository(ModelRepository):
         
         if updated_item:
             return individual_serial(updated_item)
-        raise Exception
+        raise ValueError(f"{model_name} with ID {item_id} not found")
 
     async def delete_item(self, model_name: str, item_id: str):
         collection = self.db[model_name]
