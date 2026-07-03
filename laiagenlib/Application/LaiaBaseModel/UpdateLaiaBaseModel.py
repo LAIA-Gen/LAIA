@@ -113,7 +113,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
                     is_owner = True
                     break
             if not is_owner:
-                raise PermissionError("No tienes permiso para actualizar este registro, no eres el propietario")
+                raise PermissionError("You do not have permission to update this record; you are not the owner")
 
     try:
         updated_element = await repository.put_item(model_name, element_id, updated_values)
