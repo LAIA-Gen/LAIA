@@ -1,4 +1,7 @@
-from typing import Type, List
+import re
+import sys
+from enum import EnumMeta
+from typing import Annotated, Type, List, Union, get_args, get_origin
 from pydantic import BaseModel
 from .OpenapiModel import OpenAPIModel
 from ..AccessRights.AccessRights import AccessRight
@@ -6,14 +9,28 @@ from ..LaiaUser.Role import Role
 from ...Domain.Shared.Utils.logger import _logger
 
 def main_dart(app_name: str, models: List[OpenAPIModel]):
-    auth_models = [model for model in models if model.extensions.get('x-auth')]
-    import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in auth_models])
-    auth_screens = ', '.join([f"'{model.model_name}': {model.model_name}LoginWidget()" for model in auth_models])
+    auth_models = [model for model in models if model.extensions.get('x-auth') and not model.model_name.startswith("Body_") and not model.model_name.endswith("Update")]
+    
+    clean_auth_models = []
+    seen = set()
+    for m in auth_models:
+        c_name = m.model_name.replace('-Input', '').replace('-Output', '')
+        if c_name not in seen:
+            seen.add(c_name)
+            clean_auth_models.append((c_name, m))
+
+    import_statements = '\n'.join([f"import 'package:{app_name}/models/{name.lower()}.dart';" for name, _ in clean_auth_models])
+    auth_screens = ', '.join([f"'{name}': {name}LoginWidget()" for name, _ in clean_auth_models])
 
     file_content = f"""{import_statements}
-import 'package:{app_name}/screens/home.dart';"""+"""
+import 'package:{app_name}/screens/home.dart';"""+f"""
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:{app_name}/theme/theme_app.dart';"""+"""
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(
@@ -29,28 +46,30 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'LAIA',
-      theme: ThemeData(
-        appBarTheme: const AppBarTheme(
-          color:  Color.fromARGB(255, 255, 255, 255),
-        ), 
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.brown),
-        scaffoldBackgroundColor: const Color.fromARGB(244, 255, 255, 255),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.black),
-          bodyMedium: TextStyle(color: Colors.black),
-        ),
-      ),
-      home: """+f"""{ "SplashScreen()" if auth_models else "Home()" }"""+""",
+      debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
+      theme: AppTheme.light(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        FlutterQuillLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en'),
+        Locale('es'),
+      ],
+      home: """+f"""{ "SplashScreen()" if clean_auth_models else "Home()" }"""+""",
     );
   }
 }
 """
-    if auth_models:
+    if clean_auth_models:
       file_content = file_content + """
 class SplashScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final AsyncValue<bool> tokenVerificationResult = ref.watch(verifyToken"""+f"""{auth_models[0].model_name}"""+"""Provider);
+    final AsyncValue<bool> tokenVerificationResult = ref.watch(verifyToken"""+f"""{clean_auth_models[0][0]}"""+"""Provider);
 
     return Scaffold(
       body: tokenVerificationResult.when(
@@ -58,7 +77,7 @@ class SplashScreen extends ConsumerWidget {
           if (isValid) {
             return Home();
           } else {
-            return """+f"""{ ''.join([auth_models[0].model_name, 'LoginWidget();']) if len(auth_models) == 1 else f"DynamicLogInScreen(widgetMap: const {{ {auth_screens} }});"}"""+"""
+            return """+f"""{ ''.join([clean_auth_models[0][0], 'LoginWidget();']) if len(clean_auth_models) == 1 else f"DynamicLogInScreen(widgetMap: const {{ {auth_screens} }});"}"""+"""
           }
         },
         loading: () => Center(
@@ -75,7 +94,7 @@ class SplashScreen extends ConsumerWidget {
     return file_content
 
 def api_dart():
-    return """const String baseURL = 'http://localhost:8000';
+    return """const String baseURL = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8000');
 //const String baseURL = 'http://10.0.2.2:8000';
 
 // Android emmulator
@@ -97,6 +116,7 @@ class Styles {
 
 def generic_dart(app_name: str):
     return f"""import 'package:laia_annotations/laia_annotations.dart';
+import 'package:{app_name}/theme/theme_app.dart';
 import 'package:{app_name}/config/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,6 +126,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutter_map;
 import 'package:{app_name}/models/geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'dart:convert';"""+"""
 
 part 'generic_widgets.g.dart';
@@ -114,16 +135,213 @@ part 'generic_widgets.g.dart';
 class GenericWidgets {}
 """
 
-def home_dart(app_name: str, models: List[OpenAPIModel]):
-    laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
-    import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.model_name.lower()}.dart';" for model in models])
+def http_client(app_name: str) -> str:
+    return f"""export 'package:http/http.dart'
+    hide Client, get, post, put, delete, patch, head;
+
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/main.dart';
+import 'package:{app_name}/models/user.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class Client extends http.BaseClient {{
+  final http.Client _inner;
+
+  Client([http.Client? inner]) : _inner = inner ?? http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {{
+    Uint8List? savedBody;
+    if (request is http.Request) {{
+      savedBody = request.bodyBytes;
+    }}
+
+    var streamedResponse = await _inner.send(request);
+    var response = await http.Response.fromStream(streamedResponse);
+
+    print('INTERCEPTOR: status code ${{response.statusCode}}');
+    print('INTERCEPTOR: body ${{response.body}}');
+
+    try {{
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded.containsKey("refresh_token")) {{
+        final refreshToken = decoded["refresh_token"];
+        if (refreshToken is String && refreshToken.isNotEmpty) {{
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString("refresh_token", refreshToken);
+          print("Nuevo refresh_token guardado en SharedPreferences");
+        }}
+      }}
+    }} catch (e) {{
+      print("No se pudo parsear el body como JSON: $e");
+    }}
+
+    if (response.statusCode == 401 ||
+        (_hasExpiredToken(response.body))) {{
+      print("Interceptado 401 - intentando refresh token...");
+      final newToken = await handle401();
+      if (newToken != null) {{
+        final cloned = await _cloneRequest(request, newToken, savedBody);
+        streamedResponse = await _inner.send(cloned);
+        response = await http.Response.fromStream(streamedResponse);
+      }}
+    }}
+
+    final newStream =
+        Stream<List<int>>.fromIterable([utf8.encode(response.body)]);
+    return http.StreamedResponse(
+      newStream,
+      response.statusCode,
+      headers: response.headers,
+      request: streamedResponse.request,
+      reasonPhrase: streamedResponse.reasonPhrase,
+    );
+  }}
+
+  bool _hasExpiredToken(String body) {{
+    try {{
+      final decoded = jsonDecode(body);
+      return decoded is Map && decoded['detail'] == "401: Token has expired";
+    }} catch (_) {{
+      return false;
+    }}
+  }}
+
+  Future<http.BaseRequest> _cloneRequest(
+    http.BaseRequest request,
+    String newToken,
+    Uint8List? savedBody,
+  ) async {{
+    final headers = Map<String, String>.from(request.headers);
+    headers['Authorization'] = 'Bearer $newToken';
+
+    if (request is http.Request) {{
+      final newRequest = http.Request(request.method, request.url);
+      newRequest.headers.addAll(headers);
+      if (savedBody != null && savedBody.isNotEmpty) {{
+        newRequest.bodyBytes = savedBody;
+      }}
+      return newRequest;
+    }}
+
+    if (request is http.MultipartRequest) {{
+      final newRequest = http.MultipartRequest(request.method, request.url);
+      newRequest.headers.addAll(headers);
+      newRequest.fields.addAll(request.fields);
+      newRequest.files.addAll(request.files);
+      return newRequest;
+    }}
+
+    throw Exception(
+        'Tipo de request no soportado: ${{request.runtimeType}}');
+  }}
+}}
+
+Future<String?> handle401() async {{
+  final prefs = await SharedPreferences.getInstance();
+  final refreshToken = prefs.getString("refresh_token");
+
+  if (refreshToken == null) {{
+    print("No hay refresh token en SharedPreferences");
+    await prefs.remove("token");
+    await prefs.remove("refresh_token");
+
+    navigatorKey.currentState?.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const UserLoginWidget()),
+      (route) => false,
+    );
+    return null;
+  }}
+
+  final response = await http.post(
+    Uri.parse("$baseURL/auth/refresh/user/"),
+    headers: {{"Content-Type": "application/json"}},
+    body: jsonEncode({{"refresh_token": refreshToken}}),
+  );
+
+  if (response.statusCode == 200) {{
+    final data = jsonDecode(response.body);
+    final newAccessToken = data["token"];
+    final newRefreshToken = data["refresh_token"];
+
+    if (newAccessToken != null) {{
+      await prefs.setString("token", newAccessToken);
+    }}
+    if (newRefreshToken != null) {{
+      await prefs.setString("refresh_token", newRefreshToken);
+    }}
+
+    print("Token refrescado correctamente");
+    return newAccessToken;
+  }} else {{
+    print("Fallo al refrescar token: ${{response.body}}");
+    return null;
+  }}
+}}
+
+final _defaultClient = Client();
+
+// GET
+Future<http.Response> get(Uri url, {{Map<String, String>? headers}}) =>
+    _defaultClient.get(url, headers: headers);
+
+// POST
+Future<http.Response> post(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.post(url, headers: headers, body: body, encoding: encoding);
+
+// PUT
+Future<http.Response> put(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.put(url, headers: headers, body: body, encoding: encoding);
+
+// DELETE
+Future<http.Response> delete(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.delete(url, headers: headers, body: body, encoding: encoding);
+
+// PATCH
+Future<http.Response> patch(Uri url,
+        {{Map<String, String>? headers, Object? body, Encoding? encoding}}) =>
+    _defaultClient.patch(url, headers: headers, body: body, encoding: encoding);
+
+// HEAD
+Future<http.Response> head(Uri url, {{Map<String, String>? headers}}) =>
+    _defaultClient.head(url, headers: headers);
+"""
+
+def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool):
+    if use_access_rights:
+      laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
+    else:
+      laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [Role]])
+    imports = []
+    seen = set()
+
+    for model in models:
+        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update"):
+            clean_name = model.model_name.replace('-Input', '').replace('-Output', '')
+            if clean_name not in seen:
+                seen.add(clean_name)
+                imports.append(
+                    f"import 'package:{app_name}/models/{clean_name.lower()}.dart';"
+                )
+
+    import_statements = '\n'.join(imports)
     return f"""import 'package:{app_name}/config/styles.dart';
+import 'package:{app_name}/generic/nav_bar.dart';
+import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';"""+"""
 
+import 'package:flutter/material.dart';
 part 'home.g.dart';
 
 @homeWidget
@@ -135,70 +353,370 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  int _selectedIndex = 0;
+  int _index = 2;
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  final items = const [
+    NavItem(icon: Icons.grid_view_rounded, label: 'Apps'),
+    NavItem(icon: Icons.fact_check_outlined, label: 'Tasks'),
+    NavItem(icon: Icons.home_outlined, label: 'Home'),
+    NavItem(icon: Icons.storage_outlined, label: 'Data'),
+    NavItem(icon: Icons.add, label: 'Profile'),
+  ];
+
+  final demoSections = [
+    TaskSection(
+      status: TaskStatus.todo,
+      items: [
+        TaskItem(
+          title: 'Review brand guidelines draft',
+          dueDate: DateTime(2025, 1, 17),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 23),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+        TaskItem(
+          title: 'Prepare UI layout for the analytics dashboard',
+          dueDate: DateTime(2025, 1, 18),
+          tag: 'Work',
+          priority: TaskPriority.low,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.inProgress,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 15),
+          tag: 'Work',
+          priority: TaskPriority.high,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 28),
+          tag: 'Work',
+          priority: TaskPriority.mid,
+        ),
+      ],
+    ),
+    TaskSection(
+      status: TaskStatus.done,
+      items: [
+        TaskItem(
+          title: 'Refining mobile wireframes for user testing',
+          dueDate: DateTime(2025, 1, 5),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+        TaskItem(
+          title: 'Implementing colour updates across the design system',
+          dueDate: DateTime(2025, 1, 8),
+          tag: 'Work',
+          priority: TaskPriority.done,
+          checked: true,
+        ),
+      ],
+    ),
+  ];
+
+  final demoBoardTasks = <BoardTask>[
+    // To Do
+    BoardTask(
+      title: 'Review brand guidelines draft',
+      status: BoardStatus.todo,
+      progress: 10,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.high,
+      comments: 1,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 30,
+      dueDate: DateTime(2025, 1, 23),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 0,
+    ),
+    BoardTask(
+      title: 'Prepare UI layout for the analytics dashboard',
+      status: BoardStatus.todo,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 17),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+    ),
+
+    // In progress
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.inProgress,
+      progress: 50,
+      dueDate: DateTime(2025, 1, 15),
+      tag: 'Work',
+      priority: TaskPriority.mid,
+      comments: 5,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.inProgress,
+      progress: 75,
+      dueDate: DateTime(2025, 1, 28),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+    ),
+
+    // Done
+    BoardTask(
+      title: 'Refining mobile wireframes for user testing',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 5),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 2,
+      checked: true,
+    ),
+    BoardTask(
+      title: 'Implementing colour updates across the design system',
+      status: BoardStatus.done,
+      progress: 100,
+      dueDate: DateTime(2025, 1, 8),
+      tag: 'Work',
+      priority: TaskPriority.low,
+      comments: 0,
+      checked: true,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('LAIA'),
-        centerTitle: true,
+        automaticallyImplyLeading: false,
+        surfaceTintColor: Colors.transparent,
+        title: Image.asset('assets/logo_home.png', height: 20),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: ProfileMenuButton(
+              avatarUrl: null, // o tu URL
+              onViewProfile: () {
+                // Navigator.push(...)
+              },
+              onSettings: () {
+                // Navigator.push(...)
+              },
+              onLogout: () {
+                // tu logout
+              },
+            ),
+          ),
+        ],
       ),
       body: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (_index == 0)
           Expanded(
-            child: dashboardWidget(context),
+            child: Text('Apps View', style: Theme.of(context).textTheme.headlineMedium),
+          ),
+          if (_index == 1)
+          Expanded(
+            child: TasksWidget(sections: demoSections, boardTasks: demoBoardTasks)
+          ),
+          if (_index == 2)
+          Expanded(
+            child: AppCardsGrid(
+              items: [
+                AppCardItem(
+                  title: 'Users',
+                  icon: const Icon(Icons.people_alt_outlined),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(pageBuilder: (_, __, ___) => UserListView()),
+                  ),
+                ),
+                AppCardItem(
+                  title: 'Calendar',
+                  icon: const Icon(Icons.calendar_month_outlined),
+                  onTap: () => debugPrint('Calendar'),
+                ),
+                AppCardItem(
+                  title: 'Projects',
+                  icon: const Icon(Icons.folder_open_outlined),
+                  onTap: () => debugPrint('Projects'),
+                ),
+                AppCardItem(
+                  title: 'Mailing',
+                  icon: const Icon(Icons.mail_outline),
+                  onTap: () => debugPrint('Mailing'),
+                ),
+
+                AppCardItem(
+                  title: 'Tasks',
+                  icon: const Icon(Icons.fact_check_outlined),
+                  onTap: () => debugPrint('Tasks'),
+                ),
+                AppCardItem(
+                  title: 'Analytics',
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  onTap: () => debugPrint('Analytics'),
+                ),
+                AppCardItem(
+                  title: 'Data Sources',
+                  icon: const Icon(Icons.storage_outlined),
+                  onTap: () => setState(() => _index = 3),
+                ),
+                AppCardItem(
+                  title: 'Finance',
+                  icon: const Icon(Icons.attach_money_outlined),
+                  onTap: () => debugPrint('Finance'),
+                ),
+
+                AppCardItem(
+                  title: 'AI',
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  onTap: () => debugPrint('AI'),
+                ),
+                AppCardItem(
+                  title: 'Chat',
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  onTap: () => debugPrint('Chat'),
+                ),
+                AppCardItem(
+                  title: 'Dashboard',
+                  icon: const Icon(Icons.dashboard_outlined),
+                  onTap: () => debugPrint('Dashboard'),
+                ),
+                AppCardItem(
+                  title: 'Reports',
+                  icon: const Icon(Icons.description_outlined),
+                  onTap: () => debugPrint('Reports'),
+                ),
+
+                AppCardItem(
+                  title: 'CRM',
+                  icon: const Icon(Icons.settings_outlined),
+                  onTap: () => debugPrint('CRM'),
+                ),
+                AppCardItem(
+                  title: 'Invoice',
+                  icon: const Icon(Icons.receipt_long_outlined),
+                  onTap: () => debugPrint('Invoice'),
+                ),
+                AppCardItem(
+                  title: 'Workflow',
+                  icon: const Icon(Icons.alt_route_outlined),
+                  onTap: () => debugPrint('Workflow'),
+                ),
+                AppCardItem(
+                  title: 'Add',
+                  icon: const Icon(Icons.add),
+                  onTap: () => debugPrint('Add'),
+                ),
+              ],
+            )
+          ),
+          if (_index == 3)
+          Expanded(
+            child: dashboardWidget(context)
+          ),
+          if (_index == 4)
+          Expanded(
+            child: Text('Profile View', style: Theme.of(context).textTheme.headlineMedium),
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.white,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_outline_sharp),
-            label: 'Favorites',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_outlined),
-            label: 'Profile',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: const Color.fromARGB(255, 0, 0, 0),
-        onTap: _onItemTapped,
-      ),
+      bottomNavigationBar: LaiaBottomNavBar(items: items, currentIndex: _index, onTap: (i) => setState(() => _index = i))
     );
   }
 }
 """
+
+def get_all_sub_dependencies(model_cls, seen_classes=None):
+    if seen_classes is None:
+        seen_classes = set()
+    if not isinstance(model_cls, type):
+        return set()
+    if isinstance(model_cls, EnumMeta):
+        return set()
+    if model_cls in seen_classes:
+        return set()
+    seen_classes.add(model_cls)
+    
+    dependencies = set()
+    annotations = get_inherited_field_annotations(model_cls)
+    model_module = sys.modules.get(model_cls.__module__)
+    
+    for field_name, field_type in annotations.items():
+        ref_cls_name = embedded_class_name_from_annotation(field_type)
+        if ref_cls_name:
+            ref_cls = getattr(model_module, ref_cls_name, None) if model_module else None
+            if ref_cls:
+                is_pydantic_model = isinstance(ref_cls, type) and issubclass(ref_cls, BaseModel)
+                is_enum = isinstance(ref_cls, EnumMeta)
+                if is_pydantic_model or is_enum:
+                    dependencies.add(ref_cls)
+                    if is_pydantic_model:
+                        dependencies.update(get_all_sub_dependencies(ref_cls, seen_classes))
+    return dependencies
 
 def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[BaseModel]=None):
     fields = ""
     fields_constructor = ""
     extra_imports = ""
     inherited_fields = get_inherited_fields(model)
+    inherited_field_annotations = get_inherited_field_annotations(model)
+
+    if isinstance(model, EnumMeta):
+      print(f"[LAIA Flutter enum] generating standalone enum {model.__name__} -> {model.__name__.lower()}.dart")
+      return enum_dart(model, include_import=True)
+
+    # Collect transitive sub-dependencies
+    try:
+        sub_deps = get_all_sub_dependencies(model)
+        for dep in sub_deps:
+            if dep == model:
+                continue
+            dep_name = dep.__name__
+            dep_name_clean = dep_name.replace('-Input', '').replace('-Output', '')
+            ignored_imports = {
+                'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+                'multilinestring', 'multipolygon', 'geometry', 'feature',
+                'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+                'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+            }
+            if dep_name_clean.lower() not in ignored_imports:
+                imp = f"import 'package:{app_name}/models/{dep_name_clean.lower()}.dart';\n"
+                if imp not in extra_imports:
+                    extra_imports += imp
+    except Exception as e:
+        print(f"[LAIA error collecting sub-dependencies] {e}")
     
     if openapiModel:
       frontend_props = openapiModel.get_frontend_properties()
       try:
-        defaultFields = "defaultFields: " + str(openapiModel.extensions['x-frontend-defaultFields']) + ", "
+        raw_fields = openapiModel.extensions['x-frontend-defaultFields']
+        filtered_fields = [f for f in raw_fields if str(f).lower() != 'password']
+        defaultFields = "defaultFields: " + str(filtered_fields) + ", "
       except KeyError:
         defaultFields = ""
       try:
-        defaultFieldsDetail = "defaultFieldsDetail: " + str(openapiModel.extensions['x-frontend-defaultFieldsDetail']) + ", "
+        raw_detail = openapiModel.extensions['x-frontend-defaultFieldsDetail']
+        filtered_detail = [row for row in raw_detail if not any(isinstance(val, str) and val.lower() == 'password' for val in row)]
+        defaultFieldsDetail = "defaultFieldsDetail: " + str(filtered_detail) + ", "
       except KeyError:
         defaultFieldsDetail = ""
       try:
@@ -213,6 +731,27 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         widget = "widget: '" + str(openapiModel.extensions['x-frontend-widget']) + "', "
       except KeyError:
         widget = ""
+      try:
+        raw_tabs = openapiModel.extensions.get('x-frontend-tabs')
+        if raw_tabs:
+            tab_elements = []
+            for tab in raw_tabs:
+                label = tab.get('label', '')
+                fields_list = tab.get('fields', [])
+                fields_str = ", ".join([f'"{f}"' for f in fields_list])
+                tab_elements.append(f'ElementTab(label: "{label}", fields: [{fields_str}])')
+            tabs_str = "tabs: [" + ", ".join(tab_elements) + "], "
+        else:
+            tabs_str = ""
+      except Exception as e:
+        print(f"[LAIA error parsing x-frontend-tabs] {e}")
+        tabs_str = ""
+      try:
+        raw_format = openapiModel.extensions.get('x_frontend_format')
+        format = f"format: '{raw_format}', "
+      except Exception as e:
+        print(f"[LAIA error parsing x-frontend-format] {e}")
+        format = ""
     else:
       frontend_props = {}
       defaultFields = ""
@@ -220,13 +759,53 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       widgetDistributionDetail = ""
       pageSize = ""
       widget = ""
+      tabs_str = ""
     
     for prop_name, prop_type in inherited_fields:
       dart_prop_type = pydantic_to_dart_type(prop_type)
+      
+      # Determine if the field is excluded from response (needs to be optional in Dart)
+      model_config = getattr(model, "model_config", {}) or {}
+      json_schema_extra = model_config.get("json_schema_extra", {}) or {}
+      excluded_fields = json_schema_extra.get("x-exclude-from-response", []) if isinstance(json_schema_extra, dict) else []
+      is_excluded = prop_name in excluded_fields
+      if openapiModel:
+        prop_yaml = openapiModel.properties.get(prop_name, {})
+        if isinstance(prop_yaml, dict) and (prop_yaml.get('x-exclude-from-response') or prop_yaml.get('x_exclude_from_response')):
+          is_excluded = True
+      
+      if is_excluded:
+        if not dart_prop_type.endswith('?'):
+          dart_prop_type = f"{dart_prop_type}?"
+          
+      raw_annotation = inherited_field_annotations.get(prop_name)
+      enum_cls = enum_class_from_annotation(raw_annotation, model)
+      print(
+        "[LAIA Flutter model field] "
+        f"model={model.__name__} field={prop_name} "
+        f"flattened_type={prop_type} dart_type={dart_prop_type} "
+        f"raw_annotation={raw_annotation!r} enum={enum_cls.__name__ if enum_cls else None}"
+      )
+      if enum_cls:
+        dart_prop_type = embedded_dart_type(prop_type, enum_cls.__name__)
+        imp = f"import 'package:{app_name}/models/{enum_cls.__name__.lower()}.dart';\n"
+        if imp not in extra_imports:
+          print(f"[LAIA Flutter enum import] {model.__name__}.{prop_name} -> {imp.strip()}")
+          extra_imports += imp
       fields += f"  @Field("
       
       if prop_name in frontend_props:
         frontend_details = frontend_props[prop_name]
+        relation = frontend_details.get('relation')
+        if relation:
+          is_list = 'List[' in str(prop_type) or 'list[' in str(prop_type)
+          is_optional = 'Optional[' in str(prop_type) or 'None' in str(prop_type)
+          if is_list:
+            frontend_details['widget'] = f"{relation}MultiFieldWidget"
+            dart_prop_type = 'List<dynamic>?' if is_optional else 'List<dynamic>'
+          else:
+            frontend_details['widget'] = f"{relation}FieldWidget"
+            dart_prop_type = 'dynamic?' if is_optional else 'dynamic'
         for key, value in frontend_details.items():
           if isinstance(value, bool):
             fields += f"{key}: {str(value).lower()}, "
@@ -238,7 +817,42 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
           extra_imports += f"import 'package:{app_name}/models/{value_lower}.dart';\n"
       else:
         fields += "fieldName: '{}'".format(prop_name)
-      
+
+      if openapiModel:
+        prop_yaml = openapiModel.properties.get(prop_name, {})
+        ref_cls_name = schema_ref_class_name(prop_yaml)
+        ignored_imports = {
+            'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+            'multilinestring', 'multipolygon', 'geometry', 'feature',
+            'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+            'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+        }
+        if ref_cls_name:
+          dart_prop_type = embedded_dart_type(prop_type, ref_cls_name)
+          if ref_cls_name.lower() not in ignored_imports:
+            imp = f"import 'package:{app_name}/models/{ref_cls_name.lower()}.dart';\n"
+            if imp not in extra_imports:
+              print(f"[LAIA Flutter schema ref import] {model.__name__}.{prop_name} -> {imp.strip()}")
+              extra_imports += imp
+        elif isinstance(prop_yaml, dict) and 'enum' in prop_yaml:
+          cls_name = embedded_class_name_from_type(prop_type)
+          if cls_name:
+            dart_prop_type = embedded_dart_type(prop_type, cls_name)
+            if cls_name.lower() not in ignored_imports:
+              imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
+              if imp not in extra_imports:
+                print(f"[LAIA Flutter enum import from schema] {model.__name__}.{prop_name} -> {imp.strip()}")
+                extra_imports += imp
+        if isinstance(prop_yaml, dict) and (prop_yaml.get('x_embedded') or prop_yaml.get('x-embedded')):
+          cls_name = embedded_class_name_from_type(prop_type) or embedded_class_name_from_annotation(raw_annotation)
+          if cls_name:
+            dart_prop_type = embedded_dart_type(prop_type, cls_name)
+            if cls_name.lower() not in ignored_imports:
+              imp = f"import 'package:{app_name}/models/{cls_name.lower()}.dart';\n"
+              if imp not in extra_imports:
+                print(f"[LAIA Flutter embedded import] {model.__name__}.{prop_name} -> {imp.strip()}")
+                extra_imports += imp
+
       fields += ")\n"
       fields += f"  final {dart_prop_type} {prop_name};\n"
       if '?' in dart_prop_type:
@@ -255,10 +869,13 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
       if openapiModel.extensions.get('x-auth'):
         auth = 'true'
         extra_imports += f"import 'package:shared_preferences/shared_preferences.dart';\n"
-        extra_imports += f"import 'package:{app_name}/screens/home.dart';\n"
+        extra_imports += f"import 'package:package_info_plus/package_info_plus.dart';\n"
 
     return f"""import 'package:{app_name}/models/geometry.dart';
 import 'package:laia_annotations/laia_annotations.dart';
+import 'package:{app_name}/theme/auth_scaffold.dart';
+import 'package:{app_name}/theme/theme_app.dart';
+import 'package:{app_name}/screens/home.dart';
 import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:copy_with_extension/copy_with_extension.dart';
@@ -266,7 +883,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tuple/tuple.dart';
 import 'package:{app_name}/config/api.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
-import 'package:http/http.dart' as http;
+import 'package:{app_name}/config/http_client.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
 import 'package:collection/collection.dart';
@@ -278,7 +895,7 @@ part '{model_name.lower()}.g.dart';
 @RiverpodGenAnnotation(auth: {auth})
 @HomeWidgetElementGenAnnotation()
 @ListWidgetGenAnnotation({defaultFields}{pageSize}{widget})
-@ElementWidgetGen({defaultFieldsDetail}{widgetDistributionDetail}auth: {auth})
+@ElementWidgetGen({defaultFieldsDetail}{widgetDistributionDetail}{tabs_str}auth: {auth})
 @CopyWith()
 class {model_name} {{
 {fields}
@@ -572,28 +1189,790 @@ def pydantic_to_dart_type(pydantic_type: str):
         'Optional[Polygon]': 'Polygon?',
     }
 
-    dart_type = "dynamic"
+    dart_type = "dynamic?"
 
     if pydantic_type in dart_type_mapping:
         dart_type = dart_type_mapping[pydantic_type]
     elif hasattr(pydantic_type, "__origin__") and pydantic_type.__origin__ == list:
         inner_type = pydantic_to_dart_type(pydantic_type.__args__[0])
         dart_type = f'List<{inner_type}>'
-    
+    else:
+        m = re.match(r'^Optional\[List\[(\w+)\]\]$', str(pydantic_type))
+        if m:
+            dart_type = f'List<{m.group(1)}>?'
+        else:
+            m = re.match(r'^List\[(\w+)\]$', str(pydantic_type))
+            if m:
+                dart_type = f'List<{m.group(1)}>'
+            else:
+                m = re.match(r'^Optional\[(\w+)\]$', str(pydantic_type))
+                if m:
+                    dart_type = f'{m.group(1)}?'
+
     return dart_type
+
+def embedded_class_name_from_type(type_str: str):
+    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime'}
+    type_str = str(type_str).strip().strip("'\"")
+    cls_match = (
+        re.match(r'Optional\[(?:List|list)\[(\w+)\]\]', type_str) or
+        re.match(r'(?:List|list)\[(\w+)\]', type_str) or
+        re.match(r'Optional\[(\w+)\]', type_str) or
+        re.match(r'^(\w+)$', type_str)
+    )
+    if not cls_match:
+        return None
+
+    cls_name = cls_match.group(1)
+    return None if cls_name in primitives else cls_name
+
+
+def embedded_class_name_from_annotation(annotation):
+    if annotation is None:
+        return None
+
+    if isinstance(annotation, str):
+        return embedded_class_name_from_type(annotation)
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is Annotated:
+        return embedded_class_name_from_annotation(args[0]) if args else None
+
+    if origin is list or origin is List:
+        return embedded_class_name_from_annotation(args[0]) if args else None
+
+    if origin is Union and type(None) in args:
+        non_none = [arg for arg in args if arg is not type(None)]
+        return embedded_class_name_from_annotation(non_none[0]) if non_none else None
+
+    cls_name = getattr(annotation, "__name__", None)
+    if cls_name:
+        return embedded_class_name_from_type(cls_name)
+
+    return embedded_class_name_from_type(str(annotation))
+
+
+def embedded_dart_type(type_str: str, cls_name: str):
+    type_str = str(type_str).strip().strip("'\"")
+    if re.match(r'Optional\[(?:List|list)\[\w+\]\]', type_str) or (
+        'Optional' in type_str and ('List[' in type_str or 'list[' in type_str)
+    ):
+        return f'List<{cls_name}>?'
+    if re.match(r'(?:List|list)\[\w+\]', type_str) or 'List[' in type_str or 'list[' in type_str:
+        return f'List<{cls_name}>'
+    if re.match(r'Optional\[\w+\]', type_str) or 'Optional' in type_str or 'NoneType' in type_str:
+        return f'{cls_name}?'
+    return cls_name
+
+
+def schema_ref_class_name(prop_definition):
+    if not isinstance(prop_definition, dict):
+        return None
+
+    ref = prop_definition.get('$ref')
+    if isinstance(ref, str) and ref.startswith('#/components/schemas/'):
+        return ref.rsplit('/', 1)[-1]
+
+    items_ref = schema_ref_class_name(prop_definition.get('items'))
+    if items_ref:
+        return items_ref
+
+    for key in ('anyOf', 'oneOf', 'allOf'):
+        for option in prop_definition.get(key, []):
+            option_ref = schema_ref_class_name(option)
+            if option_ref:
+                return option_ref
+
+    return None
+
+def dart_string_literal(value) -> str:
+    return str(value).replace("\\", "\\\\").replace("'", "\\'")
+
+
+def dart_enum_member_name(name: str) -> str:
+    keywords = {
+        'abstract', 'as', 'assert', 'async', 'await', 'base', 'break', 'case',
+        'catch', 'class', 'const', 'continue', 'covariant', 'default',
+        'deferred', 'do', 'dynamic', 'else', 'enum', 'export', 'extends',
+        'extension', 'external', 'factory', 'false', 'final', 'finally', 'for',
+        'function', 'get', 'hide', 'if', 'implements', 'import', 'in',
+        'interface', 'is', 'late', 'library', 'mixin', 'new', 'null', 'of',
+        'on', 'operator', 'part', 'required', 'rethrow', 'return', 'sealed',
+        'set', 'show', 'static', 'super', 'switch', 'sync', 'this', 'throw',
+        'true', 'try', 'type', 'typedef', 'var', 'void', 'when', 'with',
+        'while', 'yield',
+    }
+    identifier = re.sub(r'\W+', '_', str(name)).strip('_')
+    if not identifier:
+        identifier = 'value'
+    if identifier[0].isdigit():
+        identifier = f'value_{identifier}'
+    if identifier in keywords:
+        identifier = f'{identifier}_value'
+    return identifier
+
+
+def enum_dart(enum_cls, include_import: bool = False) -> str:
+    import_statement = "import 'package:json_annotation/json_annotation.dart';\n\n" if include_import else ""
+    members = []
+    for member in enum_cls:
+        members.append(
+            f"  @JsonValue('{dart_string_literal(member.value)}')\n"
+            f"  {dart_enum_member_name(member.name)}"
+        )
+    members_content = ',\n'.join(members)
+    return f"""{import_statement}enum {enum_cls.__name__} {{
+{members_content}
+}}
+
+"""
+
+
+def enum_class_from_annotation(annotation, model=None):
+    if annotation is None:
+        return None
+
+    if isinstance(annotation, str):
+        cls_name = embedded_class_name_from_type(annotation)
+        if not cls_name or model is None:
+            return None
+        model_module = sys.modules.get(model.__module__)
+        enum_cls = getattr(model_module, cls_name, None) if model_module else None
+        return enum_cls if isinstance(enum_cls, EnumMeta) else None
+
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    if origin is Annotated:
+        return enum_class_from_annotation(args[0], model)
+
+    if origin is list or origin is List:
+        return enum_class_from_annotation(args[0], model) if args else None
+
+    if origin is Union and type(None) in args:
+        non_none = [a for a in args if a is not type(None)]
+        return enum_class_from_annotation(non_none[0], model) if non_none else None
+
+    return annotation if isinstance(annotation, EnumMeta) else None
     
-def get_inherited_fields(model: Type[BaseModel]):
+def flatten_type(t) -> str:
+    origin = get_origin(t)
+    args = get_args(t)
+
+    if origin is list or origin is List:
+        inner = flatten_type(args[0]) if args else "dynamic"
+        return f"List[{inner}]"
+
+    if origin is Union and type(None) in args:
+        non_none = [a for a in args if a is not type(None)]
+        inner = flatten_type(non_none[0]) if non_none else "dynamic"
+        return f"Optional[{inner}]"
+
+    if origin is Annotated:
+        return flatten_type(args[0])
+
+    if hasattr(t, "__name__") and t.__name__ == "ObjectId":
+        return "str"
+
+    if hasattr(t, "__name__"):
+        return t.__name__
+    return str(t)
+
+def get_inherited_fields(model):
     model_fields = []
     for class_in_hierarchy in model.mro():
         if hasattr(class_in_hierarchy, '__annotations__'):
             for field_name, field_type in class_in_hierarchy.__annotations__.items():
-                if not field_name.startswith("_") and field_name not in [field[0] for field in model_fields]:
-                    if hasattr(field_type, '__args__') and len(field_type.__args__) > 0:
-                        unwrapped_type = field_type.__args__[0]
-                        if hasattr(unwrapped_type, '__name__'):
-                            model_fields.append((field_name, unwrapped_type.__name__))
-                        else:
-                            model_fields.append((field_name, str(unwrapped_type)))
-                    else:
-                        model_fields.append((field_name, getattr(field_type, '__name__', str(field_type))))
+                if not field_name.startswith("_") and field_name not in [f[0] for f in model_fields]:
+                    model_fields.append((field_name, flatten_type(field_type)))
     return model_fields
+
+
+def get_inherited_field_annotations(model):
+    model_fields = {}
+    for class_in_hierarchy in model.mro():
+        if hasattr(class_in_hierarchy, '__annotations__'):
+            for field_name, field_type in class_in_hierarchy.__annotations__.items():
+                if not field_name.startswith("_") and field_name not in model_fields:
+                    model_fields[field_name] = field_type
+    return model_fields
+
+
+def embedded_model_dart(class_name: str, app_name: str, model: Type[BaseModel]) -> str:
+    fields = ""
+    fields_constructor = ""
+    extra_imports = ""
+    local_annotations = getattr(model, "__annotations__", {})
+    local_fields = [
+        (field_name, flatten_type(field_type))
+        for field_name, field_type in local_annotations.items()
+        if not field_name.startswith("_")
+    ]
+
+    for prop_name, prop_type in local_fields:
+        dart_prop_type = pydantic_to_dart_type(prop_type)
+        fields += f"  final {dart_prop_type} {prop_name};\n"
+        if '?' in dart_prop_type:
+            fields_constructor += f"    this.{prop_name},\n"
+        else:
+            fields_constructor += f"    required this.{prop_name},\n"
+
+    # Collect transitive sub-dependencies
+    try:
+        sub_deps = get_all_sub_dependencies(model)
+        for dep in sub_deps:
+            if dep == model:
+                continue
+            dep_name = dep.__name__
+            dep_name_clean = dep_name.replace('-Input', '').replace('-Output', '')
+            ignored_imports = {
+                'type', 'objectid', 'point', 'polygon', 'linestring', 'multipoint',
+                'multilinestring', 'multipolygon', 'geometry', 'feature',
+                'geometrypoint', 'geometrypolygon', 'geometrylinestring',
+                'geometrymultipoint', 'geometrymultilinestring', 'geometrymultipolygon'
+            }
+            if dep_name_clean.lower() not in ignored_imports:
+                imp = f"import 'package:{app_name}/models/{dep_name_clean.lower()}.dart';\n"
+                if imp not in extra_imports:
+                    extra_imports += imp
+    except Exception as e:
+        print(f"[LAIA error collecting embedded sub-dependencies] {e}")
+
+    if fields_constructor:
+        fields_constructor = fields_constructor[:-2]
+
+    return f"""import 'package:json_annotation/json_annotation.dart';
+import 'package:copy_with_extension/copy_with_extension.dart';
+{extra_imports}
+part '{class_name.lower()}.g.dart';
+
+@JsonSerializable()
+@CopyWith()
+class {class_name} {{
+{fields}
+  {class_name}({{
+{fields_constructor}
+  }});
+
+  factory {class_name}.fromJson(Map<String, dynamic> json) => _${class_name}FromJson(json);
+
+  Map<String, dynamic> toJson() => _${class_name}ToJson(this);
+}}
+"""
+
+
+def theme_dart():
+    return f"""import 'package:flutter/material.dart';
+
+class AppColors {{
+  // Base
+  static const Color brand900 = Color(0xFF1B003F);
+
+  // Accents
+  static const Color navy = Color(0xFF191970);
+  static const Color indigo = Color(0xFF4B0082);
+  static const Color brand = Color(0xFF9748FF);
+  static const Color blue = Color(0xFF6495ED);
+
+  // Surfaces
+  static const Color lavender = Color(0xFFE6E6FA);
+  static const Color bg = Color(0xFFF3F4FA);
+  static const Color surface = Color(0xFFFDFBFF);
+
+  // Neutrals
+  static const Color outline = Color(0xFFD9D9D9);
+  static const Color muted = Color(0xFF757575);
+
+  static const Color success = Color(0xFF4CAF50);
+  static const Color successBg = Color(0xFFE8F5E9);
+  static const Color warning = Color(0xFFFFC107);
+  static const Color warningBg = Color(0xFFFFF8E1);
+  static const Color error = Color(0xFFF44336);
+  static const Color errorBg = Color(0xFFFFEBEE);
+}}
+
+class AppTheme {{
+  static ThemeData light() {{
+    const cs = ColorScheme(
+      brightness: Brightness.light,
+      primary: AppColors.indigo,
+      onPrimary: Colors.white,
+      primaryContainer: AppColors.lavender,
+      onPrimaryContainer: AppColors.brand900,
+
+      secondary: AppColors.brand,
+      onSecondary: Colors.white,
+      secondaryContainer: AppColors.lavender,
+      onSecondaryContainer: AppColors.brand900,
+
+      tertiary: AppColors.blue,
+      onTertiary: Colors.white,
+      tertiaryContainer: AppColors.lavender,
+      onTertiaryContainer: AppColors.brand900,
+
+      background: AppColors.bg,
+      onBackground: AppColors.brand900,
+
+      surface: AppColors.surface,
+      onSurface: AppColors.brand900,
+      surfaceVariant: AppColors.lavender,
+      onSurfaceVariant: AppColors.muted,
+
+      outline: AppColors.outline,
+      outlineVariant: AppColors.outline,
+
+      error: Color(0xFFB3261E),
+      onError: Colors.white,
+      errorContainer: Color(0xFFF9DEDC),
+      onErrorContainer: Color(0xFF410E0B),
+
+      inverseSurface: AppColors.brand900,
+      onInverseSurface: AppColors.surface,
+      inversePrimary: AppColors.indigo,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      surfaceTint: AppColors.indigo,
+    );
+
+    final radius = BorderRadius.circular(20);
+
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: cs,
+      scaffoldBackgroundColor: AppColors.surface,
+
+      // Tipografía: ajusta si tienes PublicSans en tu app
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(
+          fontSize: 28,
+          fontWeight: FontWeight.w600,
+          color: AppColors.indigo
+        ),
+        headlineSmall: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+        ),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+        bodyMedium: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+          color: AppColors.navy
+        ),
+        bodySmall: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.muted
+        ),
+        labelSmall: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: AppColors.indigo
+        ),
+      ),
+
+      // Card “flotante” como la imagen
+      cardTheme: CardThemeData(
+        color: cs.surface,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+
+      // Inputs redondos, con relleno suave
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        isDense: true,
+        hintStyle: const TextStyle(color: AppColors.muted),
+        labelStyle: const TextStyle(color: AppColors.muted),
+        prefixIconColor: AppColors.muted,
+        suffixIconColor: AppColors.muted,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.outline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: cs.error),
+        ),
+      ),
+
+      // AppBar minimal (en login casi ni se usa, pero por si acaso)
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        foregroundColor: cs.onBackground,
+      ),
+
+      dividerTheme: DividerThemeData(color: cs.outline, thickness: 1),
+
+      // Botones “pill”
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Por si usas FilledButton (M3)
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Outlined
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.primary,
+          side: BorderSide(color: cs.primary),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+
+      // Text buttons / links
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: cs.primary,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+
+      // Icon buttons (ojo del password, etc.)
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: AppColors.muted,
+        ),
+      ),
+    );
+  }}
+}}
+"""
+
+def auth_scafold_dart():
+    return f"""import 'package:flutter/material.dart';
+import 'theme_app.dart';
+
+class AuthScaffold extends StatelessWidget {{
+  final Widget child;
+  final Widget? topLeftBrand;
+
+  const AuthScaffold({{
+    super.key,
+    required this.child,
+    this.topLeftBrand,
+  }});
+
+  @override
+  Widget build(BuildContext context) {{
+    return Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.surface,
+                    AppColors.lavender,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 40, top: 40),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: topLeftBrand ?? const SizedBox.shrink(),
+              ),
+            ),
+          ),
+
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }}
+}}
+"""
+
+def nav_bar_dart(app_name: str):
+    return f"""import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:{app_name}/theme/theme_app.dart';
+
+class NotchedBottomBar extends StatelessWidget {{
+  final int currentIndex; 
+  final double height;
+  final double radius;
+  final Widget child;
+
+  const NotchedBottomBar({{
+    super.key,
+    required this.currentIndex,
+    required this.child,
+    this.height = 60,
+    this.radius = 34,
+  }});
+
+  double _xForIndex(double width, int i) {{
+    final padding = 16.0;
+    final usable = width - padding * 2;
+    final slot = usable / 5;
+    return padding + slot * (i + 0.5);
+  }}
+
+  @override
+  Widget build(BuildContext context) {{
+    return LayoutBuilder(
+      builder: (context, c) {{
+        final w = c.maxWidth;
+        final notchX = _xForIndex(w, currentIndex);
+
+        return ClipPath(
+          clipper: _BarNotchClipper(
+            notchCenterX: notchX,
+            notchRadius: radius,
+          ),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              color: AppColors.lavender,
+              borderRadius: BorderRadius.circular(0),
+            ),
+            child: child,
+          ),
+        );
+      }},
+    );
+  }}
+}}
+
+class _BarNotchClipper extends CustomClipper<Path> {{
+  final double notchCenterX;
+  final double notchRadius;
+
+  _BarNotchClipper({{
+    required this.notchCenterX,
+    required this.notchRadius,
+  }});
+
+  @override
+  Path getClip(Size size) {{
+    final r = notchRadius;
+    final cx = notchCenterX.clamp(r + 8, size.width - r - 8);
+
+    final valleyDepth = r * 0.85;
+    final valleyTop = 0.0;
+    final y = valleyTop;
+
+    final left = cx - r;
+    final right = cx + r;
+
+    final path = Path();
+
+    path.moveTo(0, 0);
+
+    path.lineTo(left - 14, y);
+
+    path.quadraticBezierTo(left - 6, y, left, y + 8);
+
+    final arcRect = Rect.fromCircle(
+      center: Offset(cx, y + 8),
+      radius: r,
+    );
+
+    path.arcTo(arcRect, math.pi, -math.pi, false);
+
+    path.quadraticBezierTo(right + 6, y, right + 14, y);
+
+    path.lineTo(size.width, y);
+
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+
+    return path;
+  }}
+
+  @override
+  bool shouldReclip(covariant _BarNotchClipper oldClipper) {{
+    return oldClipper.notchCenterX != notchCenterX ||
+        oldClipper.notchRadius != notchRadius;
+  }}
+}}
+
+class LaiaBottomNavBar extends StatelessWidget {{
+  final List<NavItem> items; // 5
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const LaiaBottomNavBar({{
+    super.key,
+    required this.items,
+    required this.currentIndex,
+    required this.onTap,
+  }}) : assert(items.length == 5);
+
+  @override
+  Widget build(BuildContext context) {{
+    final cs = Theme.of(context).colorScheme;
+
+    double _xForIndex(double width, int i) {{
+      const padding = 16.0;
+      final usable = width - padding * 2;
+      final slot = usable / 5;
+      return padding + slot * (i + 0.5);
+    }}
+
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: 104,
+        child: Padding(
+          padding: EdgeInsets.zero,
+          child: LayoutBuilder(
+            builder: (context, constraints) {{
+              final w = constraints.maxWidth;
+              final centerX = _xForIndex(w, currentIndex);
+              const bubbleSize = 58.0;
+              final bubbleLeft = centerX - bubbleSize / 2;
+            return Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeOut,
+                  child: NotchedBottomBar(
+                    key: ValueKey(currentIndex),
+                    currentIndex: currentIndex,
+                    height: 62,
+                    radius: 32,
+                    child: Row(
+                      children: List.generate(items.length, (i) {{
+                        final selected = i == currentIndex;
+                        return Expanded(
+                          child: InkResponse(
+                            onTap: () => onTap(i),
+                            radius: 28,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              child: Icon(
+                                items[i].icon,
+                                color: selected
+                                    ? Colors.transparent
+                                    : AppColors.indigo,
+                              ),
+                            ),
+                          ),
+                        );
+                      }}),
+                    ),
+                  ),
+                ),
+            
+                AnimatedPositioned(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    left: bubbleLeft,
+                    bottom: 8, 
+                    child: Padding(
+                      padding: EdgeInsets.zero,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 58,
+                            height: 58,
+                            decoration: BoxDecoration(
+                              color: cs.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              items[currentIndex].icon,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            items[currentIndex].label,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.indigo,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                
+              ],
+            );
+            }}
+          ),
+        ),
+      ),
+    );
+  }}
+}}
+
+
+class NavItem {{
+  final IconData icon;
+  final String label;
+  const NavItem({{required this.icon, required this.label}});
+}}
+
+"""

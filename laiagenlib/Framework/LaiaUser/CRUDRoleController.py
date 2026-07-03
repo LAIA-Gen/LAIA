@@ -1,7 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Body, Depends, HTTPException, status
+from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated
+from pydantic import BaseModel, Field
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.LaiaUser import CreateRole
 from ...Application.LaiaUser import JWTToken
@@ -11,15 +13,27 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
 T = TypeVar('T', bound='LaiaBaseModel')
-
+#JMT
 async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str='secret_key', auth_required: bool = False):
     model = Role
     router = APIRouter(tags=[model.__name__])
-    oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+    http_bearer = HTTPBearer(auto_error=False)
+
+    def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)) -> Optional[str]:
+        return credentials.credentials if credentials else None
+
+    class SearchResponse(BaseModel):
+        items: List[Role]
+        current_page: int
+        max_pages: int
+        context: Optional[dict] = Field(None, alias="@context")
+
+    class ErrorResponse(BaseModel):
+        detail: str
 
     def get_auth_dependency():
         if auth_required:
-            return Annotated[Optional[str], Depends(oauth2_scheme)]
+            return Annotated[Optional[str], Depends(get_token)]
         else:
             return Optional[str]
         
@@ -34,11 +48,11 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
             payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
             _logger.info(payload)
             
-            user_roles_ids = payload.get("user_roles", [])
+            user_roles_ids = payload.get("user_roles") or []
             _logger.info(user_roles_ids)
             user_roles = []
             for role in user_roles_ids:
-                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository)
+                user_role = await ReadLaiaBaseModel.read_laia_base_model(role, Role, ['admin'], repository, False)
                 user_roles.append(user_role['name'])
 
         except ValueError:
@@ -50,29 +64,29 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
     if not admin_role:
         await CreateRole.create_role({"name": "admin"}, ["admin"], repository)
 
-    @router.post("/role/", response_model=dict)
+    @router.post("/role/", response_model=None, responses={200: {"model": Role}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
     async def create_element(element: Role, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
             return await CreateRole.create_role(dict(element), user_roles, repository)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
-    @router.put("/role/{element_id}", response_model=dict)
+    @router.put("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def update_element(element_id: str, values: dict, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
             return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
         
-    @router.get("/role/{element_id}", response_model=dict)
+    @router.get("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
     async def read_element(element_id: str, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, False)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     @router.delete("/role/{element_id}", response_model=str)
     async def delete_element(element_id: str, token: get_auth_dependency() = None):
@@ -81,14 +95,13 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
             await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
             return f"Role deleted successfully"
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-    @router.post("/roles/", response_model=dict)
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = {}, orders: dict = {}):
+            handle_exception(e)
+    @router.post("/roles/", response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
+    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate)
         except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+            handle_exception(e)
 
     return router

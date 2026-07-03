@@ -6,10 +6,12 @@ from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import search_laia
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 
 class User(LaiaBaseModel):
+    name: str = ""
     description: str
     age: int
 
 class Drone(LaiaBaseModel):
+    name: str = ""
     description: str
     weight: float
     max_altitude: float
@@ -22,6 +24,7 @@ def in_memory_db():
     db.drop_collection("user")
     db.drop_collection("drone")
     db.drop_collection("accessright")
+    db.drop_collection("publicoffer")
     return db
 
 @pytest_asyncio.fixture
@@ -76,3 +79,31 @@ class TestSearchLaiaBaseModel:
         user_roles = ['user']
         with pytest.raises(PermissionError):
             await search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository_instance)
+
+    @pytest.mark.asyncio
+    async def test_search_laia_base_model_public(self, repository_instance):
+        class PublicOffer(LaiaBaseModel):
+            name: str = ""
+            description: str
+            model_config = {
+                "json_schema_extra": {
+                    "x-permissions": {
+                        "search": []
+                    }
+                }
+            }
+
+        await repository_instance.post_item("publicoffer", PublicOffer(name="Offer 1", description="Public Offer 1"))
+
+        skip = 0
+        limit = 10
+        filters = {}
+        orders = {}
+
+        model = PublicOffer
+        user_roles = []
+        result = await search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository_instance)
+
+        assert len(result["items"]) == 1
+        assert result["items"][0]["name"] == "Offer 1"
+

@@ -7,4 +7,5 @@ T = TypeVar('T', bound='LaiaUser')
 class Auth(BaseModel):
     email: str
     password: str
+
     

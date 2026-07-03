@@ -1,9 +1,10 @@
 import os
 from typing import List
 from .DownloadImage import download_image
-from ....Domain.Openapi.FlutterBaseFiles import main_dart, api_dart, styles_dart, generic_dart
+from ....Domain.Openapi.FlutterBaseFiles import http_client, main_dart, api_dart, styles_dart, generic_dart, theme_dart, auth_scafold_dart, nav_bar_dart
 from ....Domain.LaiaUser.Role import Role
 from ....Domain.AccessRights.AccessRights import AccessRight
+import shutil
 
 def create_base_files(app_name: str, models: List[any] = []):
     dart_dir = os.path.join(app_name, 'lib')
@@ -24,8 +25,32 @@ def create_base_files(app_name: str, models: List[any] = []):
         image_name = model.__name__.lower() + ".png"
         image_path = os.path.join(assets_dir, image_name)
         download_image(image_url, image_path)
+    
+    current_dir = os.path.dirname(os.path.abspath(__file__))
 
-    directories = ['config', 'generic', 'models', 'screens']
+    local_image_path = os.path.join(current_dir, 'logo.png')
+    local_image_path_home = os.path.join(current_dir, 'logo_home.png')
+    favicon_path = os.path.join(current_dir, 'logo_favicon.png')
+
+    shutil.copyfile(
+        local_image_path,
+        os.path.join(assets_dir, 'logo.png')
+    )
+
+    shutil.copyfile(
+        local_image_path_home,
+        os.path.join(assets_dir, 'logo_home.png')
+    )
+
+    web_dir = os.path.join(app_name, 'web')
+    os.makedirs(web_dir, exist_ok=True)
+
+    shutil.copyfile(
+        favicon_path,
+        os.path.join(web_dir, 'favicon.png')
+    )
+
+    directories = ['config', 'generic', 'models', 'screens', 'theme']
     for directory in directories:
         os.makedirs(os.path.join(dart_dir, directory), exist_ok=True)
 
@@ -40,7 +65,23 @@ def create_base_files(app_name: str, models: List[any] = []):
     styles_file_content = styles_dart()
     with open(os.path.join(dart_dir, 'config', 'styles.dart'), 'w') as f:
         f.write(styles_file_content)
+
+    http_file_content = http_client(app_name)
+    with open(os.path.join(dart_dir, 'config', 'http_client.dart'), 'w') as f:
+        f.write(http_file_content)
     
     generic_file_content = generic_dart(app_name)
     with open(os.path.join(dart_dir, 'generic', 'generic_widgets.dart'), 'w') as f:
         f.write(generic_file_content)
+
+    nav_bar_file_content = nav_bar_dart(app_name)
+    with open(os.path.join(dart_dir, 'generic', 'nav_bar.dart'), 'w') as f:
+        f.write(nav_bar_file_content)
+
+    theme_file_content = theme_dart()
+    with open(os.path.join(dart_dir, 'theme', 'theme_app.dart'), 'w') as f:
+        f.write(theme_file_content)
+
+    auth_scaffold_file_content = auth_scafold_dart()
+    with open(os.path.join(dart_dir, 'theme', 'auth_scaffold.dart'), 'w') as f:
+        f.write(auth_scaffold_file_content)

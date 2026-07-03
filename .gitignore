@@ -6,3 +6,5 @@ build
 dist
 .eggs
 .pytest_cache
+.claude/
+.worktrees/

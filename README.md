@@ -87,6 +87,31 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 
 * `x-auth` Add authentication (CRUD + register + login)
 
+### Public routes
+
+By default all routes require authentication. Add a `permissions` block to a model to make specific operations publicly accessible (no token required, no access-rights check).
+
+Set the operation value to an **empty list `[]`** to mark it as public. Omit an operation to keep it protected.
+
+Available operations: `create`, `read`, `update`, `delete`, `search`, `aggregate`, `nice`
+
+```yaml
+components:
+  schemas:
+    Offer:
+      type: object
+      permissions:
+        search: []      # anyone can search, no token needed
+        read: []        # anyone can read by ID
+        # create / update / delete — still require auth
+      properties:
+        title:
+          type: string
+        ...
+```
+
+> **Note:** Use `permissions` (without `x-` prefix) directly on the schema definition. The library maps it internally to `x-permissions`.
+
 ### Field extensions
 
 * `x_frontend_widget` Name of the widget overriding the default (String)
@@ -96,3 +121,39 @@ The wheel file will be stored in the "dist" folder and can be pip installed from
 * `x_frontend_placeholder` Placeholder on the edition input form (String)
 * `x_frontend_relation` Model name of the relation id (String)
 * `x_frontend_uspaceMap` Enaire Uspace regulation enabling (Boolean)
+* `x-embedded` Marks the referenced schema as an embedded object (Boolean)
+* `x-exclude-from-response` Never include this field in any API response (Boolean)
+
+### Embedded objects
+
+Fields annotated with `x-embedded: true` declare that the referenced schema is stored **inline** inside the parent document rather than as a separate collection.
+
+Behaviour:
+- The embedded schema is **not exposed as its own CRUD endpoint** — no routes are generated for it.
+- In the generated `model.py` the embedded class extends `BaseModel` instead of `LaiaBaseModel`, so it has no persistence layer of its own.
+- MongoDB serialization handles nested objects automatically via `model_dump`.
+
+Example:
+
+```yaml
+components:
+  schemas:
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+
+    Person:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+          x-embedded: true
+```
+
+In this example, `Address` will be embedded inside `Person` documents in MongoDB. No `/address` routes will be created.
