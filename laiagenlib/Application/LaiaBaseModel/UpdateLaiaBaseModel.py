@@ -73,8 +73,13 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         await check_access_rights_of_fields(model, 'fields_edit', updated_values, access_rights_list)
 
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    configured_owner_fields = extra.get("x-owner-fields") if isinstance(extra, dict) else None
+    has_configured_owner_fields = isinstance(configured_owner_fields, list) and len(configured_owner_fields) > 0
     needs_shard_check = extra.get("x-shard") and "admin" not in user_roles
-    needs_owner_check = "admin" not in user_roles and use_access_rights and not any(not access_right.owner for access_right in access_rights_list)
+    needs_owner_check = "admin" not in user_roles and (
+        (use_access_rights and not any(not access_right.owner for access_right in access_rights_list))
+        or (not use_access_rights and has_configured_owner_fields)
+    )
 
     if needs_shard_check or needs_owner_check:
         current_items = await repository.get_items(model_name, filters={"_id": ObjectId(element_id)}, limit=1)
@@ -96,7 +101,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
             updated_values[shard_key] = user_shard
             
         if needs_owner_check:
-            owner_fields = extra.get("x-owner-fields", ["owner"]) if isinstance(extra, dict) else ["owner"]
+            owner_fields = configured_owner_fields if has_configured_owner_fields else ["owner"]
             is_owner = False
             for field in owner_fields:
                 val = current_doc.get(field)
