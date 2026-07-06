@@ -185,8 +185,10 @@ def StatsController(
 
             # Users by role
             role_pipeline = [
-                { "$unwind": { "path": "$roles", "preserveNullAndEmptyArrays": True } },
-                { "$group": { "_id": "$roles", "count": { "$sum": 1 } } }
+                {"$addFields": {"roles_obj": {"$map": {"input": { "$ifNull": ["$roles", []] }, "as": "r", "in": { "$toObjectId": "$$r" }}}}}, 
+                { "$lookup": { "from": "role", "localField": "roles_obj", "foreignField": "_id", "as": "role_doc" } },
+                { "$unwind": { "path": "$role_doc", "preserveNullAndEmptyArrays": True } },
+                { "$group": { "_id": "$role_doc.name", "count": { "$sum": 1 } } }
             ]
             roles_data = list(collection.aggregate(role_pipeline))
             
@@ -232,7 +234,7 @@ def StatsController(
     async def get_custom_metric(metric_name: str, request: Request):
         return await _get_custom_metric_response(metric_name, request)
 
-    @router.get("/stats/custom/{metric_name}/by-activity")
+    @router.get("/stats/custom/{metric_name}/by-event")
     async def get_custom_metric_by_activity(
             metric_name: str,
             request: Request,
