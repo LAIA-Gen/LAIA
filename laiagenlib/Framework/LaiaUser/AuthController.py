@@ -130,7 +130,8 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 )
                 _logger.info(f"User {user_id} activated via direct link")
             
-            return RedirectResponse(url="https://moucul.tilingpt.com/")
+            frontend_url = (smtp_config or {}).get("frontend_url") or "/"
+            return RedirectResponse(url=frontend_url)
         except Exception as e:
             handle_exception(e)
         
