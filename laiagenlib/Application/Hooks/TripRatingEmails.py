@@ -9,7 +9,7 @@ from ...Domain.Shared.Utils.logger import _logger
 DEFAULT_SUBJECT = "Valora la teva experiencia a MouCultura"
 DEFAULT_TEMPLATE = "mail.valoracio.html"
 DEFAULT_LOCALE = "ca"
-DEFAULT_REVIEW_BASE_URL = "https://moucul.tilingpt.com/"
+DEFAULT_REVIEW_BASE_URL = "https://www.moucultura.cat/"
 
 
 async def send_trip_rating_emails(
