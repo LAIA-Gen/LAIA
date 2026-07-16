@@ -517,8 +517,14 @@ class _HomeState extends State<Home> {
               onSettings: () {
                 // Navigator.push(...)
               },
-              onLogout: () {
-                // tu logout
+              onLogout: () async{
+                final prefs= await SharedPreferences.getInstance();
+                await prefs.remove("token");
+                await prefs.remove("refresh_token");
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const UserLoginWidget()),
+                  (route) => false,
+                );
               },
             ),
           ),
