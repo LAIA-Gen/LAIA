@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from bson import ObjectId, regex
 from pymongo.collection import ReturnDocument
 import json
+from pymongo.errors import OperationFailure
 from ...Application.Shared.Utils.Schemas import list_serial, individual_serial
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
@@ -87,6 +88,8 @@ class MongoModelRepository(ModelRepository):
                     query['_id'] = {'$nin': [ObjectId(id_) for id_ in id_filter['$nin']]}
             else:
                 query['_id'] = {'$in': [ObjectId(id_filter)]}
+
+        geo_near = query.pop('$geoNear', None)
 
         self.convert_dates_in_query(query)
         self.convert_objectids_in_query(query)
@@ -217,7 +220,11 @@ class MongoModelRepository(ModelRepository):
                 # Clean up intermediate fields
                 lookup_stages.append({"$project": {temp_field: 0, f"{local_field}_as_obj": 0}})
 
-            pipeline = [{"$match": base_query}]
+            pipeline = []
+            if geo_near:
+                pipeline.append({"$geoNear": geo_near})
+            if base_query:
+                pipeline.append({"$match": base_query})
             pipeline.extend(lookup_stages)
 
             if post_lookup_query:
@@ -229,23 +236,75 @@ class MongoModelRepository(ModelRepository):
             pipeline.append({"$skip": skip})
             pipeline.append({"$limit": limit})
 
-            items = collection.aggregate(pipeline)
+            def safe_aggregate(pl):
+                try:
+                    return list(collection.aggregate(pl))
+                except OperationFailure as e:
+                    if e.code in (27, 291) and geo_near and "key" in geo_near:
+                        # IndexNotFound or NoQueryExecutionPlans, create index and retry
+                        _logger.info(f"Auto-creating 2dsphere index for field: {geo_near['key']}")
+                        collection.create_index([(geo_near["key"], "2dsphere")])
+                        return list(collection.aggregate(pl))
+                    raise e
+
+            items = safe_aggregate(pipeline)
             serialized_items = list_serial(items)
 
             if post_lookup_query:
-                count_pipeline = [{"$match": base_query}]
+                count_pipeline = []
+                if geo_near:
+                    count_pipeline.append({"$geoNear": geo_near})
+                if base_query:
+                    count_pipeline.append({"$match": base_query})
                 count_pipeline.extend(lookup_stages)
                 count_pipeline.append({"$match": post_lookup_query})
                 count_pipeline.append({"$count": "count"})
                 
-                count_res = list(collection.aggregate(count_pipeline))
+                count_res = safe_aggregate(count_pipeline)
                 total_count = count_res[0]["count"] if count_res else 0
             else:
-                total_count = collection.count_documents(query)
+                if geo_near:
+                    count_pipeline = [{"$geoNear": geo_near}]
+                    if base_query:
+                        count_pipeline.append({"$match": base_query})
+                    count_pipeline.append({"$count": "count"})
+                    count_res = safe_aggregate(count_pipeline)
+                    total_count = count_res[0]["count"] if count_res else 0
+                else:
+                    total_count = collection.count_documents(query)
         else:
-            items = collection.find(query, skip=skip, limit=limit, sort=sorts)
-            serialized_items = list_serial(items)
-            total_count = collection.count_documents(query)
+            if geo_near:
+                def safe_aggregate(pl):
+                    try:
+                        return list(collection.aggregate(pl))
+                    except OperationFailure as e:
+                        if e.code in (27, 291) and "key" in geo_near:
+                            _logger.info(f"Auto-creating 2dsphere index for field: {geo_near['key']}")
+                            collection.create_index([(geo_near["key"], "2dsphere")])
+                            return list(collection.aggregate(pl))
+                        raise e
+
+                pipeline = [{"$geoNear": geo_near}]
+                if query:
+                    pipeline.append({"$match": query})
+                if sorts:
+                    pipeline.append({"$sort": sorts})
+                pipeline.append({"$skip": skip})
+                pipeline.append({"$limit": limit})
+                items = safe_aggregate(pipeline)
+                serialized_items = list_serial(items)
+                
+                count_pipeline = [{"$geoNear": geo_near}]
+                if query:
+                    count_pipeline.append({"$match": query})
+                count_pipeline.append({"$count": "count"})
+                count_res = safe_aggregate(count_pipeline)
+                total_count = count_res[0]["count"] if count_res else 0
+            else:
+                sort_list = [(k, v) for k, v in sorts.items()] if sorts else None
+                items = collection.find(query, skip=skip, limit=limit, sort=sort_list)
+                serialized_items = list_serial(items)
+                total_count = collection.count_documents(query)
         
         return serialized_items, total_count
     

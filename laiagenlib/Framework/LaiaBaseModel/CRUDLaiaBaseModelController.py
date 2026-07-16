@@ -152,13 +152,35 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             handle_exception(e)
     @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
+    async def search_element(
+        token: get_auth_dependency() = None, 
+        skip: int = 0, 
+        limit: int = 10, 
+        filters: dict = Body({}), 
+        orders: dict = Body({}), 
+        populate: Optional[List] = Body(None),
+        geoFilter: Optional[dict] = Body(None)
+    ):
         is_public = is_public_operation(model, "search")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_id = ''
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
+        
+        if geoFilter and "field" in geoFilter and "coordinates" in geoFilter and "maxDistanceKm" in geoFilter:
+            filters["$geoNear"] = {
+                "near": {
+                    "type": "Point",
+                    "coordinates": geoFilter["coordinates"]
+                },
+                "distanceField": "distanceKm",
+                "maxDistance": geoFilter["maxDistanceKm"] * 1000,
+                "distanceMultiplier": 1 / 1000,
+                "spherical": True,
+                "key": geoFilter["field"]
+            }
+            
         try:
             return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate)
         except Exception as e:

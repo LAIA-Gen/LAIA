@@ -56,8 +56,10 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
         if use_ontology:
             extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
             context = extra.get("@context", {})
-    except Exception:
-        raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise ValueError(f"Error occurred while searching {model.__name__} with filters: {filters}. Details: {str(e)}")
     
     if populate:
         from ...Domain.Shared.Utils.ModelRegistry import get_model_class
