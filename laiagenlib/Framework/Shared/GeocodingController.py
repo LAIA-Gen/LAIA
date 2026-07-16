@@ -104,9 +104,13 @@ def GeocodingController():
                         "lon": lon
                     })
                 
+                direct_distance_meters = await get_distance(coords[0], coords[-1])
+                direct_distance_km = round(direct_distance_meters / 1000.0, 2)
+                
                 return JSONResponse(content={
                     "distances_km": distances_km,
                     "total_distance_km": total_distance_km,
+                    "direct_distance_km": direct_distance_km,
                     "coordinates": coords_response
                 }, status_code=200)
                 
