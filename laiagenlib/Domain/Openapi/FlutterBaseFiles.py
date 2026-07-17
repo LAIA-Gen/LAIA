@@ -517,8 +517,14 @@ class _HomeState extends State<Home> {
               onSettings: () {
                 // Navigator.push(...)
               },
-              onLogout: () {
-                // tu logout
+              onLogout: () async{
+                final prefs= await SharedPreferences.getInstance();
+                await prefs.remove("token");
+                await prefs.remove("refresh_token");
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const UserLoginWidget()),
+                  (route) => false,
+                );
               },
             ),
           ),
@@ -792,6 +798,17 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         if imp not in extra_imports:
           print(f"[LAIA Flutter enum import] {model.__name__}.{prop_name} -> {imp.strip()}")
           extra_imports += imp
+      schema_format = None
+      if openapiModel:
+        prop_yaml_fmt = openapiModel.properties.get(prop_name, {})
+        if isinstance(prop_yaml_fmt, dict):
+          schema_format = prop_yaml_fmt.get('format')
+          if not schema_format and 'anyOf' in prop_yaml_fmt:
+            for variant in prop_yaml_fmt['anyOf']:
+              if isinstance(variant, dict) and 'format' in variant:
+                schema_format = variant['format']
+                break
+
       fields += f"  @Field("
       
       if prop_name in frontend_props:
@@ -806,6 +823,8 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
           else:
             frontend_details['widget'] = f"{relation}FieldWidget"
             dart_prop_type = 'dynamic?' if is_optional else 'dynamic'
+        if schema_format and 'format' not in frontend_details:
+          frontend_details['format'] = schema_format
         for key, value in frontend_details.items():
           if isinstance(value, bool):
             fields += f"{key}: {str(value).lower()}, "
@@ -816,7 +835,10 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
         if value_lower:
           extra_imports += f"import 'package:{app_name}/models/{value_lower}.dart';\n"
       else:
-        fields += "fieldName: '{}'".format(prop_name)
+        if schema_format:
+          fields += "fieldName: '{}', format: '{}'".format(prop_name, schema_format)
+        else:
+          fields += "fieldName: '{}'".format(prop_name)
 
       if openapiModel:
         prop_yaml = openapiModel.properties.get(prop_name, {})
@@ -1153,6 +1175,7 @@ def pydantic_to_dart_type(pydantic_type: str):
         'str': 'String',
         'bool': 'bool',
         'datetime': 'DateTime',
+        'date': 'DateTime',
         'list': 'List<dynamic>',
         'List': 'List<dynamic>',
         'List[int]': 'List<int>',
@@ -1174,6 +1197,7 @@ def pydantic_to_dart_type(pydantic_type: str):
         'Optional[EmailStr]': 'String?',
         'Optional[float]': 'double?',
         'Optional[datetime]': 'DateTime?',
+        'Optional[date]': 'DateTime?',
         'Optional[List]': 'List<dynamic>?',
         'Optional[List[int]]': 'List<int>?',
         'Optional[List[str]]': 'List<String>?',
@@ -1212,7 +1236,7 @@ def pydantic_to_dart_type(pydantic_type: str):
     return dart_type
 
 def embedded_class_name_from_type(type_str: str):
-    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime'}
+    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime', 'date'}
     type_str = str(type_str).strip().strip("'\"")
     cls_match = (
         re.match(r'Optional\[(?:List|list)\[(\w+)\]\]', type_str) or
