@@ -3,6 +3,7 @@ import pytest_asyncio
 from pymongo import MongoClient
 from bson import ObjectId
 from pydantic import ConfigDict
+from fastapi import HTTPException
 from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoModelRepository
 from laiagenlib.Application.LaiaBaseModel.UpdateLaiaBaseModel import update_laia_base_model
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
@@ -24,6 +25,75 @@ class Offer(LaiaBaseModel):
     originText: str
     acceptedUserIds: list = []
 
+class FullProtectedOffer(LaiaBaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "x-hooks": {
+            "preupdate": [
+                {
+                    "lambda": "anonymous",
+                    "condition": "statusOffer == 'full'",
+                    "action": "HttpResponse({status: 409, body: 'Offer is full'})",
+                }
+            ]
+        }
+    })
+
+    originText: str
+    statusOffer: str = "active"
+
+class CalculatedOffer(LaiaBaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "x-hooks": {
+            "postupdate": [
+                {
+                    "lambda": "anonymous",
+                    "condition": "true",
+                    "action": "totalSeatsOccupied = len(acceptedUserIds)",
+                },
+                {
+                    "lambda": "anonymous",
+                    "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
+                    "action": "statusOffer = 'full'",
+                },
+            ]
+        }
+    })
+
+    originText: str
+    acceptedUserIds: list = []
+    totalSeatsOccupied: int = 0
+    totalSeats: int = 0
+    statusOffer: str = "active"
+
+class QueryCalculatedOffer(LaiaBaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "x-hooks": {
+            "postupdate": [
+                {
+                    "lambda": "anonymous",
+                    "condition": "true",
+                    "action": "acceptedUserIds = QUERY(Match.offerId == {{id}} && Match.status == 'confirmed').initiated_by",
+                },
+                {
+                    "lambda": "anonymous",
+                    "condition": "true",
+                    "action": "totalSeatsOccupied = len(acceptedUserIds)",
+                },
+                {
+                    "lambda": "anonymous",
+                    "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
+                    "action": "statusOffer = 'full'",
+                },
+            ]
+        }
+    })
+
+    originText: str
+    acceptedUserIds: list = []
+    totalSeatsOccupied: int = 0
+    totalSeats: int = 0
+    statusOffer: str = "active"
+
 @pytest.fixture
 def in_memory_db():
     client = MongoClient()
@@ -31,6 +101,10 @@ def in_memory_db():
     db.drop_collection("user")
     db.drop_collection("drone")
     db.drop_collection("offer")
+    db.drop_collection("fullprotectedoffer")
+    db.drop_collection("calculatedoffer")
+    db.drop_collection("querycalculatedoffer")
+    db.drop_collection("match")
     db.drop_collection("accessright")
     return db
 
@@ -117,3 +191,88 @@ class TestUpdateLaiaBaseModel:
                 use_access_rights=False,
                 user_id=str(intruder_id),
             )
+
+    @pytest.mark.asyncio
+    async def test_preupdate_hook_can_block_update_with_http_409(self, repository_instance):
+        offer = await repository_instance.post_item("fullprotectedoffer", {
+            "originText": "Original",
+            "statusOffer": "full",
+        })
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_laia_base_model(
+                offer["id"],
+                {"originText": "Should not be saved"},
+                FullProtectedOffer,
+                ["admin"],
+                repository_instance,
+            )
+
+        assert exc_info.value.status_code == 409
+        assert exc_info.value.detail == "Offer is full"
+        stored = await repository_instance.get_item("fullprotectedoffer", offer["id"])
+        assert stored["originText"] == "Original"
+
+    @pytest.mark.asyncio
+    async def test_postupdate_hook_calculates_total_seats_from_accepted_users(self, repository_instance):
+        user_1 = str(ObjectId())
+        user_2 = str(ObjectId())
+        offer = await repository_instance.post_item("calculatedoffer", {
+            "originText": "Original",
+            "acceptedUserIds": [],
+            "totalSeatsOccupied": 0,
+            "totalSeats": 2,
+            "statusOffer": "active",
+        })
+
+        updated = await update_laia_base_model(
+            offer["id"],
+            {"acceptedUserIds": [user_1, user_2]},
+            CalculatedOffer,
+            ["admin"],
+            repository_instance,
+        )
+
+        assert updated["acceptedUserIds"] == [user_1, user_2]
+        assert updated["totalSeatsOccupied"] == 2
+        assert updated["statusOffer"] == "full"
+
+    @pytest.mark.asyncio
+    async def test_postupdate_hook_can_calculate_accepted_users_from_match_query(self, repository_instance):
+        user_1 = str(ObjectId())
+        user_2 = str(ObjectId())
+        ignored_user = str(ObjectId())
+        offer = await repository_instance.post_item("querycalculatedoffer", {
+            "originText": "Original",
+            "acceptedUserIds": [],
+            "totalSeatsOccupied": 0,
+            "totalSeats": 2,
+            "statusOffer": "active",
+        })
+        await repository_instance.post_item("match", {
+            "offerId": offer["id"],
+            "status": "confirmed",
+            "initiated_by": user_1,
+        })
+        await repository_instance.post_item("match", {
+            "offerId": offer["id"],
+            "status": "confirmed",
+            "initiated_by": user_2,
+        })
+        await repository_instance.post_item("match", {
+            "offerId": offer["id"],
+            "status": "pending_confirmation",
+            "initiated_by": ignored_user,
+        })
+
+        updated = await update_laia_base_model(
+            offer["id"],
+            {"originText": "Recalculated"},
+            QueryCalculatedOffer,
+            ["admin"],
+            repository_instance,
+        )
+
+        assert updated["acceptedUserIds"] == [user_1, user_2]
+        assert updated["totalSeatsOccupied"] == 2
+        assert updated["statusOffer"] == "full"

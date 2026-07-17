@@ -1,27 +1,25 @@
 import re
 from typing import Any, Optional
 
+from fastapi import HTTPException
+
 from ...Domain.Hooks.LambdaRegistry import get_lambda
 from ...Domain.Shared.Utils.logger import _logger
 
 
 async def execute_hooks(event: str, model, element: dict, smtp_config: dict = None, repository=None):
     """
-    Executa els hooks definits al model per a un event concret.
-    
-    Args:
-        event: "postsave", "postupdate", "postdelete"
-        model: La classe del model Pydantic (amb model_config)
-        element: L'element creat/actualitzat (dict)
-        smtp_config: Configuració SMTP
-        repository: Repositori per fer lookups (populate de relacions)
+    Executes hooks defined in a model x-hooks section.
+
+    Supported events include postsave, preupdate, postupdate and postdelete.
+    The returned dict may contain mutations made by anonymous hooks.
     """
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
     hooks_config = extra.get("x-hooks", {})
     hook_list = hooks_config.get(event, [])
 
     if not hook_list:
-        return
+        return element
 
     _logger.info(f"Executing {len(hook_list)} hook(s) for event '{event}' on {model.__name__}")
 
@@ -31,27 +29,25 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
             _logger.warning(f"Hook without lambda name in {model.__name__}, skipping")
             continue
 
-        # 1. Avaluar condició
         condition = hook_def.get("condition")
-        if condition and not _evaluate_condition(condition, element):
+        if condition and not await _evaluate_condition(condition, element, repository):
             _logger.info(f"Hook condition '{condition}' not met, skipping")
             continue
 
-        # 2. Obtenir lambda
+        if lambda_name == "anonymous":
+            await _execute_anonymous_action(hook_def.get("action", ""), element, repository)
+            _logger.info("Hook 'anonymous' executed successfully")
+            continue
+
         try:
             lambda_func = get_lambda(lambda_name)
         except ValueError as e:
             _logger.error(str(e))
             continue
 
-        # 3. Resoldre paràmetres
         params = {k: v for k, v in hook_def.items() if k not in ("lambda", "condition")}
-        
-        # Comprovar si hi ha patró "wildcard" ({{acceptedUserIds.*.email}})
-        # que implica iterar sobre una llista
         expanded_params_list = await _expand_wildcard_params(params, element, repository)
 
-        # 4. Executar lambda per cada conjunt de paràmetres resolts
         for resolved_params in expanded_params_list:
             resolved = await _resolve_all_params(resolved_params, element, repository)
             try:
@@ -60,77 +56,208 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
             except Exception as e:
                 _logger.error(f"Hook '{lambda_name}' failed for {model.__name__}: {e}")
 
+    return element
 
-def _evaluate_condition(condition: str, element: dict) -> bool:
-    """
-    Avalua una condició simple contra l'element.
-    Suporta: ==, !=
-    Exemples: "statusOffer == 'full'", "isActive != true"
-    """
-    # Parse: camp operador valor
-    match = re.match(r"^\s*(\w+)\s*(==|!=)\s*['\"]?([^'\"]+)['\"]?\s*$", condition)
-    if not match:
-        _logger.warning(f"Cannot parse condition: '{condition}'")
+
+async def _evaluate_condition(condition: str, element: dict, repository=None) -> bool:
+    try:
+        return bool(await _evaluate_expression(condition, element, repository))
+    except Exception as exc:
+        _logger.warning(f"Cannot evaluate condition '{condition}': {exc}")
         return False
 
-    field_name, operator, expected_value = match.groups()
-    actual_value = element.get(field_name)
 
-    if actual_value is None:
+async def _execute_anonymous_action(action: str, element: dict, repository=None):
+    if not action:
+        return
+
+    action = action.strip()
+    if action.startswith("HttpResponse"):
+        status_match = re.search(r"status\s*:\s*(\d+)", action)
+        body_match = re.search(r"body\s*:\s*['\"]([^'\"]*)['\"]", action)
+        status_code = int(status_match.group(1)) if status_match else 409
+        detail = body_match.group(1) if body_match else "Hook response"
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    assignment = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*$", action)
+    if not assignment:
+        _logger.warning(f"Cannot parse anonymous action: '{action}'")
+        return
+
+    field_name, expression = assignment.groups()
+    element[field_name] = await _evaluate_expression(expression, element, repository)
+
+
+async def _evaluate_expression(expression: str, element: dict, repository=None) -> Any:
+    expression = str(expression).strip()
+
+    if expression.lower() == "true":
+        return True
+    if expression.lower() == "false":
         return False
 
-    # Convertir a string per comparar
-    actual_str = str(actual_value)
-    
-    if operator == "==":
-        return actual_str == expected_value
-    elif operator == "!=":
-        return actual_str != expected_value
-    
-    return False
+    query_values = {}
+    expression = await _replace_query_expressions(expression, element, repository, query_values)
+    expression = await _replace_mustache_expressions(expression, element, repository)
+    expression = re.sub(r"(?<![!<>=])=(?![=])", "==", expression)
+    expression = expression.replace("&&", " and ").replace("||", " or ")
+
+    if expression in query_values:
+        return query_values[expression]
+
+    if re.match(r"^[A-Za-z_]\w*$", expression):
+        return element.get(expression, [])
+
+    safe_globals = {"__builtins__": {}}
+    safe_locals = {
+        "len": len,
+        "True": True,
+        "False": False,
+        "None": None,
+        "null": None,
+        **query_values,
+        **{k: v for k, v in element.items() if re.match(r"^[A-Za-z_]\w*$", str(k))},
+    }
+    return eval(expression, safe_globals, safe_locals)
+
+
+async def _replace_query_expressions(expression: str, element: dict, repository=None, query_values: dict = None) -> str:
+    query_values = query_values if query_values is not None else {}
+    pattern = re.compile(r"QUERY\(([^()]*)\)(?:\.([A-Za-z_]\w*))?")
+
+    while True:
+        match = pattern.search(expression)
+        if not match:
+            return expression
+
+        query_expr, projection = match.groups()
+        items = await _execute_query(query_expr, element, repository)
+        value = [item.get(projection) for item in items if projection in item] if projection else items
+        key = f"__query_{len(query_values)}"
+        query_values[key] = value
+        expression = expression[:match.start()] + key + expression[match.end():]
+
+
+async def _replace_mustache_expressions(expression: str, element: dict, repository=None) -> str:
+    full_match = re.match(r"^\{\{(\S+)\}\}$", expression)
+    if full_match:
+        value = await _resolve_path(full_match.group(1), element, repository)
+        return repr(value)
+
+    replacements = []
+    for match in re.finditer(r"\{\{(\S+?)\}\}", expression):
+        value = await _resolve_path(match.group(1), element, repository)
+        replacements.append((match.span(), repr(value)))
+
+    for (start, end), replacement in reversed(replacements):
+        expression = expression[:start] + replacement + expression[end:]
+    return expression
+
+
+async def _execute_query(query_expr: str, element: dict, repository=None) -> list:
+    if not repository:
+        return []
+
+    clauses = [part.strip() for part in re.split(r"\s+&&\s+|\s+and\s+", query_expr) if part.strip()]
+    if not clauses:
+        return []
+
+    model_name = None
+    filters = {}
+    post_filters = []
+
+    for clause in clauses:
+        match = re.match(r"^(?:(\w+)\.)?(\w+)\s*(==|!=|=)\s*(.+)$", clause)
+        if not match:
+            _logger.warning(f"Cannot parse QUERY clause: '{clause}'")
+            return []
+
+        clause_model, field_name, operator, raw_value = match.groups()
+        if clause_model:
+            model_name = model_name or clause_model.lower()
+
+        value = await _evaluate_query_value(raw_value.strip(), element, repository)
+        if operator in ("=", "=="):
+            filters[field_name] = value
+        else:
+            post_filters.append((field_name, value))
+
+    if not model_name:
+        _logger.warning(f"QUERY without model name: '{query_expr}'")
+        return []
+
+    items, _ = await repository.get_items(model_name=model_name, filters=filters, limit=1000)
+
+    for field_name, forbidden_value in post_filters:
+        items = [item for item in items if str(item.get(field_name)) != str(forbidden_value)]
+    return items
+
+
+async def _evaluate_query_value(raw_value: str, element: dict, repository=None) -> Any:
+    if re.match(r"^\{\{\S+\}\}$", raw_value):
+        return await _resolve_path(raw_value[2:-2], element, repository)
+    if (raw_value.startswith("'") and raw_value.endswith("'")) or (raw_value.startswith('"') and raw_value.endswith('"')):
+        return raw_value[1:-1]
+    if raw_value.lower() == "true":
+        return True
+    if raw_value.lower() == "false":
+        return False
+    try:
+        return int(raw_value)
+    except ValueError:
+        return raw_value
+
+
+async def _resolve_path(path: str, element: dict, repository=None) -> Any:
+    if path == "_self":
+        return element
+
+    current_value: Any = element
+    for part in path.split("."):
+        if isinstance(current_value, dict):
+            current_value = current_value.get(part)
+            continue
+
+        if isinstance(current_value, list):
+            return [item.get(part) for item in current_value if isinstance(item, dict) and part in item]
+
+        if current_value and repository:
+            referenced = await _populate_reference(str(current_value), repository)
+            current_value = referenced.get(part) if referenced else None
+            continue
+
+        return None
+
+    return current_value
 
 
 async def _expand_wildcard_params(params: dict, element: dict, repository=None) -> list:
-    """
-    Si hi ha un paràmetre amb patró {{field.*.subfield}}, expandeix a N conjunts
-    de paràmetres (un per cada element de la llista).
-    Si no hi ha wildcards, retorna [params] directament.
-    """
     wildcard_pattern = re.compile(r"\{\{(\w+)\.\*\.(\w+)\}\}")
-    
-    # Buscar si algun valor conté wildcards
     wildcard_field = None
     wildcard_subfield = None
-    
-    for key, value in params.items():
-        if isinstance(value, str):
-            match = wildcard_pattern.search(value)
-            if match:
-                wildcard_field = match.group(1)
-                wildcard_subfield = match.group(2)
-                break
-        if isinstance(value, dict):
-            for k, v in value.items():
-                if isinstance(v, str):
-                    match = wildcard_pattern.search(v)
-                    if match:
-                        wildcard_field = match.group(1)
-                        wildcard_subfield = match.group(2)
-                        break
+
+    for value in params.values():
+        values_to_check = value.values() if isinstance(value, dict) else [value]
+        for nested_value in values_to_check:
+            if isinstance(nested_value, str):
+                match = wildcard_pattern.search(nested_value)
+                if match:
+                    wildcard_field = match.group(1)
+                    wildcard_subfield = match.group(2)
+                    break
+        if wildcard_field:
+            break
 
     if not wildcard_field:
         return [params]
 
-    # Obtenir la llista d'IDs
     ids_list = element.get(wildcard_field, [])
     if not ids_list or not isinstance(ids_list, list):
         _logger.warning(f"Wildcard field '{wildcard_field}' is not a list or is empty")
         return []
 
-    # Per cada ID, fer populate i crear un conjunt de paràmetres
     expanded = []
     for item_id in ids_list:
-        # Fer lookup a la BD per obtenir les dades de l'element referenciat
         referenced_data = None
         if repository:
             try:
@@ -142,18 +269,14 @@ async def _expand_wildcard_params(params: dict, element: dict, repository=None) 
         if not referenced_data:
             continue
 
-        # Crear còpia dels params substituint wildcards
-        expanded_params = _replace_wildcard_in_params(
-            params, wildcard_field, referenced_data
-        )
-        expanded.append(expanded_params)
+        expanded.append(_replace_wildcard_in_params(params, wildcard_field, referenced_data))
 
     return expanded
 
 
 def _replace_wildcard_in_params(params: dict, field: str, data: dict) -> dict:
-    """Substitueix qualsevol {{field.*.subfield}} pels valors reals de data[subfield]."""
     import copy
+
     new_params = copy.deepcopy(params)
     pattern = re.compile(f"\\{{\\{{{field}\\.\\*\\.(\\w+)\\}}\\}}")
 
@@ -173,9 +296,6 @@ def _replace_wildcard_in_params(params: dict, field: str, data: dict) -> dict:
 
 
 async def _resolve_all_params(params: dict, element: dict, repository=None) -> dict:
-    """
-    Resol totes les variables {{camp}} dins dels paràmetres.
-    """
     resolved = {}
     for key, value in params.items():
         if isinstance(value, str):
@@ -193,67 +313,24 @@ async def _resolve_all_params(params: dict, element: dict, repository=None) -> d
 
 
 async def _resolve_value(value: str, element: dict, repository=None) -> Any:
-    """
-    Resol una variable {{camp}} o {{camp.subcamp}} pel seu valor real.
-    
-    - {{email}} → element["email"]
-    - {{_self}} → tot l'element
-    - {{name}} → element["name"]
-    - {{userId.email}} → lookup a BD per obtenir User i retornar email
-    """
-    # Patró: tota la cadena és una variable
     full_match = re.match(r"^\{\{(\S+)\}\}$", value)
     if not full_match:
-        # Pot tenir variables dins del text: "Hola {{name}}"
-        def replace_var(m):
-            var_name = m.group(1)
-            if var_name == "_self":
-                return str(element)
-            if "." in var_name:
-                # No podem fer async dins de re.sub, retornem placeholder
-                return str(element.get(var_name.split(".")[0], ""))
-            return str(element.get(var_name, ""))
-        
-        result = re.sub(r"\{\{(\S+?)\}\}", replace_var, value)
+        result = value
+        replacements = []
+        for match in re.finditer(r"\{\{(\S+?)\}\}", value):
+            resolved = await _resolve_path(match.group(1), element, repository)
+            replacements.append((match.span(), "" if resolved is None else str(resolved)))
+        for (start, end), replacement in reversed(replacements):
+            result = result[:start] + replacement + result[end:]
         return result
 
     var_path = full_match.group(1)
-
-    # Cas especial: _self
-    if var_path == "_self":
-        return element
-
-    # Cas simple: camp directe
-    if "." not in var_path:
-        return element.get(var_path, value)
-
-    # Cas compost: camp.subcamp (necessita populate)
-    parts = var_path.split(".")
-    field_name = parts[0]
-    sub_field = parts[1]
-
-    ref_id = element.get(field_name)
-    if not ref_id:
-        return value
-
-    # Fer lookup a la BD
-    if repository:
-        try:
-            referenced = await _populate_reference(str(ref_id), repository)
-            if referenced:
-                return referenced.get(sub_field, value)
-        except Exception as e:
-            _logger.error(f"Failed to resolve {var_path}: {e}")
-
-    return value
+    resolved = await _resolve_path(var_path, element, repository)
+    return value if resolved is None else resolved
 
 
 async def _populate_reference(ref_id: str, repository) -> Optional[dict]:
-    """
-    Busca un element per ID a la BD (prova col·leccions comunes).
-    """
-    # Prova primer amb 'user' (el cas més comú)
-    for collection in ["user", "offer", "demand", "activity", "site", "vehicle"]:
+    for collection in ["user", "offer", "demand", "match", "activity", "site", "vehicle"]:
         try:
             items, _ = await repository.get_items(
                 model_name=collection,
