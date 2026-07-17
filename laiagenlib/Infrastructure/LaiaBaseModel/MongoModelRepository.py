@@ -1,5 +1,5 @@
 from typing import Any, List, TypeVar, Optional, Dict
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 from pydantic import BaseModel
 from bson import ObjectId, regex
@@ -20,14 +20,14 @@ class MongoModelRepository(ModelRepository):
     def convert_dates_in_query(self, query: dict):
         def conv(v):
             if isinstance(v, str) and "T" in v:
-                if v.endswith("Z"):
-                    v2 = v[:-1] + "+00:00"
-                else:
-                    v2 = v
-                try:
-                    return datetime.fromisoformat(v2)
-                except ValueError:
-                    return v
+                    if v.endswith("Z"):
+                        v2 = v[:-1] + "+00:00"
+                    else:
+                        v2 = v
+                    try:
+                        return datetime.fromisoformat(v2)
+                    except ValueError:
+                        return v
             return v
 
         for k, v in list(query.items()):
@@ -70,6 +70,17 @@ class MongoModelRepository(ModelRepository):
             return {k: self.convert_enums_in_query(v) for k, v in data.items()}
         elif isinstance(data, list):
             return [self.convert_enums_in_query(v) for v in data]
+        return data
+
+    def convert_date_objects(self, data: any) -> any:
+        if isinstance(data, datetime):
+            return data
+        elif isinstance(data, date):
+            return datetime(data.year, data.month, data.day)
+        elif isinstance(data, dict):
+            return {k: self.convert_date_objects(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self.convert_date_objects(v) for v in data]
         return data
 
     async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None, populate: Optional[List[str]] = None):
@@ -269,6 +280,7 @@ class MongoModelRepository(ModelRepository):
         item_dict.pop('id', None)
         self.convert_objectids_in_query(item_dict)
         item_dict = self.convert_enums_in_query(item_dict)
+        item_dict = self.convert_date_objects(item_dict)
 
         created_result = collection.insert_one(item_dict)
         inserted_id = created_result.inserted_id
@@ -282,6 +294,7 @@ class MongoModelRepository(ModelRepository):
         collection = self.db[model_name]
         self.convert_objectids_in_query(update_fields)
         update_fields = self.convert_enums_in_query(update_fields)
+        update_fields = self.convert_date_objects(update_fields)
         update_query = {'$set': update_fields}
         
         updated_item = collection.find_one_and_update(

@@ -137,7 +137,7 @@ def add_update_models_at_end(modified_content: str, models: List[any]) -> str:
 T = TypeVar('T', bound='BaseModel')
 
 def _extract_embedded_class_name(field_type: str):
-    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime'}
+    primitives = {'str', 'int', 'float', 'bool', 'Any', 'Dict', 'datetime', 'date'}
     field_type = field_type.strip().strip("'\"")
     cls_match = (
         re.match(r'Optional\[(?:List|list)\[(\w+)\]\]', field_type) or
