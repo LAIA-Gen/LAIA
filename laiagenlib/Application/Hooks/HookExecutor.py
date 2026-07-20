@@ -1,3 +1,5 @@
+import importlib.util
+import os
 import re
 from typing import Any, Optional
 
@@ -42,6 +44,21 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
             continue
 
         if has_script:
+            if isinstance(script, str) and not hook_body.get("execute") and not hook_body.get("action"):
+                params = hook_def.get("params", {})
+                await _execute_file_script(
+                    script,
+                    event=event,
+                    model=model,
+                    element=element,
+                    hook_def=hook_def,
+                    params=params,
+                    smtp_config=smtp_config,
+                    repository=repository,
+                )
+                _logger.info(f"Hook script '{script}' executed successfully")
+                continue
+
             execute = hook_body.get("execute") or hook_body.get("action")
             await _execute_script(execute, element, repository)
             _logger.info("Hook script executed successfully")
@@ -94,6 +111,66 @@ async def _execute_script(execute: str, element: dict, repository=None):
 
     field_name, expression = assignment.groups()
     element[field_name] = await _evaluate_expression(expression, element, repository)
+
+
+async def _execute_file_script(
+    script: str,
+    event: str,
+    model,
+    element: dict,
+    hook_def: dict,
+    params: dict,
+    smtp_config: dict = None,
+    repository=None,
+):
+    hooks_dir = (smtp_config or {}).get("hooks_dir") or "hooks"
+    script_path = _resolve_script_path(hooks_dir, script)
+    module = _load_script_module(script_path)
+    run_func = getattr(module, "run", None)
+    if not run_func:
+        raise ValueError(f"Hook script '{script}' must define a run(context) function")
+
+    resolved_params = await _resolve_all_params(params or {}, element, repository)
+    context = {
+        "event": event,
+        "model": model,
+        "element": element,
+        "repository": repository,
+        "smtp_config": smtp_config,
+        "params": resolved_params,
+        "hook": hook_def,
+    }
+
+    result = run_func(context)
+    if hasattr(result, "__await__"):
+        result = await result
+
+    if isinstance(result, dict):
+        element.update(result)
+
+
+def _resolve_script_path(hooks_dir: str, script: str) -> str:
+    script_name = script.replace("\\", "/").strip("/")
+    if not script_name.endswith(".py"):
+        script_name = f"{script_name}.py"
+
+    root = os.path.abspath(hooks_dir)
+    path = os.path.abspath(os.path.join(root, *script_name.split("/")))
+    if os.path.commonpath([root, path]) != root:
+        raise ValueError(f"Hook script path escapes hooks directory: {script}")
+    if not os.path.exists(path):
+        raise ValueError(f"Hook script not found: {path}")
+    return path
+
+
+def _load_script_module(script_path: str):
+    module_name = "laiagen_hook_" + re.sub(r"\W+", "_", script_path)
+    spec = importlib.util.spec_from_file_location(module_name, script_path)
+    if not spec or not spec.loader:
+        raise ValueError(f"Cannot load hook script: {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 async def _evaluate_expression(expression: str, element: dict, repository=None) -> Any:

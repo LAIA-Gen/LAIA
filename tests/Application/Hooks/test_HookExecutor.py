@@ -80,6 +80,25 @@ class TopLevelScriptHook(LaiaBaseModel):
     totalSeatsOccupied: int = 0
 
 
+class FileScriptHook(LaiaBaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "x-hooks": {
+            "postupdate": [
+                {
+                    "script": "offer/update_offer_status",
+                    "params": {
+                        "source": "{{name}}",
+                    },
+                }
+            ]
+        }
+    })
+
+    name: str
+    statusOffer: str = "active"
+    sourceName: str | None = None
+
+
 @pytest.mark.asyncio
 async def test_hook_resolves_nested_references_across_models():
     captured = {}
@@ -129,3 +148,31 @@ async def test_hook_accepts_script_marker_with_top_level_execute():
     )
 
     assert element["totalSeatsOccupied"] == 2
+
+
+@pytest.mark.asyncio
+async def test_hook_executes_python_script_file(tmp_path):
+    hooks_dir = tmp_path / "hooks"
+    script_dir = hooks_dir / "offer"
+    script_dir.mkdir(parents=True)
+    (script_dir / "update_offer_status.py").write_text(
+        "\n".join([
+            "async def run(context):",
+            "    return {",
+            "        'statusOffer': 'full',",
+            "        'sourceName': context['params']['source'],",
+            "    }",
+        ]),
+        encoding="utf-8",
+    )
+
+    element = await execute_hooks(
+        "postupdate",
+        FileScriptHook,
+        {"name": "Oferta test", "statusOffer": "active"},
+        smtp_config={"hooks_dir": str(hooks_dir)},
+        repository=FakeRepository(),
+    )
+
+    assert element["statusOffer"] == "full"
+    assert element["sourceName"] == "Oferta test"

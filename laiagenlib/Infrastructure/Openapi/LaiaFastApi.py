@@ -37,6 +37,7 @@ class LaiaFastApi():
             smtp_password: str = "",
             smtp_tls: bool = True,
             templates_dir: str = "email_templates",
+            hooks_dir: str = "",
             add_geolocation: bool = True):
         
         self.db = db
@@ -60,13 +61,15 @@ class LaiaFastApi():
                 status_code=500,
                 content={"msg": f"bson.errors.InvalidId: {str(exc)}"}
             )
+        resolved_hooks_dir = hooks_dir or os.path.join(os.path.dirname(templates_dir), "hooks")
         self.smtp_config = {
             "host": smtp_host,
             "port": smtp_port,
             "user": smtp_user,
             "password": smtp_password,
             "tls": smtp_tls,
-            "templates_dir": templates_dir
+            "templates_dir": templates_dir,
+            "hooks_dir": resolved_hooks_dir
         }
 
         backend_dir = os.path.join(os.path.dirname(self.openapi_path), backend_folder_name)

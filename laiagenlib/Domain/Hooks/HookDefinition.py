@@ -10,9 +10,7 @@ class HookDefinition:
     Preferred YAML:
         x-hooks:
           preupdate:
-            - script:
-                condition: "statusOffer == 'full'"
-                execute: "HttpResponse({status: 409, body: 'Offer is full'})"
+            - script: offer/check_offer_not_full
           postsave:
             - command: sendMail
               condition: "statusOffer == 'full'"
@@ -22,9 +20,15 @@ class HookDefinition:
               context:
                 username: "{{name}}"
           postupdate:
-            - script:
-                condition: "true"
-                execute: "totalSeatsOccupied = len(acceptedUserIds)"
+            - script: send_mail
+              params:
+                template: offer-confirmed
+            - script: offer/update_offer_status
+
+    Inline scripts are still accepted for simple declarative actions:
+        - script:
+            condition: "true"
+            execute: "totalSeatsOccupied = len(acceptedUserIds)"
     """
     event: str
     lambda_name: str                    # Deprecated. Prefer command/script in YAML.
