@@ -62,6 +62,44 @@ else:
     _logger.info("Failed to retrieve OpenAPI YAML file.")
 ```
 
+## Spatial searches
+
+MongoDB-backed SEARCH routes accept GeoJSON `$near` and `$nearSphere` filters. Coordinates must use
+`[longitude, latitude]`; `$minDistance` and `$maxDistance` are expressed in meters. Results are ordered
+from nearest to farthest unless `orders` requests a different order.
+
+```json
+{
+  "filters": {
+    "location.geo": {
+      "$near": {
+        "$geometry": {
+          "type": "Point",
+          "coordinates": [-73.9667, 40.78]
+        },
+        "$minDistance": 1000,
+        "$maxDistance": 100000
+      }
+    }
+  },
+  "orders": {},
+  "populate": []
+}
+```
+
+The queried field requires a MongoDB `2dsphere` index. The index path must point to the field that
+contains the GeoJSON object. For example:
+
+```javascript
+db.offers.createIndex({ "location.geo": "2dsphere" })
+db.demands.createIndex({ geometry: "2dsphere" })
+```
+
+If an offer stores the GeoJSON object directly in `location` instead, use
+`db.offers.createIndex({ location: "2dsphere" })`. Create these indexes as part of the consuming
+application's database deployment or migration; LAIA does not create production indexes while
+serving a search request.
+
 ## Development
 
 ### Run tests

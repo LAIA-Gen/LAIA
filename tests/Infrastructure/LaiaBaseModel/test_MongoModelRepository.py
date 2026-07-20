@@ -19,6 +19,8 @@ def in_memory_db():
     client = MongoClient()
     db = client["testdb"]
     db.drop_collection("user_collection")
+    db.drop_collection("place")
+    db.drop_collection("venue")
     return db
 
 @pytest_asyncio.fixture
@@ -95,3 +97,94 @@ class TestCRUDMongoImpl:
         assert len(items) == 2 
         retrieved_ids = [item["id"] for item in items]
         assert all(query_id not in retrieved_ids for query_id in query_ids)
+
+    @pytest.mark.asyncio
+    async def test_get_items_with_near_filter_and_pagination(self, crud_instance, in_memory_db):
+        places = in_memory_db["place"]
+        places.create_index([("location.geo", "2dsphere")])
+        places.insert_many([
+            {
+                "name": "Search origin",
+                "category": "park",
+                "location": {"geo": {"type": "Point", "coordinates": [-73.9667, 40.78]}},
+            },
+            {
+                "name": "Nearby place",
+                "category": "park",
+                "location": {"geo": {"type": "Point", "coordinates": [-73.95, 40.78]}},
+            },
+            {
+                "name": "Far away",
+                "category": "park",
+                "location": {"geo": {"type": "Point", "coordinates": [-118.24, 34.05]}},
+            },
+        ])
+
+        filters = {
+            "location.geo": {
+                "$near": {
+                    "$geometry": {"type": "Point", "coordinates": [-73.9667, 40.78]},
+                    "$minDistance": 1000,
+                    "$maxDistance": 5000,
+                }
+            },
+            "category": "park",
+        }
+
+        items, total_count = await crud_instance.get_items(
+            "place", skip=0, limit=1, filters=filters
+        )
+
+        assert total_count == 1
+        assert [item["name"] for item in items] == ["Nearby place"]
+        assert "_laia_distance" not in items[0]
+        assert "location.geo" in filters
+
+    @pytest.mark.asyncio
+    async def test_get_items_with_near_filter_and_populate(self, crud_instance, in_memory_db):
+        venue_id = in_memory_db["venue"].insert_one({"name": "Central Park"}).inserted_id
+        places = in_memory_db["place"]
+        places.create_index([("geometry", "2dsphere")])
+        places.insert_one({
+            "name": "Nearby event",
+            "venue": str(venue_id),
+            "geometry": {"type": "Point", "coordinates": [-73.9667, 40.78]},
+        })
+
+        filters = {
+            "geometry": {
+                "$nearSphere": {
+                    "$geometry": {"type": "Point", "coordinates": [-73.97, 40.78]},
+                    "$maxDistance": 5000,
+                }
+            },
+            "venue.name": "Central Park",
+        }
+
+        items, total_count = await crud_instance.get_items(
+            "place", filters=filters, populate=["venue"]
+        )
+
+        assert total_count == 1
+        assert items[0]["venue"]["name"] == "Central Park"
+        assert "_laia_distance" not in items[0]
+
+    @pytest.mark.parametrize(
+        "near_spec, error",
+        [
+            ({"$geometry": {"type": "LineString", "coordinates": [0, 0]}}, "type 'Point'"),
+            ({"$geometry": {"type": "Point", "coordinates": [181, 0]}}, "Longitude"),
+            ({"$geometry": {"type": "Point", "coordinates": [0, 91]}}, "Latitude"),
+            (
+                {
+                    "$geometry": {"type": "Point", "coordinates": [0, 0]},
+                    "$minDistance": 10,
+                    "$maxDistance": 5,
+                },
+                "minDistance",
+            ),
+        ],
+    )
+    def test_near_filter_validation(self, crud_instance, near_spec, error):
+        with pytest.raises(ValueError, match=error):
+            crud_instance._extract_near_filter({"geometry": {"$near": near_spec}})

@@ -1,4 +1,5 @@
 from typing import Any, List, TypeVar, Optional, Dict
+from copy import deepcopy
 from datetime import datetime, date
 from enum import Enum
 from pydantic import BaseModel
@@ -84,10 +85,100 @@ class MongoModelRepository(ModelRepository):
             return [self.convert_date_objects(v) for v in data]
         return data
 
+    def _extract_near_filter(self, query: dict):
+        """Extract and validate a top-level GeoJSON $near/$nearSphere filter.
+
+        The public SEARCH contract accepts MongoDB's find syntax. Geospatial
+        searches are translated to $geoNear so they also work with populate
+        pipelines and can be counted for pagination.
+        """
+        near_filter = None
+
+        for field, condition in query.items():
+            if not isinstance(condition, dict):
+                continue
+
+            operators = [operator for operator in ("$near", "$nearSphere") if operator in condition]
+            if not operators:
+                continue
+            if len(operators) > 1 or len(condition) != 1:
+                raise ValueError(
+                    f"Geospatial filter '{field}' must contain only one of $near or $nearSphere"
+                )
+            if near_filter is not None:
+                raise ValueError("Only one $near or $nearSphere filter is allowed per search")
+
+            operator = operators[0]
+            near_filter = (field, operator, self._validate_near_spec(field, condition[operator]))
+
+        return near_filter
+
+    def _validate_near_spec(self, field: str, spec: Any) -> dict:
+        if not isinstance(spec, dict):
+            raise ValueError(f"Geospatial filter '{field}' must contain an object")
+
+        allowed_keys = {"$geometry", "$minDistance", "$maxDistance"}
+        unsupported_keys = set(spec) - allowed_keys
+        if unsupported_keys:
+            raise ValueError(
+                f"Unsupported geospatial options for '{field}': {', '.join(sorted(unsupported_keys))}"
+            )
+
+        geometry = spec.get("$geometry")
+        if not isinstance(geometry, dict):
+            raise ValueError(f"Geospatial filter '{field}' requires a $geometry object")
+        if geometry.get("type") != "Point":
+            raise ValueError(f"Geospatial filter '{field}' requires GeoJSON type 'Point'")
+
+        coordinates = geometry.get("coordinates")
+        if (
+            not isinstance(coordinates, (list, tuple))
+            or len(coordinates) != 2
+            or any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in coordinates)
+        ):
+            raise ValueError(
+                f"Geospatial filter '{field}' requires numeric [longitude, latitude] coordinates"
+            )
+
+        longitude, latitude = coordinates
+        if not -180 <= longitude <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        if not -90 <= latitude <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+
+        for distance_key in ("$minDistance", "$maxDistance"):
+            distance = spec.get(distance_key)
+            if distance is not None and (
+                isinstance(distance, bool) or not isinstance(distance, (int, float)) or distance < 0
+            ):
+                raise ValueError(f"{distance_key} must be a non-negative number of meters")
+
+        min_distance = spec.get("$minDistance")
+        max_distance = spec.get("$maxDistance")
+        if min_distance is not None and max_distance is not None and min_distance > max_distance:
+            raise ValueError("$minDistance cannot be greater than $maxDistance")
+
+        return spec
+
+    def _build_geo_near_stage(self, query: dict, near_filter: tuple) -> dict:
+        field, _operator, spec = near_filter
+        geo_near = {
+            "near": deepcopy(spec["$geometry"]),
+            "distanceField": "_laia_distance",
+            "spherical": True,
+            "key": field,
+            "query": deepcopy(query),
+        }
+        if "$minDistance" in spec:
+            geo_near["minDistance"] = spec["$minDistance"]
+        if "$maxDistance" in spec:
+            geo_near["maxDistance"] = spec["$maxDistance"]
+        return {"$geoNear": geo_near}
+
     async def get_items(self, model_name: str, skip: int = 0, limit: int = 10, filters: Optional[dict] = None, orders: Optional[dict] = None, populate: Optional[List[str]] = None):
         collection = self.db[model_name]
 
-        query = filters or {}
+        query = deepcopy(filters) if filters else {}
         sorts = orders or {}
 
         if 'id' in query:
@@ -104,6 +195,11 @@ class MongoModelRepository(ModelRepository):
 
         self.convert_dates_in_query(query)
         self.convert_objectids_in_query(query)
+
+        near_filter = self._extract_near_filter(query)
+        if near_filter:
+            near_field = near_filter[0]
+            del query[near_field]
 
         if populate:
             # Identificar campos populados para saber cómo dividir los filtros
@@ -232,9 +328,11 @@ class MongoModelRepository(ModelRepository):
                 lookup_stages.append({"$project": {temp_field: 0, f"{local_field}_as_obj": 0}})
 
             pipeline = []
-            if geo_near:
+            if near_filter:
+                pipeline.append(self._build_geo_near_stage(base_query, near_filter))
+            elif geo_near:
                 pipeline.append({"$geoNear": geo_near})
-            if base_query:
+            if base_query and not near_filter:
                 pipeline.append({"$match": base_query})
             pipeline.extend(lookup_stages)
 
@@ -243,6 +341,9 @@ class MongoModelRepository(ModelRepository):
 
             if sorts:
                 pipeline.append({"$sort": sorts})
+
+            if near_filter:
+                pipeline.append({"$project": {"_laia_distance": 0}})
             
             pipeline.append({"$skip": skip})
             pipeline.append({"$limit": limit})
@@ -263,15 +364,24 @@ class MongoModelRepository(ModelRepository):
 
             if post_lookup_query:
                 count_pipeline = []
-                if geo_near:
+                if near_filter:
+                    count_pipeline.append(self._build_geo_near_stage(base_query, near_filter))
+                elif geo_near:
                     count_pipeline.append({"$geoNear": geo_near})
-                if base_query:
+                if base_query and not near_filter:
                     count_pipeline.append({"$match": base_query})
                 count_pipeline.extend(lookup_stages)
                 count_pipeline.append({"$match": post_lookup_query})
                 count_pipeline.append({"$count": "count"})
                 
                 count_res = safe_aggregate(count_pipeline)
+                total_count = count_res[0]["count"] if count_res else 0
+            elif near_filter:
+                count_pipeline = [
+                    self._build_geo_near_stage(base_query, near_filter),
+                    {"$count": "count"},
+                ]
+                count_res = list(collection.aggregate(count_pipeline))
                 total_count = count_res[0]["count"] if count_res else 0
             else:
                 if geo_near:
@@ -283,6 +393,21 @@ class MongoModelRepository(ModelRepository):
                     total_count = count_res[0]["count"] if count_res else 0
                 else:
                     total_count = collection.count_documents(query)
+        elif near_filter:
+            pipeline = [self._build_geo_near_stage(query, near_filter)]
+            if sorts:
+                pipeline.append({"$sort": sorts})
+            pipeline.append({"$project": {"_laia_distance": 0}})
+            pipeline.extend(({"$skip": skip}, {"$limit": limit}))
+            items = collection.aggregate(pipeline)
+            serialized_items = list_serial(items)
+
+            count_pipeline = [
+                self._build_geo_near_stage(query, near_filter),
+                {"$count": "count"},
+            ]
+            count_res = list(collection.aggregate(count_pipeline))
+            total_count = count_res[0]["count"] if count_res else 0
         else:
             if geo_near:
                 def safe_aggregate(pl):
