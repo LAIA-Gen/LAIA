@@ -5,16 +5,16 @@ from typing import Optional
 @dataclass
 class HookDefinition:
     """
-    Representa un hook definit al YAML del model.
-    
-    Exemple YAML:
+    Represents a hook defined in a model YAML.
+
+    Preferred YAML:
         x-hooks:
           preupdate:
-            - lambda: anonymous
-              condition: "statusOffer == 'full'"
-              action: "HttpResponse({status: 409, body: 'Offer is full'})"
+            - script:
+                condition: "statusOffer == 'full'"
+                execute: "HttpResponse({status: 409, body: 'Offer is full'})"
           postsave:
-            - lambda: sendMail
+            - command: sendMail
               condition: "statusOffer == 'full'"
               to: "{{email}}"
               subject: "Benvingut!"
@@ -22,22 +22,23 @@ class HookDefinition:
               context:
                 username: "{{name}}"
           postupdate:
-            - lambda: anonymous
-              condition: "true"
-              action: "totalSeatsOccupied = len(acceptedUserIds)"
+            - script:
+                condition: "true"
+                execute: "totalSeatsOccupied = len(acceptedUserIds)"
     """
-    event: str                          # "preupdate", "postsave", "postupdate", "postdelete"
-    lambda_name: str                    # "sendMail", "anonymous"
-    condition: Optional[str] = None     # "statusOffer == 'full'"
-    params: dict = field(default_factory=dict)  # to, subject, template, context, etc.
+    event: str
+    lambda_name: str                    # Deprecated. Prefer command/script in YAML.
+    condition: Optional[str] = None
+    params: dict = field(default_factory=dict)
 
     @classmethod
-    def from_yaml(cls, event: str, hook_dict: dict) -> 'HookDefinition':
-        """Crea un HookDefinition a partir d'un dict del YAML."""
-        lambda_name = hook_dict.get("lambda", "")
-        condition = hook_dict.get("condition", None)
-        # Tot el que no sigui lambda/condition són paràmetres per la lambda
-        params = {k: v for k, v in hook_dict.items() if k not in ("lambda", "condition")}
+    def from_yaml(cls, event: str, hook_dict: dict) -> "HookDefinition":
+        """Creates a HookDefinition from YAML while accepting old and new syntax."""
+        script = hook_dict.get("script")
+        body = script if isinstance(script, dict) else hook_dict
+        lambda_name = hook_dict.get("command") or hook_dict.get("lambda", "")
+        condition = body.get("condition", None)
+        params = {k: v for k, v in hook_dict.items() if k not in ("command", "lambda", "condition")}
         return cls(
             event=event,
             lambda_name=lambda_name,

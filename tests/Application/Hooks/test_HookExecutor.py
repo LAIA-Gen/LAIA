@@ -28,7 +28,7 @@ class MatchWithNestedHook(LaiaBaseModel):
         "x-hooks": {
             "postsave": [
                 {
-                    "lambda": "captureNested",
+                    "command": "captureNested",
                     "to": "{{offerId.userId.email}}",
                     "context": {
                         "mouerName": "{{offerId.userId.name}}",
@@ -46,12 +46,12 @@ class MatchWithFlowConditions(LaiaBaseModel):
         "x-hooks": {
             "postsave": [
                 {
-                    "lambda": "captureFlow",
+                    "command": "captureFlow",
                     "condition": "{{offerId}} != None",
                     "flow": "offer",
                 },
                 {
-                    "lambda": "captureFlow",
+                    "command": "captureFlow",
                     "condition": "{{requestId}} != None",
                     "flow": "demand",
                 },
@@ -61,6 +61,23 @@ class MatchWithFlowConditions(LaiaBaseModel):
 
     offerId: str | None = None
     requestId: str | None = None
+
+
+class TopLevelScriptHook(LaiaBaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "x-hooks": {
+            "postupdate": [
+                {
+                    "script": None,
+                    "condition": "true",
+                    "execute": "totalSeatsOccupied = len(acceptedUserIds)",
+                }
+            ]
+        }
+    })
+
+    acceptedUserIds: list = []
+    totalSeatsOccupied: int = 0
 
 
 @pytest.mark.asyncio
@@ -100,3 +117,15 @@ async def test_hook_conditions_can_split_offer_and_demand_match_flows():
     )
 
     assert captured == ["offer"]
+
+
+@pytest.mark.asyncio
+async def test_hook_accepts_script_marker_with_top_level_execute():
+    element = await execute_hooks(
+        "postupdate",
+        TopLevelScriptHook,
+        {"acceptedUserIds": ["user-1", "user-2"], "totalSeatsOccupied": 0},
+        repository=FakeRepository(),
+    )
+
+    assert element["totalSeatsOccupied"] == 2

@@ -12,7 +12,7 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
     Executes hooks defined in a model x-hooks section.
 
     Supported events include postsave, preupdate, postupdate and postdelete.
-    The returned dict may contain mutations made by anonymous hooks.
+    The returned dict may contain mutations made by script hooks.
     """
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
     hooks_config = extra.get("x-hooks", {})
@@ -24,37 +24,45 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
     _logger.info(f"Executing {len(hook_list)} hook(s) for event '{event}' on {model.__name__}")
 
     for hook_def in hook_list:
-        lambda_name = hook_def.get("lambda")
-        if not lambda_name:
-            _logger.warning(f"Hook without lambda name in {model.__name__}, skipping")
+        command_name = hook_def.get("command") or hook_def.get("lambda")
+        has_script = "script" in hook_def
+        script = hook_def.get("script")
+        if command_name == "anonymous":
+            has_script = True
+            script = hook_def
+
+        if not command_name and not has_script:
+            _logger.warning(f"Hook without command or script in {model.__name__}, skipping")
             continue
 
-        condition = hook_def.get("condition")
+        hook_body = script if isinstance(script, dict) else hook_def
+        condition = hook_body.get("condition")
         if condition and not await _evaluate_condition(condition, element, repository):
             _logger.info(f"Hook condition '{condition}' not met, skipping")
             continue
 
-        if lambda_name == "anonymous":
-            await _execute_anonymous_action(hook_def.get("action", ""), element, repository)
-            _logger.info("Hook 'anonymous' executed successfully")
+        if has_script:
+            execute = hook_body.get("execute") or hook_body.get("action")
+            await _execute_script(execute, element, repository)
+            _logger.info("Hook script executed successfully")
             continue
 
         try:
-            lambda_func = get_lambda(lambda_name)
+            lambda_func = get_lambda(command_name)
         except ValueError as e:
             _logger.error(str(e))
             continue
 
-        params = {k: v for k, v in hook_def.items() if k not in ("lambda", "condition")}
+        params = {k: v for k, v in hook_def.items() if k not in ("command", "lambda", "condition")}
         expanded_params_list = await _expand_wildcard_params(params, element, repository)
 
         for resolved_params in expanded_params_list:
             resolved = await _resolve_all_params(resolved_params, element, repository)
             try:
                 await lambda_func(**resolved, smtp_config=smtp_config)
-                _logger.info(f"Hook '{lambda_name}' executed successfully")
+                _logger.info(f"Hook command '{command_name}' executed successfully")
             except Exception as e:
-                _logger.error(f"Hook '{lambda_name}' failed for {model.__name__}: {e}")
+                _logger.error(f"Hook command '{command_name}' failed for {model.__name__}: {e}")
 
     return element
 
@@ -67,21 +75,21 @@ async def _evaluate_condition(condition: str, element: dict, repository=None) ->
         return False
 
 
-async def _execute_anonymous_action(action: str, element: dict, repository=None):
-    if not action:
+async def _execute_script(execute: str, element: dict, repository=None):
+    if not execute:
         return
 
-    action = action.strip()
-    if action.startswith("HttpResponse"):
-        status_match = re.search(r"status\s*:\s*(\d+)", action)
-        body_match = re.search(r"body\s*:\s*['\"]([^'\"]*)['\"]", action)
+    execute = execute.strip()
+    if execute.startswith("HttpResponse"):
+        status_match = re.search(r"status\s*:\s*(\d+)", execute)
+        body_match = re.search(r"body\s*:\s*['\"]([^'\"]*)['\"]", execute)
         status_code = int(status_match.group(1)) if status_match else 409
         detail = body_match.group(1) if body_match else "Hook response"
         raise HTTPException(status_code=status_code, detail=detail)
 
-    assignment = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*$", action)
+    assignment = re.match(r"^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*$", execute)
     if not assignment:
-        _logger.warning(f"Cannot parse anonymous action: '{action}'")
+        _logger.warning(f"Cannot parse hook script: '{execute}'")
         return
 
     field_name, expression = assignment.groups()

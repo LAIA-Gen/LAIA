@@ -30,9 +30,10 @@ class FullProtectedOffer(LaiaBaseModel):
         "x-hooks": {
             "preupdate": [
                 {
-                    "lambda": "anonymous",
-                    "condition": "statusOffer == 'full'",
-                    "action": "HttpResponse({status: 409, body: 'Offer is full'})",
+                    "script": {
+                        "condition": "statusOffer == 'full'",
+                        "execute": "HttpResponse({status: 409, body: 'Offer is full'})",
+                    },
                 }
             ]
         }
@@ -46,14 +47,16 @@ class CalculatedOffer(LaiaBaseModel):
         "x-hooks": {
             "postupdate": [
                 {
-                    "lambda": "anonymous",
-                    "condition": "true",
-                    "action": "totalSeatsOccupied = len(acceptedUserIds)",
+                    "script": {
+                        "condition": "true",
+                        "execute": "totalSeatsOccupied = len(acceptedUserIds)",
+                    },
                 },
                 {
-                    "lambda": "anonymous",
-                    "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
-                    "action": "statusOffer = 'full'",
+                    "script": {
+                        "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
+                        "execute": "statusOffer = 'full'",
+                    },
                 },
             ]
         }
@@ -70,19 +73,22 @@ class QueryCalculatedOffer(LaiaBaseModel):
         "x-hooks": {
             "postupdate": [
                 {
-                    "lambda": "anonymous",
-                    "condition": "true",
-                    "action": "acceptedUserIds = QUERY(Match.offerId == {{id}} && Match.status == 'confirmed').initiated_by",
+                    "script": {
+                        "condition": "true",
+                        "execute": "acceptedUserIds = QUERY(Match.offerId == {{id}} && Match.status == 'confirmed').initiated_by",
+                    },
                 },
                 {
-                    "lambda": "anonymous",
-                    "condition": "true",
-                    "action": "totalSeatsOccupied = len(acceptedUserIds)",
+                    "script": {
+                        "condition": "true",
+                        "execute": "totalSeatsOccupied = len(acceptedUserIds)",
+                    },
                 },
                 {
-                    "lambda": "anonymous",
-                    "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
-                    "action": "statusOffer = 'full'",
+                    "script": {
+                        "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
+                        "execute": "statusOffer = 'full'",
+                    },
                 },
             ]
         }
