@@ -19,7 +19,10 @@ from ...Application.Hooks.HookExecutor import execute_hooks
 def _has_hooks(model: Type, event: str) -> bool:
     extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
     hooks = extra.get("x-hooks", {}) if isinstance(extra, dict) else {}
-    return bool(hooks.get(event))
+    if hooks.get(event):
+        return True
+    normalized_event = event.lower()
+    return any(str(configured_event).lower() == normalized_event for configured_event in hooks)
 
 
 async def _get_current_doc(model_name: str, element_id: str, repository: ModelRepository) -> dict:

@@ -28,13 +28,8 @@ class Offer(LaiaBaseModel):
 class FullProtectedOffer(LaiaBaseModel):
     model_config = ConfigDict(json_schema_extra={
         "x-hooks": {
-            "preupdate": [
-                {
-                    "script": {
-                        "condition": "statusOffer == 'full'",
-                        "execute": "HttpResponse({status: 409, body: 'Offer is full'})",
-                    },
-                }
+            "preUpdate": [
+                {"script": "offer/check_offer_not_full"}
             ]
         }
     })
@@ -45,19 +40,9 @@ class FullProtectedOffer(LaiaBaseModel):
 class CalculatedOffer(LaiaBaseModel):
     model_config = ConfigDict(json_schema_extra={
         "x-hooks": {
-            "postupdate": [
-                {
-                    "script": {
-                        "condition": "true",
-                        "execute": "totalSeatsOccupied = len(acceptedUserIds)",
-                    },
-                },
-                {
-                    "script": {
-                        "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
-                        "execute": "statusOffer = 'full'",
-                    },
-                },
+            "postUpdate": [
+                {"script": "offer/update_seats_from_accepted"},
+                {"script": "offer/close_when_full"},
             ]
         }
     })
@@ -71,25 +56,10 @@ class CalculatedOffer(LaiaBaseModel):
 class QueryCalculatedOffer(LaiaBaseModel):
     model_config = ConfigDict(json_schema_extra={
         "x-hooks": {
-            "postupdate": [
-                {
-                    "script": {
-                        "condition": "true",
-                        "execute": "acceptedUserIds = QUERY(Match.offerId == {{id}} && Match.status == 'confirmed').initiated_by",
-                    },
-                },
-                {
-                    "script": {
-                        "condition": "true",
-                        "execute": "totalSeatsOccupied = len(acceptedUserIds)",
-                    },
-                },
-                {
-                    "script": {
-                        "condition": "{{totalSeatsOccupied}} == {{totalSeats}}",
-                        "execute": "statusOffer = 'full'",
-                    },
-                },
+            "postUpdate": [
+                {"script": "offer/update_accepted_from_match"},
+                {"script": "offer/update_seats_from_accepted"},
+                {"script": "offer/close_when_full"},
             ]
         }
     })
@@ -117,6 +87,55 @@ def in_memory_db():
 @pytest_asyncio.fixture
 async def repository_instance(in_memory_db):
     return MongoModelRepository(in_memory_db)
+
+@pytest.fixture
+def hooks_dir(tmp_path):
+    root = tmp_path / "hooks"
+    offer_dir = root / "offer"
+    offer_dir.mkdir(parents=True)
+
+    (offer_dir / "check_offer_not_full.py").write_text(
+        "\n".join([
+            "from fastapi import HTTPException",
+            "",
+            "async def run(context):",
+            "    if context['element'].get('statusOffer') == 'full':",
+            "        raise HTTPException(status_code=409, detail='Offer is full')",
+        ]),
+        encoding="utf-8",
+    )
+    (offer_dir / "update_seats_from_accepted.py").write_text(
+        "\n".join([
+            "async def run(context):",
+            "    accepted = context['element'].get('acceptedUserIds') or []",
+            "    return {'totalSeatsOccupied': len(accepted)}",
+        ]),
+        encoding="utf-8",
+    )
+    (offer_dir / "close_when_full.py").write_text(
+        "\n".join([
+            "async def run(context):",
+            "    element = context['element']",
+            "    if element.get('totalSeatsOccupied') == element.get('totalSeats'):",
+            "        return {'statusOffer': 'full'}",
+        ]),
+        encoding="utf-8",
+    )
+    (offer_dir / "update_accepted_from_match.py").write_text(
+        "\n".join([
+            "async def run(context):",
+            "    element = context['element']",
+            "    repository = context['repository']",
+            "    matches, _ = await repository.get_items(",
+            "        model_name='match',",
+            "        filters={'offerId': element.get('id'), 'status': 'confirmed'},",
+            "        limit=1000,",
+            "    )",
+            "    return {'acceptedUserIds': [m.get('initiated_by') for m in matches if m.get('initiated_by')]}",
+        ]),
+        encoding="utf-8",
+    )
+    return root
 
 class TestUpdateLaiaBaseModel:
 
@@ -199,7 +218,7 @@ class TestUpdateLaiaBaseModel:
             )
 
     @pytest.mark.asyncio
-    async def test_preupdate_hook_can_block_update_with_http_409(self, repository_instance):
+    async def test_preupdate_hook_can_block_update_with_http_409(self, repository_instance, hooks_dir):
         offer = await repository_instance.post_item("fullprotectedoffer", {
             "originText": "Original",
             "statusOffer": "full",
@@ -212,6 +231,7 @@ class TestUpdateLaiaBaseModel:
                 FullProtectedOffer,
                 ["admin"],
                 repository_instance,
+                smtp_config={"hooks_dir": str(hooks_dir)},
             )
 
         assert exc_info.value.status_code == 409
@@ -220,7 +240,7 @@ class TestUpdateLaiaBaseModel:
         assert stored["originText"] == "Original"
 
     @pytest.mark.asyncio
-    async def test_postupdate_hook_calculates_total_seats_from_accepted_users(self, repository_instance):
+    async def test_postupdate_hook_calculates_total_seats_from_accepted_users(self, repository_instance, hooks_dir):
         user_1 = str(ObjectId())
         user_2 = str(ObjectId())
         offer = await repository_instance.post_item("calculatedoffer", {
@@ -237,6 +257,7 @@ class TestUpdateLaiaBaseModel:
             CalculatedOffer,
             ["admin"],
             repository_instance,
+            smtp_config={"hooks_dir": str(hooks_dir)},
         )
 
         assert updated["acceptedUserIds"] == [user_1, user_2]
@@ -244,7 +265,7 @@ class TestUpdateLaiaBaseModel:
         assert updated["statusOffer"] == "full"
 
     @pytest.mark.asyncio
-    async def test_postupdate_hook_can_calculate_accepted_users_from_match_query(self, repository_instance):
+    async def test_postupdate_hook_can_calculate_accepted_users_from_match_query(self, repository_instance, hooks_dir):
         user_1 = str(ObjectId())
         user_2 = str(ObjectId())
         ignored_user = str(ObjectId())
@@ -277,6 +298,7 @@ class TestUpdateLaiaBaseModel:
             QueryCalculatedOffer,
             ["admin"],
             repository_instance,
+            smtp_config={"hooks_dir": str(hooks_dir)},
         )
 
         assert updated["acceptedUserIds"] == [user_1, user_2]
