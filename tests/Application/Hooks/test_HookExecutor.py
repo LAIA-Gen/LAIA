@@ -21,6 +21,15 @@ class FakeRepository:
         ]
         return items[:limit], len(items)
 
+    async def get_item(self, model_name, item_id):
+        items = [
+            item for item in self.items.get(model_name, [])
+            if item.get("id") == item_id
+        ]
+        if items:
+            return items[0]
+        raise ValueError("not found")
+
 
 class FileScriptHook(LaiaBaseModel):
     model_config = ConfigDict(json_schema_extra={
@@ -91,3 +100,43 @@ async def test_hook_rejects_scripts_outside_hooks_directory(tmp_path):
             smtp_config={"hooks_dir": str(tmp_path / "hooks")},
             repository=FakeRepository(),
         )
+
+
+@pytest.mark.asyncio
+async def test_hook_script_can_use_shared_services(tmp_path):
+    hooks_dir = tmp_path / "hooks"
+    script_dir = hooks_dir / "match"
+    script_dir.mkdir(parents=True)
+    (script_dir / "use_services.py").write_text(
+        "\n".join([
+            "async def run(context):",
+            "    user = await context['services']['user'].get_by_id('user-1')",
+            "    locale = context['services']['user'].get_locale({'languages': ['ES']})",
+            "    return {'sourceEmail': user['email'], 'locale': locale}",
+        ]),
+        encoding="utf-8",
+    )
+
+    class ServiceHook(LaiaBaseModel):
+        model_config = ConfigDict(json_schema_extra={
+            "x-hooks": {
+                "postupdate": [
+                    {"script": "match/use_services"}
+                ]
+            }
+        })
+
+        offerId: str
+        sourceEmail: str | None = None
+        locale: str | None = None
+
+    element = await execute_hooks(
+        "postupdate",
+        ServiceHook,
+        {"offerId": "offer-1"},
+        smtp_config={"hooks_dir": str(hooks_dir)},
+        repository=FakeRepository(),
+    )
+
+    assert element["sourceEmail"] == "mouer@example.com"
+    assert element["locale"] == "es"

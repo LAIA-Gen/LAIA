@@ -3,6 +3,7 @@ import os
 import re
 from typing import Any, Optional
 
+from .Services import create_hook_services
 from ...Domain.Shared.Utils.logger import _logger
 
 
@@ -85,6 +86,7 @@ async def _execute_file_script(
         "model": model,
         "element": element,
         "repository": repository,
+        "services": create_hook_services(repository, smtp_config),
         "smtp_config": smtp_config,
         "params": resolved_params,
         "hook": hook_def,
