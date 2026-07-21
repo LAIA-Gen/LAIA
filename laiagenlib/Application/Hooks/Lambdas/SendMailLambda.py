@@ -27,7 +27,7 @@ async def send_mail_lambda(to: str, subject: str, template: str, context: dict =
         _logger.warning("No recipient address provided, skipping email send")
         return
 
-    locale = (locale or "ca").split("-")[0].lower()
+    locale = _normalize_locale(locale)
     template_path = _resolve_template_path(template, locale, smtp_config)
 
     _logger.info(f"sendMail lambda: to={to}, subject='{subject}', template={template_path}")
@@ -61,3 +61,18 @@ def _resolve_template_path(template: str, locale: str, smtp_config: dict) -> str
         return fallback_template
 
     return localized_template
+
+
+def _normalize_locale(locale: str) -> str:
+    locale = str(locale or "ca").strip().replace("-", "_")
+    if not locale:
+        return "ca"
+
+    language = locale.split("_", 1)[0].lower()
+    if language == "en":
+        return "en_US"
+    if language == "es":
+        return "es"
+    if language == "ca":
+        return "ca"
+    return language

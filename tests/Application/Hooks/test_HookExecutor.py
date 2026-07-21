@@ -111,7 +111,7 @@ async def test_hook_script_can_use_shared_services(tmp_path):
         "\n".join([
             "async def run(context):",
             "    user = await context['services']['user'].get_by_id('user-1')",
-            "    locale = context['services']['user'].get_locale({'languages': ['ES']})",
+            "    locale = context['services']['user'].get_locale({'languages': ['en-US']})",
             "    return {'sourceEmail': user['email'], 'locale': locale}",
         ]),
         encoding="utf-8",
@@ -139,4 +139,4 @@ async def test_hook_script_can_use_shared_services(tmp_path):
     )
 
     assert element["sourceEmail"] == "mouer@example.com"
-    assert element["locale"] == "es"
+    assert element["locale"] == "en_US"

@@ -67,7 +67,7 @@ class UserService(ModelService):
             or user.get("language")
         )
         if explicit_locale:
-            return str(explicit_locale).split("-")[0].lower()
+            return _normalize_locale(explicit_locale, default)
 
         languages = user.get("languages") or []
         if isinstance(languages, list) and languages:
@@ -75,7 +75,7 @@ class UserService(ModelService):
             if isinstance(first_language, dict):
                 first_language = first_language.get("code") or first_language.get("id") or first_language.get("name")
             if first_language:
-                return str(first_language).split("-")[0].lower()
+                return _normalize_locale(first_language, default)
 
         return default
 
@@ -90,3 +90,18 @@ class DemandService(ModelService):
 
 class MatchService(ModelService):
     model_name = "match"
+
+
+def _normalize_locale(locale: Any, default: str = "ca") -> str:
+    locale = str(locale or default).strip().replace("-", "_")
+    if not locale:
+        return default
+
+    language = locale.split("_", 1)[0].lower()
+    if language == "en":
+        return "en_US"
+    if language == "es":
+        return "es"
+    if language == "ca":
+        return "ca"
+    return language

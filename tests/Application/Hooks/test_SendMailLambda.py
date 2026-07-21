@@ -6,8 +6,8 @@ from laiagenlib.Application.Hooks.Lambdas import SendMailLambda
 @pytest.mark.asyncio
 async def test_send_mail_uses_requested_locale_when_template_exists(tmp_path, monkeypatch):
     template_dir = tmp_path / "templates"
-    (template_dir / "es").mkdir(parents=True)
-    (template_dir / "es" / "welcome.html").write_text("Hola", encoding="utf-8")
+    (template_dir / "en_US").mkdir(parents=True)
+    (template_dir / "en_US" / "welcome.html").write_text("Hola", encoding="utf-8")
     sent = {}
 
     async def fake_send_email(**kwargs):
@@ -19,7 +19,7 @@ async def test_send_mail_uses_requested_locale_when_template_exists(tmp_path, mo
         to="user@example.com",
         subject="Subject",
         template="welcome.html",
-        locale="es",
+        locale="en-US",
         context={},
         smtp_config={
             "host": "smtp.example.com",
@@ -30,7 +30,7 @@ async def test_send_mail_uses_requested_locale_when_template_exists(tmp_path, mo
         },
     )
 
-    assert sent["template"] == "es/welcome.html"
+    assert sent["template"] == "en_US/welcome.html"
 
 
 @pytest.mark.asyncio
