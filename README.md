@@ -150,6 +150,43 @@ components:
 
 > **Note:** Use `permissions` (without `x-` prefix) directly on the schema definition. The library maps it internally to `x-permissions`.
 
+### Tab extensions (`x-frontend-tabs`)
+
+Use the `x-frontend-tabs` extension on a model schema to customize the tabbed view of the model detail page in the frontend backoffice.
+
+Tabs can contain either a list of standard model properties (form fields) or a dynamic read-only view of a related collection (virtual relation tab).
+
+> [!NOTE]
+> **Automatic Tab Behavior:**
+> * **Relation Tabs**: Any standard class field annotated with a relation (via `x_frontend_relation`) will automatically have its relation tab generated and appended at the end of the tabs list. You do not need to list them explicitly in `x-frontend-tabs`.
+> * **Default Details Tab**: If `x-frontend-tabs` is omitted, a default **Details** tab containing all the model's standard editable fields is automatically created.
+
+
+#### 1. Standard Fields Tab
+Displays the specified list of model fields.
+
+```yaml
+x-frontend-tabs:
+  - label: General
+    fields:
+      - title
+      - description
+      - image
+```
+
+#### 2. Virtual Relation Tab (Read-Only)
+Displays a dynamic read-only list of related objects from another collection. It automatically queries the related collection using the current parent ID.
+
+```yaml
+x-frontend-tabs:
+  - label: Activities
+    relation: Activity
+    inverseRelationField: eventId
+```
+* `relation`: The target model name to display in the tab's list view (e.g. `Activity`).
+* `inverseRelationField`: The field on the target model that references this model's ID (e.g. `eventId`).
+
+
 ### Field extensions
 
 * `x_frontend_widget` Name of the widget overriding the default (String)
