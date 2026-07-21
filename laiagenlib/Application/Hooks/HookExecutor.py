@@ -1,181 +1,130 @@
+import importlib.util
+import os
 import re
 from typing import Any, Optional
 
-from ...Domain.Hooks.LambdaRegistry import get_lambda
+from .Services import create_hook_services
 from ...Domain.Shared.Utils.logger import _logger
 
 
 async def execute_hooks(event: str, model, element: dict, smtp_config: dict = None, repository=None):
     """
-    Executa els hooks definits al model per a un event concret.
-    
-    Args:
-        event: "postsave", "postupdate", "postdelete"
-        model: La classe del model Pydantic (amb model_config)
-        element: L'element creat/actualitzat (dict)
-        smtp_config: Configuració SMTP
-        repository: Repositori per fer lookups (populate de relacions)
-    """
-    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
-    hooks_config = extra.get("x-hooks", {})
-    hook_list = hooks_config.get(event, [])
+    Executes file-based hooks defined in a model x-hooks section.
 
+    Hook YAML must use the new script form:
+
+        x-hooks:
+          postupdate:
+            - script: offer/update_offer_status
+              params:
+                template: offer-confirmed
+
+    LAIA loads the script from hooks_dir and calls async def run(context).
+    The returned dict, if any, is merged into element.
+    """
+    hook_list = _get_hook_list(model, event)
     if not hook_list:
-        return
+        return element
 
     _logger.info(f"Executing {len(hook_list)} hook(s) for event '{event}' on {model.__name__}")
 
     for hook_def in hook_list:
-        lambda_name = hook_def.get("lambda")
-        if not lambda_name:
-            _logger.warning(f"Hook without lambda name in {model.__name__}, skipping")
+        script = hook_def.get("script")
+        if not isinstance(script, str) or not script.strip():
+            _logger.warning(f"Hook without file script in {model.__name__}, skipping")
             continue
 
-        # 1. Avaluar condició
-        condition = hook_def.get("condition")
-        if condition and not _evaluate_condition(condition, element):
-            _logger.info(f"Hook condition '{condition}' not met, skipping")
-            continue
-
-        # 2. Obtenir lambda
-        try:
-            lambda_func = get_lambda(lambda_name)
-        except ValueError as e:
-            _logger.error(str(e))
-            continue
-
-        # 3. Resoldre paràmetres
-        params = {k: v for k, v in hook_def.items() if k not in ("lambda", "condition")}
-        
-        # Comprovar si hi ha patró "wildcard" ({{acceptedUserIds.*.email}})
-        # que implica iterar sobre una llista
-        expanded_params_list = await _expand_wildcard_params(params, element, repository)
-
-        # 4. Executar lambda per cada conjunt de paràmetres resolts
-        for resolved_params in expanded_params_list:
-            resolved = await _resolve_all_params(resolved_params, element, repository)
-            try:
-                await lambda_func(**resolved, smtp_config=smtp_config)
-                _logger.info(f"Hook '{lambda_name}' executed successfully")
-            except Exception as e:
-                _logger.error(f"Hook '{lambda_name}' failed for {model.__name__}: {e}")
-
-
-def _evaluate_condition(condition: str, element: dict) -> bool:
-    """
-    Avalua una condició simple contra l'element.
-    Suporta: ==, !=
-    Exemples: "statusOffer == 'full'", "isActive != true"
-    """
-    # Parse: camp operador valor
-    match = re.match(r"^\s*(\w+)\s*(==|!=)\s*['\"]?([^'\"]+)['\"]?\s*$", condition)
-    if not match:
-        _logger.warning(f"Cannot parse condition: '{condition}'")
-        return False
-
-    field_name, operator, expected_value = match.groups()
-    actual_value = element.get(field_name)
-
-    if actual_value is None:
-        return False
-
-    # Convertir a string per comparar
-    actual_str = str(actual_value)
-    
-    if operator == "==":
-        return actual_str == expected_value
-    elif operator == "!=":
-        return actual_str != expected_value
-    
-    return False
-
-
-async def _expand_wildcard_params(params: dict, element: dict, repository=None) -> list:
-    """
-    Si hi ha un paràmetre amb patró {{field.*.subfield}}, expandeix a N conjunts
-    de paràmetres (un per cada element de la llista).
-    Si no hi ha wildcards, retorna [params] directament.
-    """
-    wildcard_pattern = re.compile(r"\{\{(\w+)\.\*\.(\w+)\}\}")
-    
-    # Buscar si algun valor conté wildcards
-    wildcard_field = None
-    wildcard_subfield = None
-    
-    for key, value in params.items():
-        if isinstance(value, str):
-            match = wildcard_pattern.search(value)
-            if match:
-                wildcard_field = match.group(1)
-                wildcard_subfield = match.group(2)
-                break
-        if isinstance(value, dict):
-            for k, v in value.items():
-                if isinstance(v, str):
-                    match = wildcard_pattern.search(v)
-                    if match:
-                        wildcard_field = match.group(1)
-                        wildcard_subfield = match.group(2)
-                        break
-
-    if not wildcard_field:
-        return [params]
-
-    # Obtenir la llista d'IDs
-    ids_list = element.get(wildcard_field, [])
-    if not ids_list or not isinstance(ids_list, list):
-        _logger.warning(f"Wildcard field '{wildcard_field}' is not a list or is empty")
-        return []
-
-    # Per cada ID, fer populate i crear un conjunt de paràmetres
-    expanded = []
-    for item_id in ids_list:
-        # Fer lookup a la BD per obtenir les dades de l'element referenciat
-        referenced_data = None
-        if repository:
-            try:
-                referenced_data = await _populate_reference(str(item_id), repository)
-            except Exception as e:
-                _logger.error(f"Failed to populate {wildcard_field} ID {item_id}: {e}")
-                continue
-
-        if not referenced_data:
-            continue
-
-        # Crear còpia dels params substituint wildcards
-        expanded_params = _replace_wildcard_in_params(
-            params, wildcard_field, referenced_data
+        params = hook_def.get("params", {})
+        await _execute_file_script(
+            script,
+            event=event,
+            model=model,
+            element=element,
+            hook_def=hook_def,
+            params=params,
+            smtp_config=smtp_config,
+            repository=repository,
         )
-        expanded.append(expanded_params)
+        _logger.info(f"Hook script '{script}' executed successfully")
 
-    return expanded
+    return element
 
 
-def _replace_wildcard_in_params(params: dict, field: str, data: dict) -> dict:
-    """Substitueix qualsevol {{field.*.subfield}} pels valors reals de data[subfield]."""
-    import copy
-    new_params = copy.deepcopy(params)
-    pattern = re.compile(f"\\{{\\{{{field}\\.\\*\\.(\\w+)\\}}\\}}")
+def _get_hook_list(model, event: str) -> list:
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    hooks_config = extra.get("x-hooks", {})
+    if event in hooks_config:
+        return hooks_config[event]
 
-    def replacer(match):
-        sub = match.group(1)
-        return str(data.get(sub, ""))
+    normalized_event = event.lower()
+    for configured_event, hook_list in hooks_config.items():
+        if str(configured_event).lower() == normalized_event:
+            return hook_list
+    return []
 
-    for key, value in new_params.items():
-        if isinstance(value, str):
-            new_params[key] = pattern.sub(replacer, value)
-        elif isinstance(value, dict):
-            for k, v in value.items():
-                if isinstance(v, str):
-                    value[k] = pattern.sub(replacer, v)
 
-    return new_params
+async def _execute_file_script(
+    script: str,
+    event: str,
+    model,
+    element: dict,
+    hook_def: dict,
+    params: dict,
+    smtp_config: dict = None,
+    repository=None,
+):
+    hooks_dir = (smtp_config or {}).get("hooks_dir") or "hooks"
+    script_path = _resolve_script_path(hooks_dir, script)
+    module = _load_script_module(script_path)
+    run_func = getattr(module, "run", None)
+    if not run_func:
+        raise ValueError(f"Hook script '{script}' must define a run(context) function")
+
+    resolved_params = await _resolve_all_params(params or {}, element, repository)
+    context = {
+        "event": event,
+        "model": model,
+        "element": element,
+        "repository": repository,
+        "services": create_hook_services(repository, smtp_config),
+        "smtp_config": smtp_config,
+        "params": resolved_params,
+        "hook": hook_def,
+    }
+
+    result = run_func(context)
+    if hasattr(result, "__await__"):
+        result = await result
+
+    if isinstance(result, dict):
+        element.update(result)
+
+
+def _resolve_script_path(hooks_dir: str, script: str) -> str:
+    script_name = script.replace("\\", "/").strip("/")
+    if not script_name.endswith(".py"):
+        script_name = f"{script_name}.py"
+
+    root = os.path.abspath(hooks_dir)
+    path = os.path.abspath(os.path.join(root, *script_name.split("/")))
+    if os.path.commonpath([root, path]) != root:
+        raise ValueError(f"Hook script path escapes hooks directory: {script}")
+    if not os.path.exists(path):
+        raise ValueError(f"Hook script not found: {path}")
+    return path
+
+
+def _load_script_module(script_path: str):
+    module_name = "laiagen_hook_" + re.sub(r"\W+", "_", script_path)
+    spec = importlib.util.spec_from_file_location(module_name, script_path)
+    if not spec or not spec.loader:
+        raise ValueError(f"Cannot load hook script: {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 async def _resolve_all_params(params: dict, element: dict, repository=None) -> dict:
-    """
-    Resol totes les variables {{camp}} dins dels paràmetres.
-    """
     resolved = {}
     for key, value in params.items():
         if isinstance(value, str):
@@ -193,67 +142,47 @@ async def _resolve_all_params(params: dict, element: dict, repository=None) -> d
 
 
 async def _resolve_value(value: str, element: dict, repository=None) -> Any:
-    """
-    Resol una variable {{camp}} o {{camp.subcamp}} pel seu valor real.
-    
-    - {{email}} → element["email"]
-    - {{_self}} → tot l'element
-    - {{name}} → element["name"]
-    - {{userId.email}} → lookup a BD per obtenir User i retornar email
-    """
-    # Patró: tota la cadena és una variable
     full_match = re.match(r"^\{\{(\S+)\}\}$", value)
     if not full_match:
-        # Pot tenir variables dins del text: "Hola {{name}}"
-        def replace_var(m):
-            var_name = m.group(1)
-            if var_name == "_self":
-                return str(element)
-            if "." in var_name:
-                # No podem fer async dins de re.sub, retornem placeholder
-                return str(element.get(var_name.split(".")[0], ""))
-            return str(element.get(var_name, ""))
-        
-        result = re.sub(r"\{\{(\S+?)\}\}", replace_var, value)
+        result = value
+        replacements = []
+        for match in re.finditer(r"\{\{(\S+?)\}\}", value):
+            resolved = await _resolve_path(match.group(1), element, repository)
+            replacements.append((match.span(), "" if resolved is None else str(resolved)))
+        for (start, end), replacement in reversed(replacements):
+            result = result[:start] + replacement + result[end:]
         return result
 
     var_path = full_match.group(1)
+    resolved = await _resolve_path(var_path, element, repository)
+    return value if resolved is None else resolved
 
-    # Cas especial: _self
-    if var_path == "_self":
+
+async def _resolve_path(path: str, element: dict, repository=None) -> Any:
+    if path == "_self":
         return element
 
-    # Cas simple: camp directe
-    if "." not in var_path:
-        return element.get(var_path, value)
+    current_value: Any = element
+    for part in path.split("."):
+        if isinstance(current_value, dict):
+            current_value = current_value.get(part)
+            continue
 
-    # Cas compost: camp.subcamp (necessita populate)
-    parts = var_path.split(".")
-    field_name = parts[0]
-    sub_field = parts[1]
+        if isinstance(current_value, list):
+            return [item.get(part) for item in current_value if isinstance(item, dict) and part in item]
 
-    ref_id = element.get(field_name)
-    if not ref_id:
-        return value
+        if current_value and repository:
+            referenced = await _populate_reference(str(current_value), repository)
+            current_value = referenced.get(part) if referenced else None
+            continue
 
-    # Fer lookup a la BD
-    if repository:
-        try:
-            referenced = await _populate_reference(str(ref_id), repository)
-            if referenced:
-                return referenced.get(sub_field, value)
-        except Exception as e:
-            _logger.error(f"Failed to resolve {var_path}: {e}")
+        return None
 
-    return value
+    return current_value
 
 
 async def _populate_reference(ref_id: str, repository) -> Optional[dict]:
-    """
-    Busca un element per ID a la BD (prova col·leccions comunes).
-    """
-    # Prova primer amb 'user' (el cas més comú)
-    for collection in ["user", "offer", "demand", "activity", "site", "vehicle"]:
+    for collection in ["user", "offer", "demand", "match", "activity", "site", "vehicle"]:
         try:
             items, _ = await repository.get_items(
                 model_name=collection,

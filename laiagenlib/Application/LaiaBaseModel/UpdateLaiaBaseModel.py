@@ -1,7 +1,7 @@
 from typing import Annotated, Type, Union, get_origin
 
 from bson import ObjectId
-from fastapi import types
+from fastapi import HTTPException, types
 
 from laiagenlib.Domain.Shared.Utils.SerializeBson import serialize_bson
 from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
@@ -14,6 +14,39 @@ from fastapi.encoders import jsonable_encoder
 from typing import get_args
 
 from ...Application.Hooks.HookExecutor import execute_hooks
+
+
+def _has_hooks(model: Type, event: str) -> bool:
+    extra = getattr(model, "model_config", {}).get("json_schema_extra", {})
+    hooks = extra.get("x-hooks", {}) if isinstance(extra, dict) else {}
+    if hooks.get(event):
+        return True
+    normalized_event = event.lower()
+    return any(str(configured_event).lower() == normalized_event for configured_event in hooks)
+
+
+async def _get_current_doc(model_name: str, element_id: str, repository: ModelRepository) -> dict:
+    current_items = await repository.get_items(model_name, filters={"_id": ObjectId(element_id)}, limit=1)
+    current = current_items[0] if isinstance(current_items, tuple) else current_items
+    if not current:
+        raise ValueError(f"{model_name} with id {element_id} not found")
+    return current[0]
+
+
+def _hook_update_fields(before: dict, after: dict, model: Type) -> dict:
+    field_names = set(getattr(model, "model_fields", {}).keys())
+    blocked = {"id", "_id"}
+    changes = {}
+
+    for key, value in after.items():
+        if key in blocked:
+            continue
+        if field_names and key not in field_names:
+            continue
+        if before.get(key) != value:
+            changes[key] = value
+
+    return changes
 
 def _contains_objectid(ann) -> bool:
     if ann is ObjectId:
@@ -81,16 +114,10 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         or (not use_access_rights and has_configured_owner_fields)
     )
 
-    if needs_shard_check or needs_owner_check:
-        current_items = await repository.get_items(model_name, filters={"_id": ObjectId(element_id)}, limit=1)
-        if isinstance(current_items, tuple):
-            current = current_items[0]
-        else:
-            current = current_items
-        if not current:
-            raise ValueError(f"{model.__name__} with id {element_id} not found")
+    current_doc = None
 
-        current_doc = current[0]
+    if needs_shard_check or needs_owner_check:
+        current_doc = await _get_current_doc(model_name, element_id, repository)
 
         if needs_shard_check:
             shard_key = extra.get("x-shard-key", "region")
@@ -116,14 +143,31 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
                 raise PermissionError("You do not have permission to update this record; you are not the owner")
 
     try:
+        if _has_hooks(model, "preupdate"):
+            if current_doc is None:
+                current_doc = await _get_current_doc(model_name, element_id, repository)
+
+            proposed_element = {**current_doc, **updated_values}
+            before_preupdate = dict(proposed_element)
+            proposed_element = await execute_hooks(
+                "preupdate", model, proposed_element, smtp_config, repository
+            )
+            updated_values.update(_hook_update_fields(before_preupdate, proposed_element, model))
+
         updated_element = await repository.put_item(model_name, element_id, updated_values)
         
-        # Execute postupdate hooks (e.g. sendMail on status change)
-        await execute_hooks("postupdate", model, updated_element, smtp_config, repository)
+        if _has_hooks(model, "postupdate"):
+            before_postupdate = dict(updated_element)
+            updated_element = await execute_hooks("postupdate", model, updated_element, smtp_config, repository)
+            hook_changes = _hook_update_fields(before_postupdate, updated_element, model)
+            if hook_changes:
+                updated_element = await repository.put_item(model_name, element_id, hook_changes)
         
     except KeyError as e:
         _logger.exception("Field error while updating %s: %s", model.__name__, e)
         raise ValueError(f"Invalid field(s) in update: {e}") from e
+    except HTTPException:
+        raise
     except ValueError as e:
         _logger.exception("Value error while updating %s: %s", model.__name__, e)
         raise
