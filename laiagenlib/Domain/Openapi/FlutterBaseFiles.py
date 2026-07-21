@@ -745,7 +745,21 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                 label = tab.get('label', '')
                 fields_list = tab.get('fields', [])
                 fields_str = ", ".join([f'"{f}"' for f in fields_list])
-                tab_elements.append(f'ElementTab(label: "{label}", fields: [{fields_str}])')
+                relation = tab.get('relation', '')
+                inverse_relation_field = tab.get('inverseRelationField', '')
+                
+                parts = [f'label: "{label}"']
+                if fields_list:
+                    parts.append(f'fields: [{fields_str}]')
+                if relation:
+                    parts.append(f'relation: "{relation}"')
+                    imp = f"import 'package:{app_name}/models/{relation.lower()}.dart';\n"
+                    if imp not in extra_imports:
+                        extra_imports += imp
+                if inverse_relation_field:
+                    parts.append(f'inverseRelationField: "{inverse_relation_field}"')
+                
+                tab_elements.append(f'ElementTab({", ".join(parts)})')
             tabs_str = "tabs: [" + ", ".join(tab_elements) + "], "
         else:
             tabs_str = ""
