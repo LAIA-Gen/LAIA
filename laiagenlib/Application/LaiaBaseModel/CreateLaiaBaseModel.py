@@ -53,6 +53,10 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
             )
         clean_element[shard_key] = user_shard
 
+    clean_element = await execute_hooks(
+        "presave", model, clean_element, smtp_config, repository
+    )
+
     created_element = await repository.post_item(model_name, clean_element)
 
     # Execute postsave hooks (e.g. sendMail on register)
