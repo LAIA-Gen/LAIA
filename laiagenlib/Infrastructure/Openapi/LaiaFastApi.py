@@ -38,7 +38,8 @@ class LaiaFastApi():
             smtp_tls: bool = True,
             templates_dir: str = "email_templates",
             hooks_dir: str = "",
-            add_geolocation: bool = True):
+            add_geolocation: bool = True,
+            frontend_url: str = ""):
         
         self.db = db
         self.api = FastAPI(openapi_url='/openapi.json')
@@ -68,6 +69,7 @@ class LaiaFastApi():
             "user": smtp_user,
             "password": smtp_password,
             "tls": smtp_tls,
+            "frontend_url": frontend_url,
             "templates_dir": templates_dir,
             "hooks_dir": resolved_hooks_dir
         }

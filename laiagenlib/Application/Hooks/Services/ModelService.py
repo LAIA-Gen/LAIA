@@ -54,6 +54,18 @@ class ModelService:
         items = await self.find(filters=filters, limit=1, model_name=model_name)
         return items[0] if items else None
 
+    async def update(self, item_id: Any, update_fields: dict, model_name: str = "") -> Optional[dict]:
+        if not item_id or not self.repository:
+            return None
+        collection = model_name or self.model_name
+        if not collection:
+            return None
+        try:
+            return await self.repository.put_item(collection, str(item_id), update_fields)
+        except Exception as e:
+            print(f"[LAIA ModelService update error] {e}")
+            return None
+
 
 class UserService(ModelService):
     model_name = "user"
