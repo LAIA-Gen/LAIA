@@ -9,6 +9,7 @@ from laiagenlib.Application.LaiaUser import VerifyLaiaUser
 from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from ...Application.LaiaUser import RegisterLaiaUser, LoginLaiaUser, JWTToken
 from ...Application.LaiaUser.ChangePasswordLaiaUser import change_password
+from ...Application.Hooks.Services.ModelService import MouCulturaService
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.LaiaUser.Auth import Auth
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
@@ -115,6 +116,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
             handle_exception(e)
             
     @router.get(f"/auth/activate/{model_name}/{{user_id}}", summary="Activate user and redirect to frontend")
+    @router.put(f"/auth/activate/{model_name}/{{user_id}}", summary="Activate user and redirect to frontend")
     async def activate_user(user_id: str):
         """
         Activa directament l'usuari usant el seu ID
@@ -130,8 +132,13 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 )
                 _logger.info(f"User {user_id} activated via direct link")
             
-            frontend_url = (smtp_config or {}).get("frontend_url") or "/"
-            return RedirectResponse(url=frontend_url)
+            frontend_url = (smtp_config or {}).get("frontend_url") or "https://www.moucultura.cat"
+            default_callback_url = f"{frontend_url.rstrip('/')}/message/user_activated"
+            callback_url = await MouCulturaService(repository).getValue(
+                "URL_CALLBACK_USER_ACTIVATED",
+                default_callback_url,
+            )
+            return RedirectResponse(url=callback_url or default_callback_url)
         except Exception as e:
             handle_exception(e)
         
