@@ -104,6 +104,21 @@ class MatchService(ModelService):
     model_name = "match"
 
 
+class MouCulturaService(ModelService):
+    model_name = "moucultura"
+
+    async def get_value(self, key: str, default: Any = None) -> Any:
+        if not key:
+            return default
+        item = await self.first({"key": key})
+        if not item:
+            return default
+        return item.get("value", default)
+
+    async def getValue(self, key: str, default: Any = None) -> Any:
+        return await self.get_value(key, default)
+
+
 def _normalize_locale(locale: Any, default: str = "ca") -> str:
     locale = str(locale or default).strip().replace("-", "_")
     if not locale:

@@ -1,4 +1,4 @@
-from .ModelService import DemandService, MatchService, ModelService, OfferService, UserService
+from .ModelService import DemandService, MatchService, ModelService, MouCulturaService, OfferService, UserService
 
 
 def create_hook_services(repository=None, smtp_config: dict = None) -> dict:
@@ -8,4 +8,5 @@ def create_hook_services(repository=None, smtp_config: dict = None) -> dict:
         "offer": OfferService(repository),
         "demand": DemandService(repository),
         "match": MatchService(repository),
+        "moucultura": MouCulturaService(repository),
     }
