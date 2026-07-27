@@ -132,8 +132,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 )
                 _logger.info(f"User {user_id} activated via direct link")
             
-            frontend_url = (smtp_config or {}).get("frontend_url") or "https://www.moucultura.cat"
-            default_callback_url = f"{frontend_url.rstrip('/')}/landing"
+            default_callback_url = "http://www.moucultura.com/?msg=USER_ACTIVATED"
             callback_url = await MouCulturaService(repository).getValue(
                 "URL_CALLBACK_USER_ACTIVATED",
                 default_callback_url,
