@@ -132,7 +132,7 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                 )
                 _logger.info(f"User {user_id} activated via direct link")
             
-            default_callback_url = "http://www.moucultura.com/?msg=USER_ACTIVATED"
+            default_callback_url = "https://www.moucultura.cat/?msg=USER_ACTIVATED"
             callback_url = await MouCulturaService(repository).getValue(
                 "URL_CALLBACK_USER_ACTIVATED",
                 default_callback_url,
@@ -199,3 +199,4 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
             handle_exception(e)
 
     return router
+
