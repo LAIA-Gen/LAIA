@@ -199,3 +199,4 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
             handle_exception(e)
 
     return router
+
