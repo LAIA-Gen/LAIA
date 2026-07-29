@@ -1,9 +1,12 @@
 import pytest
 import pytest_asyncio
 from pymongo import MongoClient
+from pydantic import Field
+from bson import ObjectId
 from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoModelRepository
 from laiagenlib.Application.LaiaBaseModel.SearchLaiaBaseModel import search_laia_base_model
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
+from laiagenlib.Domain.Shared.Utils.ModelRegistry import register_model
 
 class User(LaiaBaseModel):
     name: str = ""
@@ -17,6 +20,14 @@ class Drone(LaiaBaseModel):
     max_altitude: float
     max_speed: float
 
+
+class Offer(LaiaBaseModel):
+    userId: str = Field(
+        "",
+        x_frontend_relation="User",
+        populate={"excludeFields": ["email", "telephone", "password"]},
+    )
+
 @pytest.fixture
 def in_memory_db():
     client = MongoClient()
@@ -25,6 +36,7 @@ def in_memory_db():
     db.drop_collection("drone")
     db.drop_collection("accessright")
     db.drop_collection("publicoffer")
+    db.drop_collection("offer")
     return db
 
 @pytest_asyncio.fixture
@@ -106,4 +118,44 @@ class TestSearchLaiaBaseModel:
 
         assert len(result["items"]) == 1
         assert result["items"][0]["name"] == "Offer 1"
+
+    @pytest.mark.asyncio
+    async def test_populate_excludes_relation_sensitive_fields(self, repository_instance):
+        user = await repository_instance.post_item(
+            "user",
+            User(
+                name="Volunteer",
+                description="Available",
+                age=30,
+            ),
+        )
+        repository_instance.db["user"].update_one(
+            {"_id": ObjectId(user["id"])},
+            {
+                "$set": {
+                    "email": "volunteer@example.com",
+                    "telephone": "600000000",
+                    "password": "secret",
+                }
+            },
+        )
+        await repository_instance.post_item("offer", Offer(userId=user["id"]))
+        register_model("user", User)
+
+        result = await search_laia_base_model(
+            0,
+            10,
+            {},
+            {},
+            Offer,
+            ["admin"],
+            repository_instance,
+            populate=[{"id": "userId", "from": "user", "as": "user"}],
+        )
+
+        populated_user = result["items"][0]["user"]
+        assert populated_user["name"] == "Volunteer"
+        assert "email" not in populated_user
+        assert "telephone" not in populated_user
+        assert "password" not in populated_user
 
