@@ -150,6 +150,32 @@ components:
 
 > **Note:** Use `permissions` (without `x-` prefix) directly on the schema definition. The library maps it internally to `x-permissions`.
 
+### Excluding sensitive fields from populated SEARCH results
+
+Use `populate.excludeFields` on a relation property to prevent selected fields
+from being returned when that relation is populated by a SEARCH:
+
+```yaml
+components:
+  schemas:
+    Offer:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: Volunteer ID
+          x_frontend_editable: true
+          x_frontend_relation: User
+          populate:
+            excludeFields:
+              - email
+              - telephone
+              - password
+```
+
+The exclusions are applied to both single objects and arrays, including
+populates that use `id`, `from`, and `as`.
+
 ### Tab extensions (`x-frontend-tabs`)
 
 Use the `x-frontend-tabs` extension on a model schema to customize the tabbed view of the model detail page in the frontend backoffice.

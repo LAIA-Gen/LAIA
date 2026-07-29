@@ -9,6 +9,52 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from bson import ObjectId
 #JMT
+
+
+def _get_populate_excluded_fields(model: Type, field_name: str) -> List[str]:
+    """Return response fields excluded by a relation's populate configuration."""
+    config = getattr(model, "model_config", {})
+    model_extra = config.get("json_schema_extra", {}) if isinstance(config, dict) else {}
+    configured_by_field = (
+        model_extra.get("x-populate-exclude-fields", {})
+        if isinstance(model_extra, dict)
+        else {}
+    )
+    configured_fields = (
+        configured_by_field.get(field_name, [])
+        if isinstance(configured_by_field, dict)
+        else []
+    )
+
+    field = getattr(model, "model_fields", {}).get(field_name)
+    if field is None:
+        return configured_fields if isinstance(configured_fields, list) else []
+
+    extra = getattr(field, "json_schema_extra", None) or {}
+    populate_config = extra.get("populate", {}) if isinstance(extra, dict) else {}
+    if not isinstance(populate_config, dict):
+        return configured_fields if isinstance(configured_fields, list) else []
+
+    excluded = populate_config.get(
+        "excludeFields",
+        populate_config.get("exclude_fields", configured_fields),
+    )
+    if not isinstance(excluded, list):
+        return []
+    return [name for name in excluded if isinstance(name, str)]
+
+
+def _strip_named_fields(data, excluded_fields: List[str]):
+    if not excluded_fields:
+        return data
+    excluded = set(excluded_fields)
+    if isinstance(data, list):
+        return [_strip_named_fields(item, excluded_fields) for item in data]
+    if isinstance(data, dict):
+        return {key: value for key, value in data.items() if key not in excluded}
+    return data
+
+
 async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
@@ -74,10 +120,14 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
                 result_field = entry
 
             populated_model = get_model_class(from_col)
-            if populated_model:
-                for item in items:
-                    if result_field in item and item[result_field] is not None:
+            relation_excluded_fields = _get_populate_excluded_fields(model, local_field)
+            for item in items:
+                if result_field in item and item[result_field] is not None:
+                    if populated_model:
                         item[result_field] = strip_excluded_fields(populated_model, item[result_field])
+                    item[result_field] = _strip_named_fields(
+                        item[result_field], relation_excluded_fields
+                    )
 
     items = strip_excluded_fields(model, items)
     serialized_items = []

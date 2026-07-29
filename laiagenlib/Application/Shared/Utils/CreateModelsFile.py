@@ -239,12 +239,25 @@ from bson import ObjectId"""
             json_schema_extra["@context"] = context_map
 
         excluded_from_response = []
+        populate_exclude_fields = {}
         if hasattr(model, "properties"):
             for prop_name, prop in model.properties.items():
                 if isinstance(prop, dict) and (prop.get("x_exclude_from_response") or prop.get("x-exclude-from-response")):
                     excluded_from_response.append(prop_name)
+                populate_config = prop.get("populate") if isinstance(prop, dict) else None
+                if isinstance(populate_config, dict):
+                    excluded = populate_config.get(
+                        "excludeFields",
+                        populate_config.get("exclude_fields"),
+                    )
+                    if isinstance(excluded, list):
+                        populate_exclude_fields[prop_name] = excluded
         if excluded_from_response:
             json_schema_extra["x-exclude-from-response"] = excluded_from_response
+        if populate_exclude_fields:
+            # datamodel-code-generator does not guarantee preservation of
+            # non-standard property keys, so retain this metadata explicitly.
+            json_schema_extra["x-populate-exclude-fields"] = populate_exclude_fields
 
         has_enum = False
         if hasattr(model, "properties"):
