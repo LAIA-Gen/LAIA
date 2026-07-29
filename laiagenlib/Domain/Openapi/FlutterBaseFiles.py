@@ -747,6 +747,9 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                 fields_str = ", ".join([f'"{f}"' for f in fields_list])
                 relation = tab.get('relation', '')
                 inverse_relation_field = tab.get('inverseRelationField', '')
+                if isinstance(inverse_relation_field, list):
+                    inverse_relation_field = ", ".join([str(x) for x in inverse_relation_field])
+                filters = tab.get('filters') or tab.get('extraFilters')
                 
                 parts = [f'label: "{label}"']
                 if fields_list:
@@ -758,6 +761,23 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                         extra_imports += imp
                 if inverse_relation_field:
                     parts.append(f'inverseRelationField: "{inverse_relation_field}"')
+                if filters and isinstance(filters, dict):
+                    def _to_dart_val(val):
+                        if isinstance(val, bool):
+                            return "true" if val else "false"
+                        elif isinstance(val, (int, float)):
+                            return str(val)
+                        elif isinstance(val, str):
+                            return f'"{val}"'
+                        elif isinstance(val, list):
+                            return f"[{', '.join(_to_dart_val(x) for x in val)}]"
+                        elif isinstance(val, dict):
+                            entries = [f'"{k}": {_to_dart_val(v)}' for k, v in val.items()]
+                            return f"{{{', '.join(entries)}}}"
+                        return f'"{val}"'
+                    filter_entries = [f'"{k}": {_to_dart_val(v)}' for k, v in filters.items()]
+                    filters_str = f"{{{', '.join(filter_entries)}}}"
+                    parts.append(f'filters: {filters_str}')
                 
                 tab_elements.append(f'ElementTab({", ".join(parts)})')
             tabs_str = "tabs: [" + ", ".join(tab_elements) + "], "
