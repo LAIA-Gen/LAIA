@@ -9,7 +9,7 @@ from ...Domain.Shared.Utils.logger import _logger
 DEFAULT_SUBJECT = "Valora la teva experiencia a MouCultura"
 DEFAULT_TEMPLATE = "mail.valoracio.html"
 DEFAULT_LOCALE = "ca"
-DEFAULT_REVIEW_BASE_URL = "https://www.moucultura.cat/"
+DEFAULT_REVIEW_BASE_URL = "https://www.moucultura.cat/feedback"
 
 
 async def send_trip_rating_emails(
@@ -144,10 +144,6 @@ async def send_trip_rating_emails(
                     "reviewUrl": _build_review_url(
                         review_base,
                         match_id,
-                        user_id,
-                        role,
-                        rated_user_id,
-                        rated_role,
                     ),
                 }
 
@@ -281,27 +277,20 @@ def _review_base_url(review_base_url: Optional[str], smtp_config: dict) -> str:
         return review_base_url
     configured = (smtp_config or {}).get("review_base_url") or (smtp_config or {}).get("frontend_url")
     if configured:
-        return f"{configured.rstrip('/')}/"
-    return DEFAULT_REVIEW_BASE_URL
+        return configured.rstrip("/")
+    return DEFAULT_REVIEW_BASE_URL.rstrip("/")
 
 
 def _build_review_url(
     base_url: str,
     match_id: str,
-    reviewer_id: str,
-    reviewer_role: str,
-    rated_user_id: str,
-    rated_user_role: str,
+    *args,
+    **kwargs,
 ) -> str:
-    separator = "&" if "?" in base_url else "?"
-    query = {
-        "matchId": match_id,
-        "reviewerId": reviewer_id,
-        "reviewerRole": reviewer_role,
-        "ratedUserId": rated_user_id,
-        "ratedRole": rated_user_role,
-    }
-    return f"{base_url}{separator}{urlencode(query)}"
+    base = base_url.rstrip("/")
+    if not base.endswith("/feedback"):
+        base = f"{base}/feedback"
+    return f"{base}/{match_id}"
 
 
 def _rating_subject(default_subject: str, rated_user: dict) -> str:

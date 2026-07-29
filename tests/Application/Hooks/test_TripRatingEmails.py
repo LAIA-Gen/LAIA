@@ -105,9 +105,11 @@ async def test_send_trip_rating_emails_sends_to_mouer_and_seeker():
     assert mouer_context["role"] == "mouer"
     assert mouer_context["ratedUserName"] == "Pau"
     assert mouer_context["ratedUserRole"] == "seeker"
-    assert "reviewerId=mouer-1" in mouer_context["reviewUrl"]
-    assert "ratedUserId=seeker-1" in mouer_context["reviewUrl"]
-    assert mouer_context["reviewUrl"].startswith("https://app.example.com/?")
+    assert mouer_context["reviewUrl"] == "https://app.example.com/feedback/match-1"
+<<<<<<< HEAD
+    assert seeker_context["reviewUrl"] == "https://app.example.com/feedback/match-1"
+=======
+>>>>>>> 909a825 (cambiado url email)
     assert seeker_context["role"] == "seeker"
     assert seeker_context["ratedUserName"] == "Marta"
     assert seeker_context["ratedUserRole"] == "mouer"
