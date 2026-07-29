@@ -110,10 +110,12 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     if populate:
         from ...Domain.Shared.Utils.ModelRegistry import get_model_class
         for entry in populate:
+            fields_to_exclude = []
             if isinstance(entry, dict):
                 local_field = entry.get("id") or entry.get("field")
                 from_col = entry.get("from", local_field)
                 result_field = entry.get("as", local_field)
+                fields_to_exclude = entry.get("excludeFields") or entry.get("exclude_fields") or []
             else:
                 local_field = entry
                 from_col = entry
@@ -126,7 +128,7 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
                     if populated_model:
                         item[result_field] = strip_excluded_fields(populated_model, item[result_field])
                     item[result_field] = _strip_named_fields(
-                        item[result_field], relation_excluded_fields
+                        item[result_field], list(set(relation_excluded_fields + fields_to_exclude))
                     )
 
     items = strip_excluded_fields(model, items)
