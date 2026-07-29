@@ -22,10 +22,16 @@ class Drone(LaiaBaseModel):
 
 
 class Offer(LaiaBaseModel):
+    model_config = {
+        "json_schema_extra": {
+            "x-populate-exclude-fields": {
+                "userId": ["email", "telephone", "password"],
+            }
+        }
+    }
     userId: str = Field(
         "",
         x_frontend_relation="User",
-        populate={"excludeFields": ["email", "telephone", "password"]},
     )
 
 @pytest.fixture
