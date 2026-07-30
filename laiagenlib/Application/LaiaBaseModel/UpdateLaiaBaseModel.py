@@ -8,6 +8,7 @@ from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
+from ..Shared.Utils.EnsureUniqueConstraints import ensure_unique_constraints
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from fastapi.encoders import jsonable_encoder
@@ -154,6 +155,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
             )
             updated_values.update(_hook_update_fields(before_preupdate, proposed_element, model))
 
+        await ensure_unique_constraints(model, model_name, repository)
         updated_element = await repository.put_item(model_name, element_id, updated_values)
         
         if _has_hooks(model, "postupdate"):

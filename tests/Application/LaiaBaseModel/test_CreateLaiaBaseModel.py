@@ -5,6 +5,7 @@ from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoMo
 from laiagenlib.Application.LaiaBaseModel.CreateLaiaBaseModel import create_laia_base_model
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.GeoJSON.Geometry import Point
+from pymongo.errors import DuplicateKeyError
 
 class User(LaiaBaseModel):
     description: str
@@ -17,12 +18,35 @@ class Drone(LaiaBaseModel):
     max_altitude: float
     max_speed: float
 
+
+class UniqueOffer(LaiaBaseModel):
+    userId: str
+    activityId: str
+    serviceType: str
+    originText: str
+    availabilityStartAt: str
+    availabilityEndAt: str
+
+    model_config = {
+        "json_schema_extra": {
+            "x-unique-fields": [
+                "userId",
+                "activityId",
+                "serviceType",
+                "originText",
+                "availabilityStartAt",
+                "availabilityEndAt",
+            ]
+        }
+    }
+
 @pytest.fixture
 def in_memory_db():
     client = MongoClient()
     db = client["testdb"]
     db.drop_collection("user")
     db.drop_collection("drone")
+    db.drop_collection("uniqueoffer")
     return db
 
 @pytest_asyncio.fixture
@@ -76,6 +100,26 @@ class TestCreateLaiaBaseModel:
         user_roles = ['user'] 
         with pytest.raises(PermissionError):
             await create_laia_base_model(new_element, model, user_roles, repository_instance)
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_compound_duplicate(self, repository_instance):
+        offer = {
+            "userId": "user-1",
+            "activityId": "activity-1",
+            "serviceType": "transport",
+            "originText": "Barcelona",
+            "availabilityStartAt": "2026-08-01T10:00:00",
+            "availabilityEndAt": "2026-08-01T12:00:00",
+        }
+
+        await create_laia_base_model(
+            offer, UniqueOffer, ["admin"], repository_instance
+        )
+
+        with pytest.raises(DuplicateKeyError):
+            await create_laia_base_model(
+                offer, UniqueOffer, ["admin"], repository_instance
+            )
 
     @pytest.mark.asyncio
     async def test_create_laia_base_model_missing_parameters(self, repository_instance):

@@ -9,6 +9,7 @@ from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ..AccessRights.CheckAccessRightsOfFields import check_access_rights_of_fields
 from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
+from ..Shared.Utils.EnsureUniqueConstraints import ensure_unique_constraints
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Hooks.HookExecutor import execute_hooks
@@ -57,6 +58,7 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         "presave", model, clean_element, smtp_config, repository
     )
 
+    await ensure_unique_constraints(model, model_name, repository)
     created_element = await repository.post_item(model_name, clean_element)
 
     # Execute postsave hooks (e.g. sendMail on register)

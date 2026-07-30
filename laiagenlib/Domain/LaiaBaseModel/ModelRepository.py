@@ -17,6 +17,10 @@ class ModelRepository:
     async def post_item(model_name: str, item: T):
         pass
 
+    async def ensure_unique_constraint(model_name: str, fields: List[str]):
+        """Ensure that the given field combination is unique."""
+        pass
+
     async def put_item(model_name: str, item_id: str, update_fields: dict):
         pass
 

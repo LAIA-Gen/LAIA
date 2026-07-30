@@ -1,5 +1,6 @@
 import pytest, pytest_asyncio
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 from laiagenlib.Infrastructure.LaiaBaseModel.MongoModelRepository import MongoModelRepository
 from laiagenlib.Domain.LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from laiagenlib.Domain.Shared.Utils.logger import _logger
@@ -21,6 +22,7 @@ def in_memory_db():
     db.drop_collection("user_collection")
     db.drop_collection("place")
     db.drop_collection("venue")
+    db.drop_collection("unique_offer_test")
     return db
 
 @pytest_asyncio.fixture
@@ -58,6 +60,62 @@ class TestCRUDMongoImpl:
         deleted_item = await crud_instance.delete_item("user_collection", created_item["id"])
 
         assert deleted_item["id"] == created_item["id"]
+
+    @pytest.mark.asyncio
+    async def test_compound_unique_constraint_rejects_duplicate_items(self, crud_instance):
+        fields = [
+            "userId",
+            "activityId",
+            "serviceType",
+            "originText",
+            "startAt",
+            "endAt",
+        ]
+        item = {
+            "userId": "user-1",
+            "activityId": "activity-1",
+            "serviceType": "transport",
+            "originText": "Barcelona",
+            "startAt": "2026-08-01T10:00:00",
+            "endAt": "2026-08-01T12:00:00",
+        }
+
+        await crud_instance.ensure_unique_constraint("unique_offer_test", fields)
+        await crud_instance.post_item("unique_offer_test", item)
+
+        with pytest.raises(DuplicateKeyError):
+            await crud_instance.post_item("unique_offer_test", item)
+
+    @pytest.mark.asyncio
+    async def test_compound_unique_constraint_rejects_duplicate_update(self, crud_instance):
+        fields = ["userId", "serviceType", "originText"]
+        first = await crud_instance.post_item(
+            "unique_offer_test",
+            {
+                "userId": "user-1",
+                "serviceType": "transport",
+                "originText": "Barcelona",
+            },
+        )
+        second = await crud_instance.post_item(
+            "unique_offer_test",
+            {
+                "userId": "user-1",
+                "serviceType": "transport",
+                "originText": "Badalona",
+            },
+        )
+        await crud_instance.ensure_unique_constraint("unique_offer_test", fields)
+
+        with pytest.raises(DuplicateKeyError):
+            await crud_instance.put_item(
+                "unique_offer_test",
+                second["id"],
+                {"originText": "Barcelona"},
+            )
+
+        unchanged = await crud_instance.get_item("unique_offer_test", second["id"])
+        assert unchanged["originText"] == "Badalona"
 
     @pytest.mark.asyncio
     async def test_get_items(self, crud_instance):

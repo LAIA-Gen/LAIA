@@ -474,6 +474,17 @@ class MongoModelRepository(ModelRepository):
 
         return item_dict
 
+    async def ensure_unique_constraint(self, model_name: str, fields: List[str]):
+        if not fields or any(not isinstance(field, str) or not field for field in fields):
+            raise ValueError("Unique constraint fields must be non-empty strings")
+
+        index_name = "laia_unique__" + "__".join(fields)
+        self.db[model_name].create_index(
+            [(field, 1) for field in fields],
+            unique=True,
+            name=index_name,
+        )
+
     async def put_item(self, model_name: str, item_id: str, update_fields: dict):
         collection = self.db[model_name]
         self.convert_objectids_in_query(update_fields)
