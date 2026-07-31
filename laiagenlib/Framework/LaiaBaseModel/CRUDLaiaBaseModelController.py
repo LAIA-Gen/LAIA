@@ -147,7 +147,16 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard, user_id=str(user_id))
+            await DeleteLaiaBaseModel.delete_laia_base_model(
+                element_id,
+                model,
+                user_roles,
+                repository,
+                use_access_rights,
+                user_shard,
+                user_id=str(user_id),
+                smtp_config=smtp_config,
+            )
             return f"{model_name} element deleted successfully"
         except Exception as e:
             handle_exception(e)
