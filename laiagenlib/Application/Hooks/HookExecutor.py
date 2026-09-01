@@ -7,7 +7,7 @@ from .Services import create_hook_services
 from ...Domain.Shared.Utils.logger import _logger
 
 
-async def execute_hooks(event: str, model, element: dict, smtp_config: dict = None, repository=None):
+async def execute_hooks(event: str, model, element: dict, smtp_config: dict = None, repository=None, context_extra: dict = None):
     """
     Executes file-based hooks defined in a model x-hooks section.
 
@@ -44,6 +44,7 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
             params=params,
             smtp_config=smtp_config,
             repository=repository,
+            context_extra=context_extra,
         )
         _logger.info(f"Hook script '{script}' executed successfully")
 
@@ -72,6 +73,7 @@ async def _execute_file_script(
     params: dict,
     smtp_config: dict = None,
     repository=None,
+    context_extra: dict = None,
 ):
     hooks_dir = (smtp_config or {}).get("hooks_dir") or "hooks"
     script_path = _resolve_script_path(hooks_dir, script)
@@ -91,6 +93,8 @@ async def _execute_file_script(
         "params": resolved_params,
         "hook": hook_def,
     }
+    if context_extra:
+        context.update(context_extra)
 
     result = run_func(context)
     if hasattr(result, "__await__"):
