@@ -7,6 +7,7 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
+from ...Application.Hooks.HookExecutor import execute_hooks
 from bson import ObjectId
 #JMT
 
@@ -55,7 +56,7 @@ def _strip_named_fields(data, excluded_fields: List[str]):
     return data
 
 
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None, smtp_config: dict = None):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
@@ -83,7 +84,16 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
     if extra.get("x-shard") and "admin" not in user_roles:
         shard_key = extra.get("x-shard-key", "region")
         filters[shard_key] = user_shard
-        
+
+    filters = await execute_hooks(
+        "presearch",
+        model,
+        filters,
+        smtp_config,
+        repository,
+        context_extra={"user_roles": user_roles, "user_id": user_id},
+    )
+
     if "_id" in filters and isinstance(filters["_id"], str):
         filters["_id"] = ObjectId(filters["_id"])
     elif "id" in filters and isinstance(filters["id"], str):

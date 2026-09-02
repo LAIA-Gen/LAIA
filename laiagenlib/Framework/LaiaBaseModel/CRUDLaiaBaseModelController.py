@@ -191,7 +191,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             }
             
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate, smtp_config=smtp_config)
         except Exception as e:
             handle_exception(e)
         
