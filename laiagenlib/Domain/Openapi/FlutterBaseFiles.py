@@ -747,6 +747,26 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                 fields_str = ", ".join([f'"{f}"' for f in fields_list])
                 relation = tab.get('relation', '')
                 inverse_relation_field = tab.get('inverseRelationField', '')
+
+                if fields_list:
+                    for f in fields_list:
+                        prop_info = openapiModel.properties.get(f, {})
+                        nicename = (
+                            prop_info.get('x_frontend_nicename')
+                        )
+                        if nicename and (not label or label.lower() == f.lower()):
+                            label = nicename
+                            break
+                if relation and not label:
+                    for prop_n, prop_d in openapiModel.properties.items():
+                        if prop_d.get('x_frontend_relation') == relation:
+                            label = (
+                                prop_d.get('x_frontend_nicename')
+                                or label
+                            )
+                            break
+                    if not label:
+                        label = relation
                 if isinstance(inverse_relation_field, list):
                     inverse_relation_field = ", ".join([str(x) for x in inverse_relation_field])
                 filters = tab.get('filters') or tab.get('extraFilters')
