@@ -75,6 +75,8 @@ class MongoModelRepository(ModelRepository):
         return data
 
     def convert_date_objects(self, data: any) -> any:
+        if isinstance(data, str) and data.lower() in ("date.now", "datenow", "now"):
+            return datetime.now()
         if isinstance(data, datetime):
             return data
         elif isinstance(data, date):
@@ -462,6 +464,8 @@ class MongoModelRepository(ModelRepository):
             item_dict = dict(item)
 
         item_dict.pop('id', None)
+        if 'created_at' not in item_dict or item_dict['created_at'] is None:
+            item_dict['created_at'] = datetime.now()
         self.convert_objectids_in_query(item_dict)
         item_dict = self.convert_enums_in_query(item_dict)
         item_dict = self.convert_date_objects(item_dict)

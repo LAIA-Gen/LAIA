@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated, Optional
 from pydantic import BaseModel
 from pydantic import Field
@@ -8,6 +9,7 @@ class LaiaBaseModel(BaseModel):
     id: str = ""
     owner: Optional[Annotated[ObjectId, ObjectIdPydanticAnnotation]] = None
     nicename: Optional[str] = None
+    created_at: Optional[datetime] = Field(default_factory=datetime.now)
 
     @classmethod
     def __get_pydantic_json_schema__(cls, core_schema, handler):

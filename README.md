@@ -201,16 +201,24 @@ x-frontend-tabs:
 ```
 
 #### 2. Virtual Relation Tab (Read-Only)
-Displays a dynamic read-only list of related objects from another collection. It automatically queries the related collection using the current parent ID.
+Displays a dynamic read-only list of related objects from another collection. It automatically queries the related collection using the current parent ID and optional additional filters.
 
 ```yaml
 x-frontend-tabs:
-  - label: Activities
-    relation: Activity
-    inverseRelationField: eventId
+  - label: Matches Pendents
+    relation: Match
+    inverseRelationField: offerId
+    filters:
+      status: PENDING
+  - label: Matches Acceptats
+    relation: Match
+    inverseRelationField: offerId
+    filters:
+      status: ACCEPTED
 ```
-* `relation`: The target model name to display in the tab's list view (e.g. `Activity`).
-* `inverseRelationField`: The field on the target model that references this model's ID (e.g. `eventId`).
+* `relation`: The target model name to display in the tab's list view (e.g. `Activity` or `Match`).
+* `inverseRelationField`: The field (or list of comma-separated fields / YAML array) on the target model that references this model's ID (e.g. `eventId`, `offerId`, or `[offerId, demandId]`).
+* `filters` / `extraFilters`: (Optional) Key-value pairs to apply additional query filters on the related list view (e.g. `status: PENDING`).
 
 
 ### Field extensions
