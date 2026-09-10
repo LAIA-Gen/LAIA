@@ -1,9 +1,10 @@
-from fastapi import Body, Depends, HTTPException, status
+from fastapi import Body, Depends, HTTPException, Request, status
 from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import TypeVar, Optional, List, Annotated
 from pydantic import BaseModel, Field
+from ...Application.Audit import build_audit_context
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel
 from ...Application.LaiaUser import CreateRole
 from ...Application.LaiaUser import JWTToken
@@ -60,47 +61,63 @@ async def CRUDRoleController(repository: ModelRepository=None, jwtSecretKey: str
         
         return user_roles
 
+    async def get_user_id(token: Optional[str] = None) -> str:
+        if not token:
+            return ""
+        try:
+            payload = JWTToken.verify_jwt_token(token, jwtSecretKey)
+            return str(payload.get("user_id") or "")
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid session token")
+
     admin_role, _ = await repository.get_items("role", skip=0, limit=10, filters={ "name": "admin"})
     if not admin_role:
         await CreateRole.create_role({"name": "admin"}, ["admin"], repository)
 
     @router.post("/role/", response_model=None, responses={200: {"model": Role}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
-    async def create_element(element: Role, token: get_auth_dependency() = None):
+    async def create_element(element: Role, request: Request, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = await get_user_id(token)
+        payload = dict(element)
         try:
-            return await CreateRole.create_role(dict(element), user_roles, repository)
+            return await CreateRole.create_role(payload, user_roles, repository, audit_context=build_audit_context(request, user_id, payload), user_id=user_id)
         except Exception as e:
             handle_exception(e)
 
     @router.put("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
-    async def update_element(element_id: str, values: dict, token: get_auth_dependency() = None):
+    async def update_element(element_id: str, values: dict, request: Request, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = await get_user_id(token)
         try:
-            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository)
+            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, user_id=user_id, audit_context=build_audit_context(request, user_id, values))
         except Exception as e:
             handle_exception(e)
         
     @router.get("/role/{element_id}", response_model=None, responses={200: {"model": Role}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
-    async def read_element(element_id: str, token: get_auth_dependency() = None):
+    async def read_element(element_id: str, request: Request, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = await get_user_id(token)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, False)
+            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, False, user_id=user_id, audit_context=build_audit_context(request, user_id))
         except Exception as e:
             handle_exception(e)
 
     @router.delete("/role/{element_id}", response_model=str)
-    async def delete_element(element_id: str, token: get_auth_dependency() = None):
+    async def delete_element(element_id: str, request: Request, token: get_auth_dependency() = None):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = await get_user_id(token)
         try:
-            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository)
+            await DeleteLaiaBaseModel.delete_laia_base_model(element_id, model, user_roles, repository, user_id=user_id, audit_context=build_audit_context(request, user_id))
             return f"Role deleted successfully"
         except Exception as e:
             handle_exception(e)
+
     @router.post("/roles/", response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
-    async def search_element(token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
+    async def search_element(request: Request, token: get_auth_dependency() = None, skip: int = 0, limit: int = 10, filters: dict = Body({}), orders: dict = Body({}), populate: Optional[List] = Body(None)):
         user_roles = await get_user_roles(repository, token, jwtSecretKey)
+        user_id = await get_user_id(token)
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate)
+            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, populate=populate, audit_context=build_audit_context(request, user_id, {"filters": filters, "orders": orders, "populate": populate}))
         except Exception as e:
             handle_exception(e)
 

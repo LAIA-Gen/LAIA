@@ -1,4 +1,4 @@
-from fastapi import Body, Depends, HTTPException, status
+from fastapi import Body, Depends, HTTPException, Request, status
 from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -6,6 +6,7 @@ from typing import TypeVar, Optional, List, Annotated, Any
 from pydantic import BaseModel, Field
 
 from laiagenlib.Application.Shared.Utils.UserShard import get_user_shard
+from laiagenlib.Application.Audit import build_audit_context
 
 from ...Application.LaiaBaseModel import ReadLaiaBaseModel, CreateLaiaBaseModel, DeleteLaiaBaseModel, SearchLaiaBaseModel, UpdateLaiaBaseModel, AggregateLaiaBaseModel
 from ...Application.LaiaUser import JWTToken
@@ -97,23 +98,35 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         return ObjectId(user_id)
 
     @router.post(**routes_info['create'], response_model=None, responses={200: {"model": model}, 400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}})
-    async def create_element(element: model, token: get_auth_dependency() = None):
+    async def create_element(element: model, request: Request, token: get_auth_dependency() = None):
         is_public = is_public_operation(model, "create")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         element_dict = element.dict()
+        user_id = None
         if auth_required:
-            element_dict["owner"] = await get_user_id(repository, token, jwtSecretKey, is_public)
+            user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
+            element_dict["owner"] = user_id
 
         element_full = model(**element_dict)
         user_shard = await get_user_shard(token, jwtSecretKey)
 
         try:
-            return await CreateLaiaBaseModel.create_laia_base_model(element_full, model, user_roles, repository, use_access_rights, user_shard, smtp_config)
+            return await CreateLaiaBaseModel.create_laia_base_model(
+                element_full,
+                model,
+                user_roles,
+                repository,
+                use_access_rights,
+                user_shard,
+                smtp_config,
+                audit_context=build_audit_context(request, user_id, element_dict),
+                user_id=str(user_id) if user_id else "",
+            )
         except Exception as e:
             handle_exception(e)
 
     @router.put(**routes_info['update'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
-    async def update_element(element_id: str, values: update_model, token: get_auth_dependency() = None):
+    async def update_element(element_id: str, values: update_model, request: Request, token: get_auth_dependency() = None):
         is_public = is_public_operation(model, "update")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -121,12 +134,24 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            return await UpdateLaiaBaseModel.update_laia_base_model(element_id, values, model, user_roles, repository, use_access_rights, user_shard, smtp_config, user_id=str(user_id))
+            payload = values.model_dump(exclude_unset=True) if hasattr(values, "model_dump") else values.dict(exclude_unset=True)
+            return await UpdateLaiaBaseModel.update_laia_base_model(
+                element_id,
+                values,
+                model,
+                user_roles,
+                repository,
+                use_access_rights,
+                user_shard,
+                smtp_config,
+                user_id=str(user_id),
+                audit_context=build_audit_context(request, user_id, payload),
+            )
         except Exception as e:
             handle_exception(e)
         
     @router.get(**routes_info['read'], response_model=None, responses={200: {"model": model}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
-    async def read_element(element_id: str, token: get_auth_dependency() = None):
+    async def read_element(element_id: str, request: Request, token: get_auth_dependency() = None):
         is_public = is_public_operation(model, "read")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -134,12 +159,21 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         if auth_required:
             user_id = await get_user_id(repository, token, jwtSecretKey, is_public)
         try:
-            return await ReadLaiaBaseModel.read_laia_base_model(element_id, model, user_roles, repository, use_access_rights, user_shard, user_id=str(user_id))
+            return await ReadLaiaBaseModel.read_laia_base_model(
+                element_id,
+                model,
+                user_roles,
+                repository,
+                use_access_rights,
+                user_shard,
+                user_id=str(user_id),
+                audit_context=build_audit_context(request, user_id),
+            )
         except Exception as e:
             handle_exception(e)
 
     @router.delete(**routes_info['delete'], response_model=str)
-    async def delete_element(element_id: str, token: get_auth_dependency() = None):
+    async def delete_element(element_id: str, request: Request, token: get_auth_dependency() = None):
         is_public = is_public_operation(model, "delete")
         user_roles = await get_user_roles(repository, token, jwtSecretKey, is_public)
         user_shard = await get_user_shard(token, jwtSecretKey)
@@ -156,17 +190,20 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
                 user_shard,
                 user_id=str(user_id),
                 smtp_config=smtp_config,
+                audit_context=build_audit_context(request, user_id),
             )
             return f"{model_name} element deleted successfully"
         except Exception as e:
             handle_exception(e)
+
     @router.post(**routes_info['search'], response_model=None, responses={200: {"model": SearchResponse}, 401: {"model": ErrorResponse}})
     async def search_element(
-        token: get_auth_dependency() = None, 
-        skip: int = 0, 
-        limit: int = 10, 
-        filters: dict = Body({}), 
-        orders: dict = Body({}), 
+        request: Request,
+        token: get_auth_dependency() = None,
+        skip: int = 0,
+        limit: int = 10,
+        filters: dict = Body({}),
+        orders: dict = Body({}),
         populate: Optional[List] = Body(None),
         geoFilter: Optional[dict] = Body(None)
     ):
@@ -191,7 +228,22 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
             }
             
         try:
-            return await SearchLaiaBaseModel.search_laia_base_model(skip, limit, filters, orders, model, user_roles, repository, user_id, use_access_rights, use_ontology, user_shard, populate=populate, smtp_config=smtp_config)
+            return await SearchLaiaBaseModel.search_laia_base_model(
+                skip,
+                limit,
+                filters,
+                orders,
+                model,
+                user_roles,
+                repository,
+                user_id,
+                use_access_rights,
+                use_ontology,
+                user_shard,
+                populate=populate,
+                smtp_config=smtp_config,
+                audit_context=build_audit_context(request, user_id, {"filters": filters, "orders": orders, "populate": populate, "geoFilter": geoFilter}),
+            )
         except Exception as e:
             handle_exception(e)
         

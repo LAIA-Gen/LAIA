@@ -14,6 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import get_args
 
 from ...Application.Hooks.HookExecutor import execute_hooks
+from ...Application.Audit import write_audit_log
 
 
 def _has_hooks(model: Type, event: str) -> bool:
@@ -86,7 +87,7 @@ def convert_objectid_fields(model, values: dict) -> dict:
                     pass
     return values
 
-async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None, user_id: str = ""):
+async def update_laia_base_model(element_id:str, updated_values: dict, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None, user_id: str = "", audit_context: dict = None):
     _logger.info(f"Updating {model.__name__} with ID: {element_id} and values: {updated_values}")
 
     if hasattr(updated_values, "model_dump"):            
@@ -114,11 +115,10 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         or (not use_access_rights and has_configured_owner_fields)
     )
 
-    current_doc = None
+    current_doc = await _get_current_doc(model_name, element_id, repository)
+    audit_before = dict(current_doc)
 
     if needs_shard_check or needs_owner_check:
-        current_doc = await _get_current_doc(model_name, element_id, repository)
-
         if needs_shard_check:
             shard_key = extra.get("x-shard-key", "region")
             if not user_shard or user_shard == "":
@@ -144,9 +144,6 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
 
     try:
         if _has_hooks(model, "preupdate"):
-            if current_doc is None:
-                current_doc = await _get_current_doc(model_name, element_id, repository)
-
             proposed_element = {**current_doc, **updated_values}
             before_preupdate = dict(proposed_element)
             proposed_element = await execute_hooks(
@@ -180,4 +177,17 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
         updated_element = {field: updated_element[field] for field in allowed_fields if field in updated_element}
 
     _logger.info(f"{model.__name__} updated successfully")
-    return serialize_bson(strip_excluded_fields(model, updated_element))
+    result = serialize_bson(strip_excluded_fields(model, updated_element))
+    await write_audit_log(
+        repository,
+        "UPDATE",
+        model.__name__,
+        resource_id=element_id,
+        user_id=user_id,
+        request_context=audit_context,
+        before=audit_before,
+        after=result,
+        status_code=200,
+        success=True,
+    )
+    return result

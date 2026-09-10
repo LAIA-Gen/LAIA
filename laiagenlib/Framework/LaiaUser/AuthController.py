@@ -1,4 +1,4 @@
-from fastapi import HTTPException, status, Body, Depends
+from fastapi import HTTPException, status, Body, Depends, Request
 from fastapi.routing import APIRouter
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import RedirectResponse
@@ -10,6 +10,8 @@ from laiagenlib.Framework.Shared.ErrorMapping import handle_exception
 from ...Application.LaiaUser import RegisterLaiaUser, LoginLaiaUser, JWTToken
 from ...Application.LaiaUser.ChangePasswordLaiaUser import change_password
 from ...Application.Hooks.Services.ModelService import MouCulturaService
+from ...Application.Hooks.HookExecutor import execute_hooks
+from ...Application.Audit import build_audit_context, write_audit_log
 from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.LaiaUser.Auth import Auth
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
@@ -96,10 +98,52 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
             handle_exception(e)
 
     @router.post(f"/auth/login/{model_name}/", response_model=None, responses={200: {"model": LoginResponse}, 401: {"model": ErrorResponse}, 404: {"model": ErrorResponse}})
-    async def login_user(element: Auth):
+    async def login_user(element: Auth, request: Request):
+        request_context = build_audit_context(request, None, {"email": element.email})
         try:
-            return await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey, jwtRefreshSecretKey)
+            login_result = await LoginLaiaUser.login(dict(element), model, repository, jwtSecretKey, jwtRefreshSecretKey)
+            login_user_data = login_result.get("user", {}) if isinstance(login_result, dict) else {}
+            user_id = login_user_data.get("id")
+            request_context = build_audit_context(request, user_id, {"email": element.email})
+            try:
+                await execute_hooks(
+                    "auth_login",
+                    model,
+                    login_user_data,
+                    smtp_config,
+                    repository,
+                    context_extra={
+                        "request": request,
+                        "request_context": request_context,
+                    },
+                )
+            except Exception as hook_error:
+                _logger.warning("auth_login hook failed for %s: %s", element.email, hook_error)
+            await write_audit_log(
+                repository,
+                "LOGIN",
+                model.__name__,
+                resource_id=user_id,
+                user_id=user_id,
+                request_context=request_context,
+                before=None,
+                after={"id": user_id, "email": element.email},
+                status_code=200,
+                success=True,
+            )
+            return login_result
         except ValueError as e:
+            status_code = status.HTTP_404_NOT_FOUND if str(e) == "User not found" else status.HTTP_401_UNAUTHORIZED
+            await write_audit_log(
+                repository,
+                "LOGIN",
+                model.__name__,
+                request_context=request_context,
+                before=None,
+                after={"email": element.email},
+                status_code=status_code,
+                success=False,
+            )
             if str(e) == "User not found":
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))

@@ -12,11 +12,12 @@ from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Hooks.HookExecutor import execute_hooks
+from ...Application.Audit import write_audit_log
 # Auto-register sendMail lambda
 import laiagenlib.Application.Hooks.Lambdas.SendMailLambda
-from bson import ObjectId
 
-async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None):
+
+async def create_laia_base_model(new_element: Type, model: Type, user_roles: list, repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", smtp_config: dict = None, audit_context: dict = None, user_id: str = ""):
     _logger.info(f"Creating new {model.__name__} with values: {new_element}")
     
     model_name = model.__name__.lower()
@@ -26,8 +27,6 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
     x_nicename = extra.get("x-nicename", False)
     default_fields = extra.get("x-frontend-defaultFields", [])
     first_field = default_fields[0] if default_fields else None
-
-
 
     if "admin" not in user_roles and use_access_rights:
         access_rights_list = await check_access_rights_of_user(model_name, user_roles, "create", repository)
@@ -71,5 +70,19 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
         _logger.info(allowed_fields)
         created_element = {field: created_element[field] for field in allowed_fields if field in created_element}
 
+    result = serialize_bson(strip_excluded_fields(model, created_element))
+    await write_audit_log(
+        repository,
+        "CREATE",
+        model.__name__,
+        resource_id=created_element.get("id") or created_element.get("_id"),
+        user_id=user_id,
+        request_context=audit_context,
+        before=None,
+        after=result,
+        status_code=200,
+        success=True,
+    )
+
     _logger.info(f"{model.__name__} created successfully")
-    return serialize_bson(strip_excluded_fields(model, created_element))
+    return result

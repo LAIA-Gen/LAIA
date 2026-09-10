@@ -7,7 +7,7 @@ from ...Domain.LaiaUser.LaiaUser import LaiaUser
 from ...Domain.Shared.Utils.logger import _logger
 from .ResolveRoles import resolve_role_ids
 
-async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[str], repository: ModelRepository, user_shard: str = "", smtp_config: dict = None):
+async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[str], repository: ModelRepository, user_shard: str = "", smtp_config: dict = None, audit_context: dict = None, user_id: str = ""):
     _logger.info("Creating new User")
     email = new_element.get('email')
     password = new_element.get('password')
@@ -33,6 +33,6 @@ async def create_laia_user(new_element: dict, model: LaiaUser, user_roles: List[
     
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     
-    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository, True, user_shard, smtp_config=smtp_config)
+    user = await create_laia_base_model({**new_element, 'password': hashed_password}, model, user_roles, repository, True, user_shard, smtp_config=smtp_config, audit_context=audit_context, user_id=user_id)
     _logger.info("User created successfully")
     return user
