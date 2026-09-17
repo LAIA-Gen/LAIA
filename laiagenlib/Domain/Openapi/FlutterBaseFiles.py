@@ -743,13 +743,24 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
             tab_elements = []
             for tab in raw_tabs:
                 label = tab.get('label', '')
-                fields_list = tab.get('fields', [])
-                fields_str = ", ".join([f'"{f}"' for f in fields_list])
+                raw_fields_list = tab.get('fields', [])
+                fields_dart_parts = []
+                flattened_fields = []
+                for item in raw_fields_list:
+                    if isinstance(item, list):
+                        row_cols = [str(x) for x in item]
+                        flattened_fields.extend(row_cols)
+                        cols_str = ", ".join([f'"{c}"' for c in row_cols])
+                        fields_dart_parts.append(f'[{cols_str}]')
+                    elif isinstance(item, str):
+                        flattened_fields.append(item)
+                        fields_dart_parts.append(f'"{item}"')
+                fields_str = ", ".join(fields_dart_parts)
                 relation = tab.get('relation', '')
                 inverse_relation_field = tab.get('inverseRelationField', '')
 
-                if fields_list:
-                    for f in fields_list:
+                if flattened_fields:
+                    for f in flattened_fields:
                         prop_info = openapiModel.properties.get(f, {})
                         nicename = (
                             prop_info.get('x_frontend_nicename')
@@ -772,7 +783,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                 filters = tab.get('filters') or tab.get('extraFilters')
                 
                 parts = [f'label: "{label}"']
-                if fields_list:
+                if fields_dart_parts:
                     parts.append(f'fields: [{fields_str}]')
                 if relation:
                     parts.append(f'relation: "{relation}"')
