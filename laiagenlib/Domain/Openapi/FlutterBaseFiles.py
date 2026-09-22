@@ -149,6 +149,7 @@ def image_picker_stub_dart() -> str:
     required Function(bool) onDragStateChanged,
     required Function(List<int>, String) onFileDropped,
   }) => () {};
+  static void downloadFile(String url, [String? filename]) {}
 }
 """
 
@@ -179,6 +180,15 @@ class ImagePickerHelper {
     return () { s1.cancel(); s2.cancel(); s3.cancel(); };
   }
 
+  static void downloadFile(String url, [String? filename]) {
+    final anchor = html.AnchorElement(href: url)
+      ..target = '_blank';
+    if (filename != null && filename.isNotEmpty) {
+      anchor.download = filename;
+    }
+    anchor.click();
+  }
+
   static void _readFile(html.File? file, Function(List<int>, String) cb) {
     if (file == null) return;
     final reader = html.FileReader()..readAsArrayBuffer(file);
@@ -187,6 +197,607 @@ class ImagePickerHelper {
       if (res is Uint8List) cb(res.toList(), file.name);
       else if (res is ByteBuffer) cb(Uint8List.view(res).toList(), file.name);
     });
+  }
+}
+"""
+
+def media_gallery_screen_dart(app_name: str) -> str:
+    return f"""import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/generic/image_picker_helper.dart';
+""" + """import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class GalleryScreen extends StatefulWidget {
+  final bool showAppBar;
+  const GalleryScreen({super.key, this.showAppBar = false});
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> {
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, dynamic>> _photos = [];
+  final Map<String, String> _presignedCache = {};
+
+  String _selectedBucket = 'originals';
+  final List<String> _allowedBuckets = const ['originals', 'public', 'processed'];
+  final TextEditingController _prefixController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPhotos();
+  }
+
+  @override
+  void dispose() {
+    _prefixController.dispose();
+    super.dispose();
+  }
+
+  String _formatFileSize(dynamic size) {
+    if (size is num && size > 0) {
+      if (size < 1024) return '$size B';
+      if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
+      return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '';
+  }
+
+  Future<void> _fetchPhotos() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final queryParams = <String, String>{
+        'bucket': _selectedBucket,
+        'recursive': 'true',
+      };
+      if (_prefixController.text.trim().isNotEmpty) {
+        queryParams['prefix'] = _prefixController.text.trim();
+      }
+
+      final uri = Uri.parse('$baseURL/admin/files/explorer').replace(queryParameters: queryParams);
+      http.Response? response;
+
+      try {
+        final res = await http.get(uri, headers: headers);
+        if (res.statusCode == 200 || res.statusCode == 403) {
+          response = res;
+        }
+      } catch (_) {}
+
+      // Fallback si no está disponible la ruta de admin
+      if (response == null || (response.statusCode != 200 && response.statusCode != 403)) {
+        final fallbackEndpoints = [
+          '$baseURL/storage/$_selectedBucket',
+          '$baseURL/photos',
+          '$baseURL/storage',
+        ];
+        for (final endpoint in fallbackEndpoints) {
+          try {
+            final res = await http.get(Uri.parse(endpoint), headers: headers);
+            if (res.statusCode == 200) {
+              response = res;
+              break;
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (response != null && response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<Map<String, dynamic>> items = [];
+
+        if (decoded is Map && decoded['files'] is List) {
+          for (final item in decoded['files']) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            }
+          }
+        } else if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            } else if (item is String) {
+              items.add({'key': item});
+            }
+          }
+        } else if (decoded is Map && decoded['items'] is List) {
+          for (final item in decoded['items']) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            }
+          }
+        }
+
+        final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        final imageItems = items.where((it) {
+          final key = (it['key'] ?? it['image_id'] ?? it['path'] ?? it['filename'] ?? '').toString().toLowerCase();
+          return imageExtensions.any((ext) => key.endsWith(ext)) || key.contains('users/');
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _photos = imageItems.isNotEmpty ? imageItems : items;
+            _isLoading = false;
+          });
+        }
+      } else if (response != null && response.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Acceso restringido: Se requieren permisos de administrador de backoffice';
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'No se pudieron cargar los archivos del bucket "$_selectedBucket"';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error al conectar con el servidor: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<String?> _resolveImageUrl(Map<String, dynamic> photo) async {
+    final preview = (photo['preview_url'] ?? photo['url'] ?? '').toString();
+    if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://'))) {
+      try {
+        final parsed = Uri.parse(preview);
+        final baseUri = Uri.parse(baseURL);
+        // Si el backend devolvió el host interno de Docker 'minio', sustituir por el host de la API
+        if (parsed.host == 'minio' || (parsed.host == 'localhost' && baseUri.host != 'localhost' && baseUri.host.isNotEmpty)) {
+          return parsed.replace(host: baseUri.host).toString();
+        }
+      } catch (_) {}
+      return preview;
+    }
+
+    final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
+    if (key.isEmpty) return null;
+
+    if (_presignedCache.containsKey(key)) {
+      return _presignedCache[key];
+    }
+
+    if (key.startsWith('http://') || key.startsWith('https://')) {
+      _presignedCache[key] = key;
+      return key;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      final headers = <String, String>{};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final cleanKey = key.replaceAll(RegExp(r'^/+'), '');
+      final res = await http.get(Uri.parse('$baseURL/download/$cleanKey'), headers: headers);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final url = data['url']?.toString();
+        if (url != null) {
+          _presignedCache[key] = url;
+          return url;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _showPhotoDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? photo]) {
+    final sizeStr = _formatFileSize(photo?['size']);
+    final ownerId = (photo?['owner_id'] ?? '').toString();
+    final lastModified = (photo?['last_modified'] ?? photo?['created_at_db'] ?? '').toString();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 850, maxHeight: 750),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 16,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.image_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            filename,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Bucket: $_selectedBucket | Clave: $key ${sizeStr.isNotEmpty ? " • $sizeStr" : ""}',
+                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Cerrar',
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: downloadUrl != null && downloadUrl.isNotEmpty
+                    ? InteractiveViewer(
+                        clipBehavior: Clip.antiAlias,
+                        maxScale: 4.0,
+                        child: Center(
+                          child: Image.network(
+                            downloadUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(child: CircularProgressIndicator());
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      )
+                    : const Center(
+                        child: Text('No se pudo obtener la URL de visualización'),
+                      ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    if (ownerId.isNotEmpty || lastModified.isNotEmpty)
+                      Expanded(
+                        child: Text(
+                          '${ownerId.isNotEmpty ? "Propietario: $ownerId  " : ""}${lastModified.isNotEmpty ? "Fecha: ${lastModified.split('T').first}" : ""}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    if (downloadUrl != null && downloadUrl.isNotEmpty)
+                      FilledButton.icon(
+                        icon: const Icon(Icons.download_rounded, size: 18),
+                        label: const Text('Descargar'),
+                        onPressed: () => ImagePickerHelper.downloadFile(downloadUrl, filename),
+                      ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      child: const Text('Cerrar'),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('Explorador de Fotos'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Actualizar',
+                  onPressed: _fetchPhotos,
+                ),
+              ],
+            )
+          : null,
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.photo_library_rounded, color: Theme.of(context).primaryColor, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Explorador de Archivos',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _isLoading ? 'Cargando...' : '${_photos.length} archivos en "$_selectedBucket"',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedBucket,
+                          icon: const Icon(Icons.arrow_drop_down, size: 20),
+                          items: _allowedBuckets.map((b) => DropdownMenuItem(
+                            value: b,
+                            child: Text(b, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                          )).toList(),
+                          onChanged: (newBucket) {
+                            if (newBucket != null && newBucket != _selectedBucket) {
+                              setState(() => _selectedBucket = newBucket);
+                              _fetchPhotos();
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 180,
+                      height: 40,
+                      child: TextField(
+                        controller: _prefixController,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Prefijo (ej: users/)',
+                          hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search, size: 18),
+                            onPressed: _fetchPhotos,
+                          ),
+                        ),
+                        onSubmitted: (_) => _fetchPhotos(),
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.refresh_rounded),
+                      tooltip: 'Actualizar',
+                      onPressed: _fetchPhotos,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Consultando MinIO...', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline_rounded, size: 48, color: Colors.redAccent),
+                              const SizedBox(height: 12),
+                              Text(_errorMessage!, style: const TextStyle(color: Colors.grey)),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Reintentar'),
+                                onPressed: _fetchPhotos,
+                              ),
+                            ],
+                          ),
+                        )
+                      : _photos.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.photo_outlined, size: 64, color: Colors.grey[400]),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No se encontraron archivos en "$_selectedBucket"',
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : GridView.builder(
+                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 240,
+                                crossAxisSpacing: 16,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 1.0,
+                              ),
+                              itemCount: _photos.length,
+                              itemBuilder: (context, index) {
+                                final photo = _photos[index];
+                                final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
+                                final filename = (photo['filename'] ?? key.split('/').last).toString();
+                                final sizeStr = _formatFileSize(photo['size']);
+
+                                return FutureBuilder<String?>(
+                                  future: _resolveImageUrl(photo),
+                                  builder: (context, snapshot) {
+                                    final downloadUrl = snapshot.data;
+                                    return Card(
+                                      elevation: 2,
+                                      clipBehavior: Clip.antiAlias,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                                      ),
+                                      child: InkWell(
+                                        onTap: () => _showPhotoDialog(context, key, downloadUrl, filename, photo),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            if (snapshot.connectionState == ConnectionState.waiting)
+                                              const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                                            else if (downloadUrl != null && downloadUrl.isNotEmpty)
+                                              Image.network(
+                                                downloadUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => const Center(
+                                                  child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey),
+                                                ),
+                                              )
+                                            else
+                                              const Center(
+                                                child: Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.grey),
+                                              ),
+                                            Positioned(
+                                              bottom: 0,
+                                              left: 0,
+                                              right: 0,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    begin: Alignment.bottomCenter,
+                                                    end: Alignment.topCenter,
+                                                    colors: [
+                                                      Colors.black.withOpacity(0.75),
+                                                      Colors.transparent,
+                                                    ],
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            filename,
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w500,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                          if (sizeStr.isNotEmpty)
+                                                            Text(
+                                                              sizeStr,
+                                                              style: TextStyle(
+                                                                color: Colors.white.withOpacity(0.7),
+                                                                fontSize: 10,
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    if (downloadUrl != null && downloadUrl.isNotEmpty)
+                                                      InkWell(
+                                                        onTap: () => ImagePickerHelper.downloadFile(downloadUrl, filename),
+                                                        child: const Padding(
+                                                          padding: EdgeInsets.all(4.0),
+                                                          child: Icon(
+                                                            Icons.download_rounded,
+                                                            color: Colors.white,
+                                                            size: 18,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 """
@@ -391,6 +1002,7 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     return f"""import 'package:{app_name}/config/styles.dart';
 import 'package:{app_name}/generic/nav_bar.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
+import 'package:{app_name}/screens/gallery_screen.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
@@ -412,7 +1024,7 @@ class _HomeState extends State<Home> {
   int _index = 2;
 
   final items = const [
-    NavItem(icon: Icons.grid_view_rounded, label: 'Apps'),
+    NavItem(icon: Icons.photo_library_rounded, label: 'Fotos'),
     NavItem(icon: Icons.fact_check_outlined, label: 'Tasks'),
     NavItem(icon: Icons.home_outlined, label: 'Home'),
     NavItem(icon: Icons.storage_outlined, label: 'Data'),
@@ -592,7 +1204,7 @@ class _HomeState extends State<Home> {
         children: [
           if (_index == 0)
           Expanded(
-            child: Text('Apps View', style: Theme.of(context).textTheme.headlineMedium),
+            child: const GalleryScreen(),
           ),
           if (_index == 1)
           Expanded(
@@ -608,6 +1220,16 @@ class _HomeState extends State<Home> {
                   onTap: () => Navigator.push(
                     context,
                     PageRouteBuilder(pageBuilder: (_, __, ___) => UserListView()),
+                  ),
+                ),
+                AppCardItem(
+                  title: 'Fotos',
+                  icon: const Icon(Icons.photo_library_outlined),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (_, __, ___) => const GalleryScreen(showAppBar: true),
+                    ),
                   ),
                 ),
                 AppCardItem(
