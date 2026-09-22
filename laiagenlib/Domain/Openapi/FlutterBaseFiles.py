@@ -127,12 +127,68 @@ import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutt
 import 'package:{app_name}/models/geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'dart:convert';"""+"""
+import 'dart:convert';
+import 'dart:typed_data';
+import 'image_picker_helper.dart';"""+"""
 
 part 'generic_widgets.g.dart';
 
 @genericWidgets
 class GenericWidgets {}
+"""
+
+def image_picker_helper_dart() -> str:
+    return """export 'image_picker_stub.dart'
+    if (dart.library.html) 'image_picker_web.dart';
+"""
+
+def image_picker_stub_dart() -> str:
+    return """class ImagePickerHelper {
+  static void pickImage(Function(List<int>, String) onPicked) {}
+  static void Function() setupDropZone({
+    required Function(bool) onDragStateChanged,
+    required Function(List<int>, String) onFileDropped,
+  }) => () {};
+}
+"""
+
+def image_picker_web_dart() -> str:
+    return """// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:html' as html;
+import 'dart:typed_data';
+
+class ImagePickerHelper {
+  static void pickImage(Function(List<int>, String) onPicked) {
+    final input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+    input.onChange.first.then((_) => _readFile(input.files?.firstOrNull, onPicked));
+  }
+
+  static void Function() setupDropZone({
+    required Function(bool) onDragStateChanged,
+    required Function(List<int>, String) onFileDropped,
+  }) {
+    final s1 = html.window.onDragOver.listen((e) { e.preventDefault(); onDragStateChanged(true); });
+    final s2 = html.window.onDragLeave.listen((_) => onDragStateChanged(false));
+    final s3 = html.window.onDrop.listen((e) {
+      e.preventDefault();
+      onDragStateChanged(false);
+      _readFile(e.dataTransfer.files?.firstOrNull, onFileDropped);
+    });
+    return () { s1.cancel(); s2.cancel(); s3.cancel(); };
+  }
+
+  static void _readFile(html.File? file, Function(List<int>, String) cb) {
+    if (file == null) return;
+    final reader = html.FileReader()..readAsArrayBuffer(file);
+    reader.onLoadEnd.first.then((_) {
+      final res = reader.result;
+      if (res is Uint8List) cb(res.toList(), file.name);
+      else if (res is ByteBuffer) cb(Uint8List.view(res).toList(), file.name);
+    });
+  }
+}
 """
 
 def http_client(app_name: str) -> str:
@@ -973,6 +1029,7 @@ import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:{app_name}/config/http_client.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 {extra_imports}

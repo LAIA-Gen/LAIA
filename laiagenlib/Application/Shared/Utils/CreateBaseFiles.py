@@ -1,7 +1,7 @@
 import os
 from typing import List
 from .DownloadImage import download_image
-from ....Domain.Openapi.FlutterBaseFiles import http_client, main_dart, api_dart, styles_dart, generic_dart, theme_dart, auth_scafold_dart, nav_bar_dart
+from ....Domain.Openapi.FlutterBaseFiles import http_client, main_dart, api_dart, styles_dart, generic_dart, theme_dart, auth_scafold_dart, nav_bar_dart, image_picker_helper_dart, image_picker_stub_dart, image_picker_web_dart
 from ....Domain.LaiaUser.Role import Role
 from ....Domain.AccessRights.AccessRights import AccessRight
 import shutil
@@ -73,6 +73,15 @@ def create_base_files(app_name: str, models: List[any] = []):
     generic_file_content = generic_dart(app_name)
     with open(os.path.join(dart_dir, 'generic', 'generic_widgets.dart'), 'w') as f:
         f.write(generic_file_content)
+
+    with open(os.path.join(dart_dir, 'generic', 'image_picker_helper.dart'), 'w') as f:
+        f.write(image_picker_helper_dart())
+
+    with open(os.path.join(dart_dir, 'generic', 'image_picker_stub.dart'), 'w') as f:
+        f.write(image_picker_stub_dart())
+
+    with open(os.path.join(dart_dir, 'generic', 'image_picker_web.dart'), 'w') as f:
+        f.write(image_picker_web_dart())
 
     nav_bar_file_content = nav_bar_dart(app_name)
     with open(os.path.join(dart_dir, 'generic', 'nav_bar.dart'), 'w') as f:
