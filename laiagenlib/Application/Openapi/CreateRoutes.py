@@ -61,8 +61,8 @@ async def create_crud_routes(
         else:
             await repositoryAPI.create_routes(repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology, smtp_config=smtp_config)
 
-        if add_storage == True:
-            await repositoryAPI.create_storage_routes(endpoint_url_storage, access_key_storage, secret_key_storage)
+    if add_storage == True:
+        await repositoryAPI.create_storage_routes(endpoint_url_storage, access_key_storage, secret_key_storage, db=getattr(repository, "db", None), jwtSecretKey=jwtSecretKey)
 
     if use_access_rights: 
         await repositoryAPI.create_access_rights_routes(models=modelsTypes, repository=repository, jwtSecretKey=jwtSecretKey, auth_required=auth_required)
