@@ -35,13 +35,22 @@ class FastAPIOpenapiRepository(OpenapiRepository):
         router = CRUDLaiaBaseModelController(repository=repository, model=model, update_model=update_model, routes_info=routes_info, jwtSecretKey=jwtSecretKey, auth_required=auth_required, use_access_rights=use_access_rights, use_ontology=use_ontology, smtp_config=smtp_config)
         self.api.include_router(router)
 
-    async def create_storage_routes(self, endpoint_url: str = "", access_key: str = "", secret_key: str = "", db = None, jwtSecretKey: str = None):
+    async def create_storage_routes(
+        self,
+        endpoint_url: str = "",
+        access_key: str = "",
+        secret_key: str = "",
+        db = None,
+        jwtSecretKey: str = None,
+        imgproxy_endpoint: str = "",
+    ):
         router = CRUDStorageController(
             endpoint_url=endpoint_url,
             access_key=access_key,
             secret_key=secret_key,
             db=db,
             jwtSecretKey=jwtSecretKey or self.jwtSecretKey,
+            imgproxy_endpoint=imgproxy_endpoint,
         )
         self.api.include_router(router)
 

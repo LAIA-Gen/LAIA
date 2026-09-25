@@ -1,17 +1,19 @@
+import base64
 import mimetypes
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 import boto3
 from botocore.client import Config
 from bson import ObjectId
 from dotenv import load_dotenv
-from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Query, Security, UploadFile, status)
-from fastapi.responses import JSONResponse, StreamingResponse
+import urllib.request
+from fastapi import (APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, Security, UploadFile, status)
+from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 
@@ -28,7 +30,6 @@ DISALLOWED_EXTENSIONS = {
 
 
 
-
 def CRUDStorageController(
     endpoint_url: str = "",
     access_key: str = "",
@@ -39,23 +40,71 @@ def CRUDStorageController(
     jwtSecretKey: str = "secret_key",
     bucket_originals: str = "originals",
     storage_collection: str = "user_photos",
+    imgproxy_endpoint: str = "",
 ):
     """
-    Controlador de almacenamiento para LAIA con las funciones y endpoints de MinIO:
+    Controlador de almacenamiento para LAIA con las funciones y endpoints de MinIO e Imgproxy:
     - cargar_minio_client()
     - cargar_public_minio_client()
+    - generar_imgproxy_url()
     - get_current_user_data()
     - get_current_user_id()
     - POST /upload
     - POST /upload/confirm-temp
-    - GET /download/{image_id:path}
+    - GET /download/{image_id:path} (con soporte para medidas y formas vía imgproxy)
     - GET /admin/files/explorer
     - Operaciones básicas /storage/{bucket}
     """
     router = APIRouter(tags=["Storage"])
 
     backend_jwt_secret_key = jwtSecretKey
-    collection_name = storage_collection or os.getenv("STORAGE_COLLECTION", "user_photos")
+    collection_name = os.getenv("STORAGE_COLLECTION") or storage_collection or "user_photos"
+    bucket_originals = os.getenv("MINIO_BUCKET_ORIGINALS") or bucket_originals or "originals"
+
+    # Configuración de Imgproxy
+    IMGPROXY_BASE_URL = os.getenv("IMGPROXY_BASE_URL") or imgproxy_endpoint or "http://localhost:7000"
+    IMGPROXY_INTERNAL_URL = os.getenv("IMGPROXY_INTERNAL_URL") or "http://imgproxy:8080"
+
+    def generar_imgproxy_url(
+        source_url: str,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        resizing_type: Optional[str] = None,
+        gravity: Optional[str] = None,
+        format: Optional[str] = None,
+        quality: Optional[int] = None,
+        enlarge: int = 0,
+        extend: int = 0,
+        base_url: Optional[str] = None,
+    ) -> str:
+        options = []
+        if width is not None or height is not None or resizing_type:
+            rt = (resizing_type or "fit").lower()
+            w = width if width is not None else 0
+            h = height if height is not None else 0
+            options.append(f"resize:{rt}:{w}:{h}")
+
+        if gravity:
+            options.append(f"gravity:{gravity.lower()}")
+
+        if quality:
+            options.append(f"quality:{quality}")
+
+        if format and format.lower() != "original":
+            options.append(f"format:{format.lstrip('.').lower()}")
+
+        options_path = "/".join(options) if options else "resize:fill:0:0"
+        clean_source = source_url.strip()
+        target_base = (base_url or IMGPROXY_BASE_URL).rstrip('/')
+
+        return f"{target_base}/insecure/{options_path}/plain/{clean_source}"
+
+    def fetch_imgproxy_stream(url: str):
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "LAIA-Storage-Proxy/1.0"}
+        )
+        return urllib.request.urlopen(req, timeout=12)
 
     def cargar_minio_client():
         load_dotenv()
@@ -186,6 +235,91 @@ def CRUDStorageController(
             raise HTTPException(status_code=401, detail="El token ha expirado")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Token invalido")
+
+    optional_security_scheme = HTTPBearer(auto_error=False)
+
+    def get_current_user_data_optional(
+        credentials: Optional[HTTPAuthorizationCredentials] = Security(optional_security_scheme),
+        token_query: Optional[str] = Query(None, alias="token"),
+    ) -> Optional[dict]:
+        token = None
+        if credentials and credentials.credentials:
+            token = credentials.credentials
+        elif token_query:
+            token = token_query
+
+        if not token:
+            return None
+
+        try:
+            payload = jwt.decode(token, backend_jwt_secret_key, algorithms=["HS256"])
+            user_id = payload.get("user_id") or payload.get("sub")
+            if not user_id:
+                return None
+
+            user_id = str(user_id)
+            is_admin = False
+
+            user_name = str(payload.get("user_name", "")).lower()
+            if user_name == "admin":
+                is_admin = True
+
+            if not is_admin:
+                name = str(payload.get("name", "")).lower()
+                if name == "admin":
+                    is_admin = True
+
+            if not is_admin:
+                username = str(payload.get("username", "")).lower()
+                if username == "admin":
+                    is_admin = True
+
+            if not is_admin:
+                role = str(payload.get("role", "")).lower()
+                if role == "admin":
+                    is_admin = True
+
+            if not is_admin:
+                roles = payload.get("roles", [])
+                if isinstance(roles, list) and "admin" in [str(r).lower() for r in roles]:
+                    is_admin = True
+
+            if not is_admin:
+                user_roles = payload.get("user_roles", [])
+                if isinstance(user_roles, list) and "admin" in [str(r).lower() for r in user_roles]:
+                    is_admin = True
+
+            if not is_admin and db is not None:
+                query = (
+                    {"_id": ObjectId(user_id)}
+                    if ObjectId.is_valid(user_id)
+                    else {"_id": user_id}
+                )
+                user_doc = db["user"].find_one(query)
+                if user_doc:
+                    doc_user_name = str(user_doc.get("user_name", "")).lower()
+                    if doc_user_name == "admin":
+                        is_admin = True
+                    if not is_admin:
+                        doc_name = str(user_doc.get("name", "")).lower()
+                        if doc_name == "admin":
+                            is_admin = True
+                    if not is_admin:
+                        doc_email = str(user_doc.get("email", "")).lower()
+                        if doc_email.startswith("admin"):
+                            is_admin = True
+                    if not is_admin:
+                        doc_role = str(user_doc.get("role", "")).lower()
+                        if doc_role == "admin":
+                            is_admin = True
+                    if not is_admin:
+                        doc_roles = user_doc.get("roles", [])
+                        if isinstance(doc_roles, list) and "admin" in [str(r).lower() for r in doc_roles]:
+                            is_admin = True
+
+            return {"user_id": user_id, "is_admin": is_admin}
+        except Exception:
+            return None
 
     def get_current_user_id(
         credentials: HTTPAuthorizationCredentials = Security(security_scheme),
@@ -345,13 +479,36 @@ def CRUDStorageController(
     @router.get("/download/{image_id:path}")
     def get_download(
         image_id: str,
+        request: Request,
+        raw: Optional[bool] = Query(False, description="Entregar los bytes de la imagen directamente (Streaming)"),
         folder: Optional[str] = Query(None),
-        user_data: dict = Depends(get_current_user_data),
+        width: Optional[int] = Query(None, description="Ancho de la imagen (imgproxy)"),
+        height: Optional[int] = Query(None, description="Alto de la imagen (imgproxy)"),
+        resizing_type: Optional[str] = Query(None, description="Modo: fit, fill, auto, fill-down, force"),
+        gravity: Optional[str] = Query(None, description="Gravedad/enfoque para recorte: ce, sm, no, so, ea, we"),
+        format: Optional[str] = Query(None, description="Formato de salida: webp, png, jpeg, avif"),
+        quality: Optional[int] = Query(None, description="Calidad de imagen (1-100)"),
+        enlarge: Optional[int] = Query(0, description="Permitir ampliar la imagen (0 o 1)"),
+        redirect: Optional[bool] = Query(False, description="Redirigir directamente a la URL de imagen"),
+        user_data: Optional[dict] = Depends(get_current_user_data_optional),
     ):
-        current_user_id = user_data["user_id"]
-        is_admin = user_data["is_admin"]
+        current_user_id = user_data["user_id"] if user_data else ""
+        is_admin = user_data["is_admin"] if user_data else False
 
         clean_image_id = image_id.lstrip("/")
+        if "$query" in clean_image_id:
+            clean_image_id = clean_image_id.replace("$query", "")
+        if clean_image_id.endswith("$"):
+            clean_image_id = clean_image_id[:-1]
+
+        is_transform_requested = any([
+            width is not None,
+            height is not None,
+            resizing_type is not None,
+            gravity is not None,
+            format is not None,
+            quality is not None,
+        ])
 
         # 1. Buscar metadatos en MongoDB
         photo = None
@@ -412,30 +569,120 @@ def CRUDStorageController(
                     detail="Acceso denegado: No eres el propietario de esta imagen",
                 )
 
-        # 4. Generar URL prefirmada
+        # 4. Procesamiento y respuesta limpia
         try:
             MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
 
-            if not photo:
-                s3_internal = cargar_minio_client()
+            # Si se solicita la imagen directa (raw=True)
+            if raw:
+                # 4.1. Si se pidio transformacion, obtenerla de imgproxy internamente
+                if is_transform_requested:
+                    target_imgproxy_url = generar_imgproxy_url(
+                        source_url=f"s3://{MINIO_BUCKET_ORIGINAL}/{clean_image_id}",
+                        width=width,
+                        height=height,
+                        resizing_type=resizing_type,
+                        gravity=gravity,
+                        format=format,
+                        quality=quality,
+                        enlarge=enlarge or 0,
+                        base_url=IMGPROXY_INTERNAL_URL,
+                    )
+                    try:
+                        resp = fetch_imgproxy_stream(target_imgproxy_url)
+                        content_type = resp.headers.get("Content-Type", f"image/{format or 'jpeg'}")
+                        filename = clean_image_id.split("/")[-1]
+                        if format and "." in filename:
+                            filename = f"{filename.rsplit('.', 1)[0]}.{format.lstrip('.')}"
+                        return StreamingResponse(
+                            resp,
+                            media_type=content_type,
+                            headers={
+                                "Cache-Control": "public, max-age=86400",
+                                "Content-Disposition": f'inline; filename="{filename}"',
+                            },
+                        )
+                    except Exception as e:
+                        print(f"Error fetching from imgproxy ({target_imgproxy_url}): {e}")
+                        # Fallback a IMGPROXY_BASE_URL si IMGPROXY_INTERNAL_URL no respondio (por ejemplo en desarrollo local fuera de Docker)
+                        if IMGPROXY_BASE_URL and IMGPROXY_BASE_URL.rstrip('/') != IMGPROXY_INTERNAL_URL.rstrip('/'):
+                            try:
+                                fallback_url = generar_imgproxy_url(
+                                    source_url=f"s3://{MINIO_BUCKET_ORIGINAL}/{clean_image_id}",
+                                    width=width,
+                                    height=height,
+                                    resizing_type=resizing_type,
+                                    gravity=gravity,
+                                    format=format,
+                                    quality=quality,
+                                    enlarge=enlarge or 0,
+                                    base_url=IMGPROXY_BASE_URL,
+                                )
+                                resp = fetch_imgproxy_stream(fallback_url)
+                                content_type = resp.headers.get("Content-Type", f"image/{format or 'jpeg'}")
+                                filename = clean_image_id.split("/")[-1]
+                                if format and "." in filename:
+                                    filename = f"{filename.rsplit('.', 1)[0]}.{format.lstrip('.')}"
+                                return StreamingResponse(
+                                    resp,
+                                    media_type=content_type,
+                                    headers={
+                                        "Cache-Control": "public, max-age=86400",
+                                        "Content-Disposition": f'inline; filename="{filename}"',
+                                    },
+                                )
+                            except Exception as e2:
+                                print(f"Error fetching from fallback imgproxy ({IMGPROXY_BASE_URL}): {e2}")
+
+                # 4.2. Si no hay transformacion o fallo imgproxy, entregar original directamente desde MinIO
                 try:
-                    s3_internal.head_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_image_id)
-                except Exception:
-                    raise HTTPException(status_code=404, detail="Imagen no encontrada")
+                    s3_client = cargar_minio_client()
+                    s3_obj = s3_client.get_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_image_id)
+                    content_type = s3_obj.get("ContentType", "image/jpeg")
+                    filename = clean_image_id.split("/")[-1]
+                    return StreamingResponse(
+                        s3_obj["Body"].iter_chunks(),
+                        media_type=content_type,
+                        headers={
+                            "Cache-Control": "public, max-age=86400",
+                            "Content-Disposition": f'inline; filename="{filename}"',
+                        },
+                    )
+                except Exception as e:
+                    raise HTTPException(status_code=404, detail=f"Imagen no encontrada: {e}")
 
-            s3_public_client = cargar_public_minio_client()
-            presigned_url = s3_public_client.generate_presigned_url(
-                "get_object",
-                Params={"Bucket": MINIO_BUCKET_ORIGINAL, "Key": clean_image_id},
-                ExpiresIn=900,
+            # 4.3. Si raw=False, devolver la URL limpia de la propia API
+            query_params = ["raw=true"]
+            if width is not None: query_params.append(f"width={width}")
+            if height is not None: query_params.append(f"height={height}")
+            if resizing_type: query_params.append(f"resizing_type={resizing_type}")
+            if gravity: query_params.append(f"gravity={gravity}")
+            if format: query_params.append(f"format={format}")
+            if quality: query_params.append(f"quality={quality}")
+            if enlarge: query_params.append(f"enlarge={enlarge}")
+
+            qs = "&".join(query_params)
+            base_api = str(request.base_url).rstrip('/') if request else ""
+            clean_url = f"{base_api}/download/{clean_image_id}?{qs}"
+            clean_original_url = f"{base_api}/download/{clean_image_id}?raw=true"
+
+            if redirect:
+                return RedirectResponse(url=clean_url, status_code=307)
+
+            return JSONResponse(
+                {
+                    "url": clean_url if is_transform_requested else clean_original_url,
+                    "original_url": clean_original_url,
+                    "expires_in": 86400,
+                },
+                status_code=200,
             )
-
-            return JSONResponse({"url": presigned_url, "expires_in": 900}, status_code=200)
         except HTTPException:
             raise
         except Exception as e:
-            print(f"ERROR GENERANDO PRESIGNED URL: {e}")
+            print(f"ERROR EN DOWNLOAD: {e}")
             raise HTTPException(status_code=500, detail="Error al generar acceso a la imagen")
+
 
     @router.get("/admin/files/explorer")
     def get_backoffice_files_explorer(

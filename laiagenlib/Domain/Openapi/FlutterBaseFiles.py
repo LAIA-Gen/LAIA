@@ -129,7 +129,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'image_picker_helper.dart';"""+"""
+import 'image_picker_helper.dart';
+import 'imgproxy_helper.dart';"""+"""
 
 part 'generic_widgets.g.dart';
 
@@ -201,9 +202,47 @@ class ImagePickerHelper {
 }
 """
 
+def imgproxy_helper_dart() -> str:
+    return """class ImgproxyHelper {
+  /// Genera la URL limpia a traves de la API del backend
+  static String buildUrl({
+    required String imagePath,
+    String? apiBaseUrl,
+    int width = 0,
+    int height = 0,
+    String resize = 'fill',
+    String? gravity,
+    String format = 'webp',
+    String? roundCorners,
+  }) {
+    if (imagePath.isEmpty) return '';
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+
+    final clean = imagePath.replaceAll(RegExp(r'^/+'), '');
+    final base = (apiBaseUrl != null && apiBaseUrl.isNotEmpty)
+        ? apiBaseUrl.replaceAll(RegExp(r'/+$'), '')
+        : '';
+
+    final query = <String>['raw=true'];
+    if (width > 0) query.add('width=\$width');
+    if (height > 0) query.add('height=\$height');
+    if (resize.isNotEmpty && resize != 'fit') query.add('resizing_type=\$resize');
+    if (gravity != null && gravity.isNotEmpty) query.add('gravity=\$gravity');
+    if (format.isNotEmpty && format != 'original') query.add('format=\$format');
+
+    final prefix = base.isNotEmpty ? '\$base/download' : '/download';
+    final qs = query.join('&');
+    return '\$prefix/\$clean?\$qs';
+  }
+}
+"""
+
 def media_gallery_screen_dart(app_name: str) -> str:
     return f"""import 'package:{app_name}/config/api.dart';
 import 'package:{app_name}/generic/image_picker_helper.dart';
+import 'package:{app_name}/generic/imgproxy_helper.dart';
 """ + """import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -363,6 +402,65 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
   }
 
+  Future<String?> _getDownloadUrl(String key, [Map<String, dynamic>? options]) async {
+    if (key.isEmpty) return null;
+
+    final isDefault = (options == null || options.isEmpty);
+    if (isDefault && _presignedCache.containsKey(key)) {
+      return _presignedCache[key];
+    }
+
+    if (key.startsWith('http://') || key.startsWith('https://')) {
+      if (isDefault) _presignedCache[key] = key;
+      return key;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      final headers = <String, String>{};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final cleanKey = key.replaceAll(RegExp(r'^/+'), '');
+      String query = '';
+      if (options != null && options.isNotEmpty) {
+        final params = options.entries
+            .where((e) => e.value != null && e.value.toString().isNotEmpty)
+            .map((e) => '${Uri.encodeComponent(e.key.toString())}=${Uri.encodeComponent(e.value.toString())}')
+            .join('&');
+        if (params.isNotEmpty) query = '?$params';
+      }
+      final res = await http.get(Uri.parse('$baseURL/download/$cleanKey$query'), headers: headers);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final url = data['url']?.toString();
+        if (url != null) {
+          if (isDefault) {
+            _presignedCache[key] = url;
+          }
+          return url;
+        }
+      }
+    } catch (_) {}
+    if (options != null && options.isNotEmpty) {
+      final w = options['width'] as int? ?? 0;
+      final h = options['height'] as int? ?? 0;
+      return ImgproxyHelper.buildUrl(
+        imagePath: key,
+        apiBaseUrl: baseURL,
+        width: w,
+        height: h,
+        resize: options['resizing_type']?.toString() ?? 'fill',
+        gravity: options['gravity']?.toString(),
+        format: options['format']?.toString() ?? 'webp',
+        roundCorners: options['round_corners']?.toString(),
+      );
+    }
+    return null;
+  }
+
   Future<String?> _resolveImageUrl(Map<String, dynamic> photo) async {
     final preview = (photo['preview_url'] ?? photo['url'] ?? '').toString();
     if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://'))) {
@@ -379,36 +477,173 @@ class _GalleryScreenState extends State<GalleryScreen> {
 
     final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
     if (key.isEmpty) return null;
+    return await _getDownloadUrl(key);
+  }
 
-    if (_presignedCache.containsKey(key)) {
-      return _presignedCache[key];
-    }
+  void _showDownloadOptionsDialog(BuildContext context, String key, String defaultUrl, String defaultFilename) {
+    String selectedSize = 'original';
+    String selectedShape = 'fit';
+    String selectedFormat = 'original';
+    bool downloading = false;
 
-    if (key.startsWith('http://') || key.startsWith('https://')) {
-      _presignedCache[key] = key;
-      return key;
-    }
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.download_rounded, size: 24),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Opciones de descarga",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Medidas / Tamaño:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Original", style: TextStyle(fontSize: 12)), selected: selectedSize == 'original', onSelected: (_) => setDialogState(() => selectedSize = 'original')),
+                        ChoiceChip(label: const Text("Miniatura (150x150)", style: TextStyle(fontSize: 12)), selected: selectedSize == '150x150', onSelected: (_) => setDialogState(() => selectedSize = '150x150')),
+                        ChoiceChip(label: const Text("Avatar (256x256)", style: TextStyle(fontSize: 12)), selected: selectedSize == 'avatar_256', onSelected: (_) => setDialogState(() {
+                          selectedSize = 'avatar_256';
+                          selectedShape = 'square';
+                        })),
+                        ChoiceChip(label: const Text("Mediano (800x600)", style: TextStyle(fontSize: 12)), selected: selectedSize == '800x600', onSelected: (_) => setDialogState(() => selectedSize = '800x600')),
+                        ChoiceChip(label: const Text("Grande (1280x720)", style: TextStyle(fontSize: 12)), selected: selectedSize == '1280x720', onSelected: (_) => setDialogState(() => selectedSize = '1280x720')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Forma / Proporción de recorte:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Mantener proporción (Fit)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'fit', onSelected: (_) => setDialogState(() => selectedShape = 'fit')),
+                        ChoiceChip(label: const Text("Cuadrado 1:1 (Smart Fill)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'square', onSelected: (_) => setDialogState(() => selectedShape = 'square')),
+                        ChoiceChip(label: const Text("Panorámico 16:9", style: TextStyle(fontSize: 12)), selected: selectedShape == '16:9', onSelected: (_) => setDialogState(() => selectedShape = '16:9')),
+                        ChoiceChip(label: const Text("Fotografía 4:3", style: TextStyle(fontSize: 12)), selected: selectedShape == '4:3', onSelected: (_) => setDialogState(() => selectedShape = '4:3')),
+                        ChoiceChip(label: const Text("Vertical 9:16", style: TextStyle(fontSize: 12)), selected: selectedShape == '9:16', onSelected: (_) => setDialogState(() => selectedShape = '9:16')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Formato de salida:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Original", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'original', onSelected: (_) => setDialogState(() => selectedFormat = 'original')),
+                        ChoiceChip(label: const Text("WebP", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'webp', onSelected: (_) => setDialogState(() => selectedFormat = 'webp')),
+                        ChoiceChip(label: const Text("PNG", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'png', onSelected: (_) => setDialogState(() => selectedFormat = 'png')),
+                        ChoiceChip(label: const Text("JPEG / JPG", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'jpeg', onSelected: (_) => setDialogState(() => selectedFormat = 'jpeg')),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: downloading ? null : () => Navigator.of(ctx).pop(),
+                          child: const Text("Cancelar"),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          icon: downloading
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.download_rounded, size: 18),
+                          label: Text(downloading ? "Procesando..." : "Descargar"),
+                          onPressed: downloading ? null : () async {
+                            setDialogState(() => downloading = true);
+                            final options = <String, dynamic>{};
+                            int? w;
+                            int? h;
+                            if (selectedSize == '150x150') { w = 150; h = 150; }
+                            else if (selectedSize == 'avatar_256') {
+                              w = 256; h = 256;
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                            }
+                            else if (selectedSize == '800x600') { w = 800; h = 600; }
+                            else if (selectedSize == '1280x720') { w = 1280; h = 720; }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token");
-      final headers = <String, String>{};
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
+                            if (selectedShape == 'square') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                              if (w != null && h == null) h = w;
+                              else if (h != null && w == null) w = h;
+                              else if (w == null && h == null) { w = 500; h = 500; }
+                            } else if (selectedShape == '16:9') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'ce';
+                              if (w == null && h == null) { w = 1280; h = 720; }
+                            } else if (selectedShape == '4:3') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'ce';
+                              if (w == null && h == null) { w = 800; h = 600; }
+                            } else if (selectedShape == '9:16') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                              if (w == null && h == null) { w = 720; h = 1280; }
+                            } else if (w != null || h != null) {
+                              options['resizing_type'] = 'fit';
+                            }
+                            if (w != null && w > 0) options['width'] = w;
+                            if (h != null && h > 0) options['height'] = h;
+                            if (selectedFormat != 'original') options['format'] = selectedFormat;
 
-      final cleanKey = key.replaceAll(RegExp(r'^/+'), '');
-      final res = await http.get(Uri.parse('$baseURL/download/$cleanKey'), headers: headers);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final url = data['url']?.toString();
-        if (url != null) {
-          _presignedCache[key] = url;
-          return url;
-        }
-      }
-    } catch (_) {}
-    return null;
+                            String? targetUrl;
+                            if (options.isNotEmpty) {
+                              targetUrl = await _getDownloadUrl(key, options);
+                            }
+                            targetUrl ??= defaultUrl;
+
+                            final dotIdx = defaultFilename.lastIndexOf('.');
+                            String nameWithoutExt = dotIdx > 0 ? defaultFilename.substring(0, dotIdx) : defaultFilename;
+                            String ext = dotIdx > 0 ? defaultFilename.substring(dotIdx + 1) : 'jpg';
+                            if (selectedFormat != 'original') ext = selectedFormat;
+                            String dimSuffix = (w != null && h != null) ? '_\${w}x\${h}' : (w != null ? '_w\$w' : (h != null ? '_h\$h' : ''));
+                            String shapeSuffix = selectedShape != 'fit' ? '_\$selectedShape' : '';
+                            final finalFilename = '\$nameWithoutExt\$dimSuffix\$shapeSuffix.\$ext';
+
+                            ImagePickerHelper.downloadFile(targetUrl, finalFilename);
+                            if (mounted) {
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Descarga iniciada")));
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _showPhotoDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? photo]) {
@@ -444,20 +679,10 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     const Icon(Icons.image_outlined, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            filename,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            'Bucket: $_selectedBucket | Clave: $key ${sizeStr.isNotEmpty ? " • $sizeStr" : ""}',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                      child: Text(
+                        filename,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
@@ -497,21 +722,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: Row(
                   children: [
-                    if (ownerId.isNotEmpty || lastModified.isNotEmpty)
-                      Expanded(
-                        child: Text(
-                          '${ownerId.isNotEmpty ? "Propietario: $ownerId  " : ""}${lastModified.isNotEmpty ? "Fecha: ${lastModified.split('T').first}" : ""}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )
-                    else
-                      const Spacer(),
+                    const Spacer(),
                     if (downloadUrl != null && downloadUrl.isNotEmpty)
                       FilledButton.icon(
                         icon: const Icon(Icons.download_rounded, size: 18),
                         label: const Text('Descargar'),
-                        onPressed: () => ImagePickerHelper.downloadFile(downloadUrl, filename),
+                        onPressed: () => _showDownloadOptionsDialog(context, key, downloadUrl, filename),
                       ),
                     const SizedBox(width: 8),
                     TextButton(
