@@ -79,7 +79,7 @@ async def write_audit_log(
     Calls outside an HTTP audit scope do not create misleading API audit records.
     """
     state = current_audit.get()
-    if state is None or not state.enabled:
+    if state is None or not state.enabled or request_context is None:
         return
     state.action = action
     state.model = model_name
