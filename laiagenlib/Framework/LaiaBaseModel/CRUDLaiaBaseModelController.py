@@ -287,7 +287,7 @@ def CRUDLaiaBaseModelController(repository: ModelRepository=None, model: T=None,
         except Exception as e:
             handle_exception(e)
         
-    @router.post(**routes_info['aggregate'], response_model=List[dict])
+    @router.post(**routes_info['aggregate'], response_model=dict)
     async def aggregate_users(
         pipeline: List[dict] = Body(..., description="Pipeline MongoDB aggregation"),
         token: get_auth_dependency() = None

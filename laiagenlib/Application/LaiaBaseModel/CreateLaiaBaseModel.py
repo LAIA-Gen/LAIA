@@ -12,7 +12,7 @@ from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Hooks.HookExecutor import execute_hooks
-from ...Application.Audit import write_audit_log
+from ...Application.Audit import write_audit_log, capture_audit_changes
 # Auto-register sendMail lambda
 import laiagenlib.Application.Hooks.Lambdas.SendMailLambda
 
@@ -57,6 +57,7 @@ async def create_laia_base_model(new_element: Type, model: Type, user_roles: lis
     )
 
     created_element = await repository.post_item(model_name, clean_element)
+    capture_audit_changes(after=created_element)
 
     # Execute postsave hooks (e.g. sendMail on register)
     await execute_hooks(

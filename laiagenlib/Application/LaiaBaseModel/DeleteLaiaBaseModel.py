@@ -5,7 +5,7 @@ from ..AccessRights.CheckAccessRightsOfUser import check_access_rights_of_user
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Hooks.HookExecutor import execute_hooks
-from ...Application.Audit import write_audit_log
+from ...Application.Audit import write_audit_log, capture_audit_changes
 
 
 def _has_hooks(model: Type, event: str) -> bool:
@@ -39,6 +39,7 @@ async def delete_laia_base_model(element_id: str, model: Type, user_roles: List[
     if not current:
         raise ValueError(f"{model.__name__} with id {element_id} not found")
     current_doc = current[0]
+    capture_audit_changes(before=current_doc)
 
     if needs_shard_check:
         shard_key = extra.get("x-shard-key", "region")

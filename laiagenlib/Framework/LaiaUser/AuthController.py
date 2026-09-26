@@ -118,7 +118,11 @@ def AuthController(repository: ModelRepository=None, model: T=None, jwtSecretKey
                     },
                 )
             except Exception as hook_error:
-                _logger.warning("auth_login hook failed for %s: %s", element.email, hook_error)
+                _logger.error("auth_login hook failed; no login tokens returned")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Login event could not be recorded; please retry",
+                ) from hook_error
             await write_audit_log(
                 repository,
                 "LOGIN",

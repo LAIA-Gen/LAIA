@@ -1,1 +1,1 @@
-from .AuditLogger import build_audit_context, redact_sensitive, write_audit_log
+from .AuditLogger import build_audit_context, capture_audit_changes, redact_sensitive, write_audit_log

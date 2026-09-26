@@ -6,6 +6,29 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 
+
+def protect_audit_collections(value, user_roles):
+    """Do not let another model's aggregate endpoint bypass audit permissions."""
+    protected = {'auditlog', 'loginevent'}
+    if isinstance(value, list):
+        for child in value:
+            protect_audit_collections(child, user_roles)
+    elif isinstance(value, dict):
+        for operator, target in value.items():
+            destination = target
+            if operator == '$lookup' and isinstance(target, dict):
+                destination = target.get('from')
+            elif operator == '$merge' and isinstance(target, dict):
+                destination = target.get('into')
+            if isinstance(destination, dict):
+                destination = destination.get('coll')
+            if isinstance(destination, str) and destination.casefold() in protected:
+                if operator in {'$out', '$merge'}:
+                    raise PermissionError('Audit records cannot be changed through aggregation')
+                if operator in {'$lookup', '$unionWith'} and 'admin' not in user_roles:
+                    raise PermissionError('Audit records are restricted to administrators')
+            protect_audit_collections(target, user_roles)
+
 def convert_ids_in_pipeline(pipeline: list) -> list:
     for stage in pipeline:
         if "$match" in stage:
@@ -30,6 +53,8 @@ async def aggregate_laia_base_model(
     _logger.info(f"Aggregating {model.__name__} with pipeline: {pipeline}")
 
     model_name = model.__name__.lower()
+
+    protect_audit_collections(pipeline, user_roles)
 
     pipeline = convert_ids_in_pipeline(pipeline)
 

@@ -12,6 +12,7 @@ from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.Openapi.OpenapiRepository import OpenapiRepository
 from ...Domain.Shared.Utils.logger import _logger
+from ...Framework.Shared.AuditMiddleware import AuditMiddleware
 
 @asyncinit
 class LaiaFastApi():
@@ -48,6 +49,10 @@ class LaiaFastApi():
         self.repository_api_instance = repositoryAPI(self.api, jwtSecretKey, jwtRefreshSecretKey)
         self.openapi_path = openapi
         self.openapi = OpenAPI(openapi)
+        self.api.add_middleware(
+            AuditMiddleware, api=self.api, repository=self.repository_instance,
+            config=self.openapi.audit_config, jwt_secret=jwtSecretKey,
+        )
         self.api.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -135,6 +140,9 @@ class LaiaFastApi():
             if api.openapi_schema:
                 return api.openapi_schema
             schema = get_openapi(title=api.title, version=api.version, routes=api.routes)
+            # Preserve the configuration when main.py exports the generated schema.
+            if hasattr(self, 'openapi'):
+                schema['middleware'] = {'auditlog': self.openapi.audit_config.as_dict()}
             schemas = schema.get("components", {}).get("schemas", {})
             
             if hasattr(self, 'openapi') and self.openapi:

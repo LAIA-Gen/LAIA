@@ -14,7 +14,7 @@ from fastapi.encoders import jsonable_encoder
 from typing import get_args
 
 from ...Application.Hooks.HookExecutor import execute_hooks
-from ...Application.Audit import write_audit_log
+from ...Application.Audit import write_audit_log, capture_audit_changes
 
 
 def _has_hooks(model: Type, event: str) -> bool:
@@ -117,6 +117,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
 
     current_doc = await _get_current_doc(model_name, element_id, repository)
     audit_before = dict(current_doc)
+    capture_audit_changes(before=current_doc)
 
     if needs_shard_check or needs_owner_check:
         if needs_shard_check:
@@ -152,6 +153,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
             updated_values.update(_hook_update_fields(before_preupdate, proposed_element, model))
 
         updated_element = await repository.put_item(model_name, element_id, updated_values)
+        capture_audit_changes(after=updated_element)
         
         if _has_hooks(model, "postupdate"):
             before_postupdate = dict(updated_element)
@@ -159,6 +161,7 @@ async def update_laia_base_model(element_id:str, updated_values: dict, model: Ty
             hook_changes = _hook_update_fields(before_postupdate, updated_element, model)
             if hook_changes:
                 updated_element = await repository.put_item(model_name, element_id, hook_changes)
+                capture_audit_changes(after=updated_element)
         
     except KeyError as e:
         _logger.exception("Field error while updating %s: %s", model.__name__, e)
