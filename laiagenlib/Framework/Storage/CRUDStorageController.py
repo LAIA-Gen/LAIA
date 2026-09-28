@@ -17,6 +17,21 @@ from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 
+try:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.utils
+    import cloudinary.api
+    HAS_CLOUDINARY = True
+except ImportError:
+    HAS_CLOUDINARY = False
+
+try:
+    from ...Domain.Shared.Utils.logger import _logger
+except Exception:
+    import logging
+    _logger = logging.getLogger("LAIA")
+
 load_dotenv()
 
 security_scheme = HTTPBearer()
@@ -64,6 +79,78 @@ def CRUDStorageController(
     # Configuración de Imgproxy
     IMGPROXY_BASE_URL = os.getenv("IMGPROXY_BASE_URL") or imgproxy_endpoint or "http://localhost:7000"
     IMGPROXY_INTERNAL_URL = os.getenv("IMGPROXY_INTERNAL_URL") or "http://imgproxy:8080"
+
+    def get_active_storage_provider() -> str:
+        provider_env = os.getenv("STORAGE_PROVIDER", "").strip().lower()
+        if provider_env in ["cloudinary", "minio", "s3"]:
+            return "cloudinary" if provider_env == "cloudinary" else "minio"
+
+        if os.getenv("MINIO_ENDPOINT") or os.getenv("MINIO_ACCESS_KEY"):
+            return "minio"
+        elif os.getenv("CLOUDINARY_CLOUD_NAME") and os.getenv("CLOUDINARY_API_KEY"):
+            return "cloudinary"
+        return "minio"
+
+    _logger.info(f"[STORAGE] Proveedor activo: {get_active_storage_provider().upper()}")
+
+    def init_cloudinary() -> bool:
+        if not HAS_CLOUDINARY:
+            return False
+        cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME")
+        api_key = os.getenv("CLOUDINARY_API_KEY")
+        api_secret = os.getenv("CLOUDINARY_API_SECRET")
+        if cloud_name and api_key and api_secret:
+            cloudinary.config(
+                cloud_name=cloud_name,
+                api_key=api_key,
+                api_secret=api_secret,
+                secure=True,
+            )
+            return True
+        return False
+
+    def generar_cloudinary_url(
+        public_id: str,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+        resizing_type: Optional[str] = None,
+        gravity: Optional[str] = None,
+        format: Optional[str] = None,
+        quality: Optional[int] = None,
+    ) -> str:
+        init_cloudinary()
+        clean_pid = public_id.strip()
+        if "res.cloudinary.com" in clean_pid and "/upload/" in clean_pid:
+            parts = clean_pid.split("/upload/")
+            after_upload = parts[1]
+            subparts = after_upload.split("/")
+            if subparts[0].startswith("v") and subparts[0][1:].isdigit():
+                clean_pid = "/".join(subparts[1:])
+            elif any(subparts[0].startswith(p) for p in ["w_", "h_", "c_", "g_"]):
+                clean_pid = "/".join(subparts[2:]) if len(subparts) > 2 and subparts[1].startswith("v") else "/".join(subparts[1:])
+
+        if "." in clean_pid:
+            clean_pid = clean_pid.rsplit(".", 1)[0]
+
+        trans = {}
+        if width: trans["width"] = width
+        if height: trans["height"] = height
+        if resizing_type:
+            trans["crop"] = "fill" if resizing_type.lower() == "fill" else "fit"
+        elif width or height:
+            trans["crop"] = "fill"
+
+        if gravity:
+            trans["gravity"] = "face" if gravity.lower() in ["sm", "face"] else "center"
+
+        if format and format.lower() != "original":
+            trans["format"] = format.lstrip(".").lower()
+
+        if quality:
+            trans["quality"] = quality
+
+        url, _ = cloudinary.utils.cloudinary_url(clean_pid, **trans)
+        return url
 
     def generar_imgproxy_url(
         source_url: str,
@@ -351,35 +438,56 @@ def CRUDStorageController(
                 detail=f"Tipo de archivo no permitido: los ejecutables (.{extension}) estan restringidos.",
             )
 
-        raw_folder = folder or folder_form or "users"
+        raw_folder = folder or folder_form or "user"
         clean_folder = raw_folder.strip().strip("/").lower()
         if not clean_folder:
-            clean_folder = "users"
+            clean_folder = "user"
 
         raw_id = id or id_form
         clean_id = raw_id.strip().strip("/") if raw_id else None
 
-        if clean_folder in ["users", "user"]:
-            target_id = clean_id or user_id
-            image_uuid = f"users/{target_id}/{uuid.uuid4()}.{extension}"
+        if clean_id:
+            target_id = clean_id
+            image_uuid = f"{clean_folder}/{target_id}/{uuid.uuid4()}.{extension}"
         else:
-            if clean_id:
-                target_id = clean_id
-                image_uuid = f"{clean_folder}/{target_id}/{uuid.uuid4()}.{extension}"
-            else:
-                target_id = "temp"
-                image_uuid = f"temp/{clean_folder}/{uuid.uuid4()}.{extension}"
+            target_id = "temp"
+            image_uuid = f"temp/{clean_folder}/{uuid.uuid4()}.{extension}"
+
+        active_provider = get_active_storage_provider()
+        secure_url = ""
 
         try:
-            s3_client = cargar_minio_client()
-            MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
+            if active_provider == "cloudinary":
+                if not HAS_CLOUDINARY:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Librería 'cloudinary' no instalada. Ejecuta: pip install cloudinary",
+                    )
+                if not init_cloudinary():
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Faltan credenciales de Cloudinary (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)",
+                    )
+                file.file.seek(0)
+                clean_public_id = image_uuid.rsplit(".", 1)[0]
+                upload_res = cloudinary.uploader.upload(
+                    file.file,
+                    public_id=clean_public_id,
+                    resource_type="auto",
+                    overwrite=True,
+                )
+                image_uuid = upload_res.get("public_id") or clean_public_id
+                secure_url = upload_res.get("secure_url") or ""
+            else:
+                s3_client = cargar_minio_client()
+                MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
 
-            s3_client.upload_fileobj(
-                file.file,
-                MINIO_BUCKET_ORIGINAL,
-                image_uuid,
-                ExtraArgs={"ContentType": file.content_type},
-            )
+                s3_client.upload_fileobj(
+                    file.file,
+                    MINIO_BUCKET_ORIGINAL,
+                    image_uuid,
+                    ExtraArgs={"ContentType": file.content_type},
+                )
 
             if db is not None:
                 record = {
@@ -390,6 +498,8 @@ def CRUDStorageController(
                     "folder": clean_folder,
                     "class_name": clean_folder,
                     "filename": file.filename,
+                    "provider": active_provider,
+                    "secure_url": secure_url,
                     "created_at": datetime.now(timezone.utc),
                 }
                 db[collection_name].insert_one(record)
@@ -400,18 +510,19 @@ def CRUDStorageController(
                 {
                     "id": image_uuid,
                     "path": image_uuid,
-                    "image_url": image_uuid,
-                    "url": image_uuid,
+                    "image_url": secure_url or image_uuid,
+                    "url": secure_url or image_uuid,
                     "folder": clean_folder,
                     "entity_id": target_id,
+                    "provider": active_provider,
                 },
                 status_code=201,
             )
         except HTTPException:
             raise
         except Exception as e:
-            print(f"MINIO ERROR: {e}")
-            raise HTTPException(status_code=500, detail="Failed to upload image to MinIO")
+            print(f"STORAGE ERROR ({active_provider}): {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to upload image to {active_provider.capitalize()}: {str(e)}")
 
     @router.post("/upload/confirm-temp")
     def post_confirm_temp(
@@ -431,14 +542,32 @@ def CRUDStorageController(
         target_key = f"{class_folder}/{clean_entity_id}/{filename}"
 
         try:
-            s3_client = cargar_minio_client()
-            MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
-            s3_client.copy_object(
-                Bucket=MINIO_BUCKET_ORIGINAL,
-                CopySource={"Bucket": MINIO_BUCKET_ORIGINAL, "Key": clean_source},
-                Key=target_key,
-            )
-            s3_client.delete_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_source)
+            active_provider = get_active_storage_provider()
+            existing_rec = None
+            if db is not None:
+                existing_rec = db[collection_name].find_one(
+                    {"$or": [{"image_id": clean_source}, {"file_id": clean_source}]}
+                )
+            if existing_rec and existing_rec.get("provider"):
+                active_provider = existing_rec.get("provider")
+
+            if active_provider == "cloudinary":
+                if HAS_CLOUDINARY and init_cloudinary():
+                    try:
+                        clean_src_pid = clean_source.rsplit(".", 1)[0]
+                        clean_tgt_pid = target_key.rsplit(".", 1)[0]
+                        cloudinary.uploader.rename(clean_src_pid, clean_tgt_pid, overwrite=True)
+                    except Exception:
+                        pass
+            else:
+                s3_client = cargar_minio_client()
+                MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
+                s3_client.copy_object(
+                    Bucket=MINIO_BUCKET_ORIGINAL,
+                    CopySource={"Bucket": MINIO_BUCKET_ORIGINAL, "Key": clean_source},
+                    Key=target_key,
+                )
+                s3_client.delete_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_source)
 
             if db is not None:
                 update_fields = {
@@ -549,28 +678,71 @@ def CRUDStorageController(
                 if photo:
                     clean_image_id = photo.get("image_id") or photo.get("file_id")
 
-        # 2. Determinar la carpeta / clase
         file_folder = photo.get("folder") if photo else (clean_image_id.split("/")[0] if "/" in clean_image_id else "")
         if not file_folder and folder:
             file_folder = folder.strip("/").lower()
 
-        # 3. Control de permisos:
-        # Solo para fotos privadas de usuario ('users') se exige ser propietario o admin.
-        if file_folder in ["users", "user"] or clean_image_id.startswith("users/"):
-            owner_id = photo.get("owner_id") if photo else None
-            if not owner_id and clean_image_id.startswith("users/"):
+        if file_folder in ["users", "user"] or clean_image_id.startswith("users/") or clean_image_id.startswith("user/"):
+            owner_id = str(photo.get("owner_id")) if (photo and photo.get("owner_id")) else None
+            entity_id = str(photo.get("entity_id")) if (photo and photo.get("entity_id")) else None
+            path_user_id = None
+            if clean_image_id.startswith("users/") or clean_image_id.startswith("user/"):
                 parts = clean_image_id.split("/")
                 if len(parts) >= 2:
-                    owner_id = parts[1]
+                    path_user_id = parts[1]
 
-            if not is_admin and owner_id and owner_id != current_user_id:
+            is_authorized = (
+                is_admin
+                or (current_user_id and current_user_id in [owner_id, entity_id, path_user_id])
+            )
+
+            if not is_authorized:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Acceso denegado: No eres el propietario de esta imagen",
+                    detail="Acceso denegado: Solo el propietario o un administrador pueden acceder a esta imagen",
                 )
 
-        # 4. Procesamiento y respuesta limpia
+        active_provider = get_active_storage_provider()
+        image_provider = active_provider
+
+        if photo and photo.get("provider"):
+            image_provider = photo.get("provider")
+        elif "res.cloudinary.com" in clean_image_id:
+            image_provider = "cloudinary"
+        elif "/" in clean_image_id and (clean_image_id.startswith("activity/") or clean_image_id.startswith("users/") or clean_image_id.startswith("temp/")):
+            if not photo or photo.get("provider") != "cloudinary":
+                image_provider = "minio"
+
         try:
+            if image_provider == "cloudinary" and HAS_CLOUDINARY and init_cloudinary():
+                target_public_id = photo.get("file_id") if photo else clean_image_id
+                target_cloudinary_url = generar_cloudinary_url(
+                    public_id=target_public_id,
+                    width=width,
+                    height=height,
+                    resizing_type=resizing_type,
+                    gravity=gravity,
+                    format=format,
+                    quality=quality,
+                )
+                original_cloudinary_url = (photo.get("secure_url") if photo else None) or generar_cloudinary_url(public_id=target_public_id)
+
+                if raw or redirect:
+                    return RedirectResponse(
+                        url=target_cloudinary_url if is_transform_requested else original_cloudinary_url,
+                        status_code=307,
+                    )
+
+                return JSONResponse(
+                    {
+                        "url": target_cloudinary_url if is_transform_requested else original_cloudinary_url,
+                        "original_url": original_cloudinary_url,
+                        "provider": "cloudinary",
+                        "expires_in": 86400,
+                    },
+                    status_code=200,
+                )
+                
             MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
 
             # Si se solicita la imagen directa (raw=True)
@@ -661,10 +833,21 @@ def CRUDStorageController(
             if quality: query_params.append(f"quality={quality}")
             if enlarge: query_params.append(f"enlarge={enlarge}")
 
+            # Obtener token de la petición actual para incluirlo en la URL devuelta a Image.network
+            auth_header = request.headers.get("authorization", "") if request else ""
+            raw_token = ""
+            if auth_header.lower().startswith("bearer "):
+                raw_token = auth_header[7:].strip()
+            elif request and "token" in request.query_params:
+                raw_token = request.query_params.get("token", "")
+
+            if raw_token:
+                query_params.append(f"token={raw_token}")
+
             qs = "&".join(query_params)
             base_api = str(request.base_url).rstrip('/') if request else ""
             clean_url = f"{base_api}/download/{clean_image_id}?{qs}"
-            clean_original_url = f"{base_api}/download/{clean_image_id}?raw=true"
+            clean_original_url = f"{base_api}/download/{clean_image_id}?raw=true" + (f"&token={raw_token}" if raw_token else "")
 
             if redirect:
                 return RedirectResponse(url=clean_url, status_code=307)
@@ -698,7 +881,138 @@ def CRUDStorageController(
                 detail="Acceso restringido: Se requieren permisos de administrador de backoffice",
             )
 
-        # 2. Validar que el bucket solicitado exista/esté permitido
+        # 2. Si el proveedor activo es Cloudinary, explorar recursos de Cloudinary
+        active_provider = get_active_storage_provider()
+        if active_provider == "cloudinary":
+            if not HAS_CLOUDINARY:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Librería 'cloudinary' no instalada.",
+                )
+            if not init_cloudinary():
+                raise HTTPException(
+                    status_code=500,
+                    detail="Faltan credenciales de Cloudinary.",
+                )
+
+            clean_prefix = prefix.strip().strip("/")
+            folders = []
+            files = []
+
+            # 1. Intentar obtener carpetas desde Cloudinary API
+            try:
+                if clean_prefix:
+                    f_res = cloudinary.api.subfolders(clean_prefix)
+                else:
+                    f_res = cloudinary.api.root_folders()
+                folders = [f["name"] + "/" for f in f_res.get("folders", [])]
+            except Exception:
+                pass
+
+            # 2. Obtener recursos desde Cloudinary API
+            resources = []
+            try:
+                res_params = {"type": "upload", "max_results": 500}
+                if clean_prefix:
+                    res_params["prefix"] = clean_prefix
+                c_res = cloudinary.api.resources(**res_params)
+                resources = c_res.get("resources", [])
+            except Exception:
+                if db is not None:
+                    mongo_query = {"provider": "cloudinary"}
+                    if clean_prefix:
+                        mongo_query["$or"] = [
+                            {"image_id": {"$regex": f"^{re.escape(clean_prefix)}"}},
+                            {"file_id": {"$regex": f"^{re.escape(clean_prefix)}"}},
+                            {"folder": clean_prefix},
+                        ]
+                    for doc in db[collection_name].find(mongo_query):
+                        resources.append({
+                            "public_id": doc.get("image_id") or doc.get("file_id"),
+                            "format": (doc.get("filename") or "").split(".")[-1] if "." in (doc.get("filename") or "") else "jpg",
+                            "bytes": 0,
+                            "created_at": doc.get("created_at").isoformat() if doc.get("created_at") else None,
+                            "secure_url": doc.get("secure_url") or "",
+                        })
+
+            # Extraer subcarpetas implícitas si folders está vacío y no es recursivo
+            if not recursive and clean_prefix:
+                subfolder_set = set(folders)
+                prefix_with_slash = f"{clean_prefix}/"
+                for item in resources:
+                    pid = item.get("public_id", "")
+                    if pid.startswith(prefix_with_slash):
+                        rel = pid[len(prefix_with_slash):]
+                        if "/" in rel:
+                            subfolder_set.add(rel.split("/")[0] + "/")
+                folders = sorted(list(subfolder_set))
+            elif not recursive and not clean_prefix:
+                subfolder_set = set(folders)
+                for item in resources:
+                    pid = item.get("public_id", "")
+                    if "/" in pid:
+                        subfolder_set.add(pid.split("/")[0] + "/")
+                folders = sorted(list(subfolder_set))
+
+            pids = [r.get("public_id") for r in resources if r.get("public_id")]
+            db_records = {}
+            if pids and db is not None:
+                for col in [collection_name, "user_photos"]:
+                    for doc in db[col].find(
+                        {"$or": [{"image_id": {"$in": pids}}, {"file_id": {"$in": pids}}]}
+                    ):
+                        k = doc.get("image_id") or doc.get("file_id")
+                        if k and k not in db_records:
+                            db_records[k] = doc
+
+            for item in resources:
+                pid = item.get("public_id", "")
+                fmt = item.get("format", "")
+                full_filename = (db_records.get(pid, {}).get("filename")) or (pid.split("/")[-1] + (f".{fmt}" if fmt and not pid.endswith(f".{fmt}") else ""))
+                preview_url = item.get("secure_url") or item.get("url") or generar_cloudinary_url(pid)
+                created_at_val = item.get("created_at")
+                if isinstance(created_at_val, datetime):
+                    created_at_val = created_at_val.isoformat()
+
+                if not recursive:
+                    if clean_prefix:
+                        rel = pid[len(clean_prefix):].lstrip("/")
+                        if "/" in rel:
+                            continue
+                    elif "/" in pid:
+                        continue
+
+                files.append(
+                    {
+                        "id": pid,
+                        "key": pid,
+                        "filename": full_filename,
+                        "size": item.get("bytes", 0),
+                        "last_modified": created_at_val,
+                        "owner_id": db_records.get(pid, {}).get("owner_id"),
+                        "created_at_db": (
+                            db_records.get(pid, {}).get("created_at").isoformat()
+                            if db_records.get(pid, {}).get("created_at")
+                            else None
+                        ),
+                        "preview_url": preview_url,
+                        "url": preview_url,
+                    }
+                )
+
+            return JSONResponse(
+                {
+                    "bucket": "cloudinary",
+                    "current_prefix": prefix,
+                    "folders": folders,
+                    "total_files": len(files),
+                    "files": files,
+                    "items": files,
+                },
+                status_code=200,
+            )
+
+        # 3. Proveedor MinIO / S3
         allowed_buckets = [
             os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals),
             os.getenv("MINIO_BUCKET_PUBLIC", "public"),
@@ -831,11 +1145,20 @@ def CRUDStorageController(
                     detail="Acceso denegado: No eres el propietario de esta imagen",
                 )
 
-        # 3. Eliminar de MinIO y de MongoDB
+        # 3. Eliminar del proveedor correspondiente (Cloudinary o MinIO) y de MongoDB
         try:
-            s3_client = cargar_minio_client()
-            MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
-            s3_client.delete_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_image_id)
+            image_provider = photo.get("provider") if photo else get_active_storage_provider()
+            if image_provider == "cloudinary":
+                if HAS_CLOUDINARY and init_cloudinary():
+                    try:
+                        clean_pid = (photo.get("file_id") if photo else clean_image_id).rsplit(".", 1)[0]
+                        cloudinary.uploader.destroy(clean_pid)
+                    except Exception as e:
+                        print(f"ERROR BORRANDO CLOUDINARY: {e}")
+            else:
+                s3_client = cargar_minio_client()
+                MINIO_BUCKET_ORIGINAL = os.getenv("MINIO_BUCKET_ORIGINALS", bucket_originals)
+                s3_client.delete_object(Bucket=MINIO_BUCKET_ORIGINAL, Key=clean_image_id)
 
             if db is not None:
                 db[collection_name].delete_one(

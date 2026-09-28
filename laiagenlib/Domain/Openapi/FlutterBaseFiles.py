@@ -204,7 +204,7 @@ class ImagePickerHelper {
 
 def imgproxy_helper_dart() -> str:
     return """class ImgproxyHelper {
-  /// Genera la URL limpia a traves de la API del backend
+  /// Genera la URL limpia a través de la API del backend (compatible con MinIO, Imgproxy, Cloudinary y S3)
   static String buildUrl({
     required String imagePath,
     String? apiBaseUrl,
@@ -213,7 +213,6 @@ def imgproxy_helper_dart() -> str:
     String resize = 'fill',
     String? gravity,
     String format = 'webp',
-    String? roundCorners,
   }) {
     if (imagePath.isEmpty) return '';
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
@@ -237,6 +236,8 @@ def imgproxy_helper_dart() -> str:
     return '\$prefix/\$clean?\$qs';
   }
 }
+
+typedef StorageHelper = ImgproxyHelper;
 """
 
 def media_gallery_screen_dart(app_name: str) -> str:
