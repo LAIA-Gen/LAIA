@@ -146,12 +146,15 @@ def image_picker_helper_dart() -> str:
 def image_picker_stub_dart() -> str:
     return """class ImagePickerHelper {
   static void pickImage(Function(List<int>, String) onPicked) {}
+  static void pickFile(Function(List<int>, String) onPicked, [String? accept]) {}
   static void Function() setupDropZone({
     required Function(bool) onDragStateChanged,
     required Function(List<int>, String) onFileDropped,
   }) => () {};
   static void downloadFile(String url, [String? filename]) {}
 }
+
+typedef FilePickerHelper = ImagePickerHelper;
 """
 
 def image_picker_web_dart() -> str:
@@ -163,6 +166,15 @@ import 'dart:typed_data';
 class ImagePickerHelper {
   static void pickImage(Function(List<int>, String) onPicked) {
     final input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+    input.onChange.first.then((_) => _readFile(input.files?.firstOrNull, onPicked));
+  }
+
+  static void pickFile(Function(List<int>, String) onPicked, [String? accept]) {
+    final input = html.FileUploadInputElement();
+    if (accept != null && accept.isNotEmpty) {
+      input.accept = accept;
+    }
     input.click();
     input.onChange.first.then((_) => _readFile(input.files?.firstOrNull, onPicked));
   }
@@ -200,6 +212,8 @@ class ImagePickerHelper {
     });
   }
 }
+
+typedef FilePickerHelper = ImagePickerHelper;
 """
 
 def imgproxy_helper_dart() -> str:
@@ -456,7 +470,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
         resize: options['resizing_type']?.toString() ?? 'fill',
         gravity: options['gravity']?.toString(),
         format: options['format']?.toString() ?? 'webp',
-        roundCorners: options['round_corners']?.toString(),
       );
     }
     return null;
