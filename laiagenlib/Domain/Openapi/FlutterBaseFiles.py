@@ -280,6 +280,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   String _selectedBucket = 'originals';
   final List<String> _allowedBuckets = const ['originals', 'public', 'processed'];
   final TextEditingController _prefixController = TextEditingController();
+  String _activeFilter = 'all'; // 'all', 'images', 'files'
 
   @override
   void initState() {
@@ -292,6 +293,44 @@ class _GalleryScreenState extends State<GalleryScreen> {
     _prefixController.dispose();
     super.dispose();
   }
+
+  String _itemKey(Map<String, dynamic> it) =>
+      (it['key'] ?? it['image_id'] ?? it['path'] ?? it['filename'] ?? '').toString();
+
+  bool _isImage(String name) {
+    final ext = name.toLowerCase().split('.').last;
+    return const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'}.contains(ext);
+  }
+
+  String _getFileExtension(String name) =>
+      name.contains('.') ? name.split('.').last.toUpperCase() : 'FILE';
+
+  IconData _fileIcon(String ext) {
+    final e = ext.toLowerCase();
+    if (e == 'pdf') return Icons.picture_as_pdf_rounded;
+    if (['doc', 'docx'].contains(e)) return Icons.description_rounded;
+    if (['xls', 'xlsx', 'csv'].contains(e)) return Icons.table_chart_rounded;
+    if (['zip', 'rar', '7z'].contains(e)) return Icons.folder_zip_rounded;
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Color _fileColor(String ext) {
+    final e = ext.toLowerCase();
+    if (e == 'pdf') return Colors.red.shade700;
+    if (['doc', 'docx'].contains(e)) return Colors.blue.shade700;
+    if (['xls', 'xlsx', 'csv'].contains(e)) return Colors.green.shade700;
+    if (['zip', 'rar', '7z'].contains(e)) return Colors.amber.shade800;
+    return Colors.blueGrey.shade700;
+  }
+
+  List<Map<String, dynamic>> get _filteredPhotos {
+    if (_activeFilter == 'images') return _photos.where((it) => _isImage(_itemKey(it))).toList();
+    if (_activeFilter == 'files') return _photos.where((it) => !_isImage(_itemKey(it))).toList();
+    return _photos;
+  }
+
+  int get _imageCount => _photos.where((it) => _isImage(_itemKey(it))).length;
+  int get _fileCount => _photos.where((it) => !_isImage(_itemKey(it))).length;
 
   String _formatFileSize(dynamic size) {
     if (size is num && size > 0) {
@@ -380,29 +419,23 @@ class _GalleryScreenState extends State<GalleryScreen> {
           }
         }
 
-        final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-        final imageItems = items.where((it) {
-          final key = (it['key'] ?? it['image_id'] ?? it['path'] ?? it['filename'] ?? '').toString().toLowerCase();
-          return imageExtensions.any((ext) => key.endsWith(ext)) || key.contains('users/');
-        }).toList();
-
         if (mounted) {
           setState(() {
-            _photos = imageItems.isNotEmpty ? imageItems : items;
+            _photos = items;
             _isLoading = false;
           });
         }
       } else if (response != null && response.statusCode == 403) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'Acceso restringido: Se requieren permisos de administrador de backoffice';
+            _errorMessage = 'Restricted access: Backoffice admin permissions required';
             _isLoading = false;
           });
         }
       } else {
         if (mounted) {
           setState(() {
-            _errorMessage = 'No se pudieron cargar los archivos del bucket "$_selectedBucket"';
+            _errorMessage = 'Could not load files from bucket "$_selectedBucket"';
             _isLoading = false;
           });
         }
@@ -410,7 +443,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Error al conectar con el servidor: $e';
+          _errorMessage = 'Error connecting to server: $e';
           _isLoading = false;
         });
       }
@@ -476,7 +509,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Future<String?> _resolveImageUrl(Map<String, dynamic> photo) async {
-    final preview = (photo['preview_url'] ?? photo['url'] ?? '').toString();
+    final preview = (photo['preview_url'] ?? photo['url'] ?? photo['download_url'] ?? '').toString();
     if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://'))) {
       try {
         final parsed = Uri.parse(preview);
@@ -489,7 +522,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
       return preview;
     }
 
-    final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
+    final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? photo['id'] ?? '').toString();
     if (key.isEmpty) return null;
     return await _getDownloadUrl(key);
   }
@@ -520,7 +553,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         const SizedBox(width: 8),
                         const Expanded(
                           child: Text(
-                            "Opciones de descarga",
+                            "Download Options",
                             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -531,38 +564,38 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text("Medidas / Tamaño:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text("Dimensions / Size:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
                         ChoiceChip(label: const Text("Original", style: TextStyle(fontSize: 12)), selected: selectedSize == 'original', onSelected: (_) => setDialogState(() => selectedSize = 'original')),
-                        ChoiceChip(label: const Text("Miniatura (150x150)", style: TextStyle(fontSize: 12)), selected: selectedSize == '150x150', onSelected: (_) => setDialogState(() => selectedSize = '150x150')),
+                        ChoiceChip(label: const Text("Thumbnail (150x150)", style: TextStyle(fontSize: 12)), selected: selectedSize == '150x150', onSelected: (_) => setDialogState(() => selectedSize = '150x150')),
                         ChoiceChip(label: const Text("Avatar (256x256)", style: TextStyle(fontSize: 12)), selected: selectedSize == 'avatar_256', onSelected: (_) => setDialogState(() {
                           selectedSize = 'avatar_256';
                           selectedShape = 'square';
                         })),
-                        ChoiceChip(label: const Text("Mediano (800x600)", style: TextStyle(fontSize: 12)), selected: selectedSize == '800x600', onSelected: (_) => setDialogState(() => selectedSize = '800x600')),
-                        ChoiceChip(label: const Text("Grande (1280x720)", style: TextStyle(fontSize: 12)), selected: selectedSize == '1280x720', onSelected: (_) => setDialogState(() => selectedSize = '1280x720')),
+                        ChoiceChip(label: const Text("Medium (800x600)", style: TextStyle(fontSize: 12)), selected: selectedSize == '800x600', onSelected: (_) => setDialogState(() => selectedSize = '800x600')),
+                        ChoiceChip(label: const Text("Large (1280x720)", style: TextStyle(fontSize: 12)), selected: selectedSize == '1280x720', onSelected: (_) => setDialogState(() => selectedSize = '1280x720')),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text("Forma / Proporción de recorte:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text("Crop / Aspect Ratio:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        ChoiceChip(label: const Text("Mantener proporción (Fit)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'fit', onSelected: (_) => setDialogState(() => selectedShape = 'fit')),
-                        ChoiceChip(label: const Text("Cuadrado 1:1 (Smart Fill)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'square', onSelected: (_) => setDialogState(() => selectedShape = 'square')),
-                        ChoiceChip(label: const Text("Panorámico 16:9", style: TextStyle(fontSize: 12)), selected: selectedShape == '16:9', onSelected: (_) => setDialogState(() => selectedShape = '16:9')),
-                        ChoiceChip(label: const Text("Fotografía 4:3", style: TextStyle(fontSize: 12)), selected: selectedShape == '4:3', onSelected: (_) => setDialogState(() => selectedShape = '4:3')),
-                        ChoiceChip(label: const Text("Vertical 9:16", style: TextStyle(fontSize: 12)), selected: selectedShape == '9:16', onSelected: (_) => setDialogState(() => selectedShape = '9:16')),
+                        ChoiceChip(label: const Text("Keep aspect ratio (Fit)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'fit', onSelected: (_) => setDialogState(() => selectedShape = 'fit')),
+                        ChoiceChip(label: const Text("Square 1:1 (Smart Fill)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'square', onSelected: (_) => setDialogState(() => selectedShape = 'square')),
+                        ChoiceChip(label: const Text("Landscape 16:9", style: TextStyle(fontSize: 12)), selected: selectedShape == '16:9', onSelected: (_) => setDialogState(() => selectedShape = '16:9')),
+                        ChoiceChip(label: const Text("Photo 4:3", style: TextStyle(fontSize: 12)), selected: selectedShape == '4:3', onSelected: (_) => setDialogState(() => selectedShape = '4:3')),
+                        ChoiceChip(label: const Text("Portrait 9:16", style: TextStyle(fontSize: 12)), selected: selectedShape == '9:16', onSelected: (_) => setDialogState(() => selectedShape = '9:16')),
                       ],
                     ),
                     const SizedBox(height: 16),
-                    const Text("Formato de salida:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const Text("Output format:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -580,14 +613,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       children: [
                         TextButton(
                           onPressed: downloading ? null : () => Navigator.of(ctx).pop(),
-                          child: const Text("Cancelar"),
+                          child: const Text("Cancel"),
                         ),
                         const SizedBox(width: 8),
                         FilledButton.icon(
                           icon: downloading
                               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                               : const Icon(Icons.download_rounded, size: 18),
-                          label: Text(downloading ? "Procesando..." : "Descargar"),
+                          label: Text(downloading ? "Processing..." : "Download"),
                           onPressed: downloading ? null : () async {
                             setDialogState(() => downloading = true);
                             final options = <String, dynamic>{};
@@ -637,14 +670,14 @@ class _GalleryScreenState extends State<GalleryScreen> {
                             String nameWithoutExt = dotIdx > 0 ? defaultFilename.substring(0, dotIdx) : defaultFilename;
                             String ext = dotIdx > 0 ? defaultFilename.substring(dotIdx + 1) : 'jpg';
                             if (selectedFormat != 'original') ext = selectedFormat;
-                            String dimSuffix = (w != null && h != null) ? '_\${w}x\${h}' : (w != null ? '_w\$w' : (h != null ? '_h\$h' : ''));
-                            String shapeSuffix = selectedShape != 'fit' ? '_\$selectedShape' : '';
-                            final finalFilename = '\$nameWithoutExt\$dimSuffix\$shapeSuffix.\$ext';
+                            String dimSuffix = (w != null && h != null) ? '_${w}x${h}' : (w != null ? '_w$w' : (h != null ? '_h$h' : ''));
+                            String shapeSuffix = selectedShape != 'fit' ? '_$selectedShape' : '';
+                            final finalFilename = '$nameWithoutExt$dimSuffix$shapeSuffix.$ext';
 
                             ImagePickerHelper.downloadFile(targetUrl, finalFilename);
                             if (mounted) {
                               Navigator.of(ctx).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Descarga iniciada")));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download started")));
                             }
                           },
                         ),
@@ -661,10 +694,6 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   void _showPhotoDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? photo]) {
-    final sizeStr = _formatFileSize(photo?['size']);
-    final ownerId = (photo?['owner_id'] ?? '').toString();
-    final lastModified = (photo?['last_modified'] ?? photo?['created_at_db'] ?? '').toString();
-
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -701,7 +730,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
-                      tooltip: 'Cerrar',
+                      tooltip: 'Close',
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
@@ -728,7 +757,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         ),
                       )
                     : const Center(
-                        child: Text('No se pudo obtener la URL de visualización'),
+                        child: Text('Could not get image preview URL'),
                       ),
               ),
               const Divider(height: 1),
@@ -740,12 +769,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     if (downloadUrl != null && downloadUrl.isNotEmpty)
                       FilledButton.icon(
                         icon: const Icon(Icons.download_rounded, size: 18),
-                        label: const Text('Descargar'),
+                        label: const Text('Download'),
                         onPressed: () => _showDownloadOptionsDialog(context, key, downloadUrl, filename),
                       ),
                     const SizedBox(width: 8),
                     TextButton(
-                      child: const Text('Cerrar'),
+                      child: const Text('Close'),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
@@ -758,16 +787,71 @@ class _GalleryScreenState extends State<GalleryScreen> {
     );
   }
 
+  void _showFileDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? file]) {
+    final ext = _getFileExtension(filename);
+    final color = _fileColor(ext);
+    final size = _formatFileSize(file?['size']);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(_fileIcon(ext), color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text(filename, style: const TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+                child: Icon(_fileIcon(ext), size: 48, color: color),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (size.isNotEmpty) Text('Size: $size', style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Bucket: $_selectedBucket', style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Key: $key', style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+          FilledButton.icon(
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: const Text('Download'),
+            style: FilledButton.styleFrom(backgroundColor: color),
+            onPressed: () async {
+              final url = downloadUrl ?? await _getDownloadUrl(key);
+              if (url != null && url.isNotEmpty) {
+                ImagePickerHelper.downloadFile(url, filename);
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Download started')));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: widget.showAppBar
           ? AppBar(
-              title: const Text('Explorador de Fotos'),
+              title: const Text('File & Media Explorer'),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.refresh_rounded),
-                  tooltip: 'Actualizar',
+                  tooltip: 'Refresh',
                   onPressed: _fetchPhotos,
                 ),
               ],
@@ -793,18 +877,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         color: Theme.of(context).primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.photo_library_rounded, color: Theme.of(context).primaryColor, size: 24),
+                      child: Icon(Icons.perm_media_rounded, color: Theme.of(context).primaryColor, size: 24),
                     ),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Explorador de Archivos',
+                          'File & Media Explorer',
                           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          _isLoading ? 'Cargando...' : '${_photos.length} archivos en "$_selectedBucket"',
+                          _isLoading ? 'Loading...' : '${_filteredPhotos.length} items in "$_selectedBucket"',
                           style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                         ),
                       ],
@@ -813,6 +897,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                 ),
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Container(
@@ -845,7 +930,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         controller: _prefixController,
                         style: const TextStyle(fontSize: 13),
                         decoration: InputDecoration(
-                          hintText: 'Prefijo (ej: users/)',
+                          hintText: 'Prefix (e.g. users/)',
                           hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -860,10 +945,34 @@ class _GalleryScreenState extends State<GalleryScreen> {
                     ),
                     IconButton.filledTonal(
                       icon: const Icon(Icons.refresh_rounded),
-                      tooltip: 'Actualizar',
+                      tooltip: 'Refresh',
                       onPressed: _fetchPhotos,
                     ),
                   ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  avatar: const Icon(Icons.apps_rounded, size: 16),
+                  label: Text('All (${_photos.length})', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'all',
+                  onSelected: (_) => setState(() => _activeFilter = 'all'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.image_outlined, size: 16),
+                  label: Text('Images ($_imageCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'images',
+                  onSelected: (_) => setState(() => _activeFilter = 'images'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.insert_drive_file_outlined, size: 16),
+                  label: Text('Files ($_fileCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'files',
+                  onSelected: (_) => setState(() => _activeFilter = 'files'),
                 ),
               ],
             ),
@@ -876,7 +985,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         children: [
                           CircularProgressIndicator(),
                           SizedBox(height: 16),
-                          Text('Consultando MinIO...', style: TextStyle(color: Colors.grey)),
+                          Text('Querying MinIO...', style: TextStyle(color: Colors.grey)),
                         ],
                       ),
                     )
@@ -891,21 +1000,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
                               const SizedBox(height: 16),
                               FilledButton.icon(
                                 icon: const Icon(Icons.refresh_rounded),
-                                label: const Text('Reintentar'),
+                                label: const Text('Retry'),
                                 onPressed: _fetchPhotos,
                               ),
                             ],
                           ),
                         )
-                      : _photos.isEmpty
+                      : _filteredPhotos.isEmpty
                           ? Center(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.photo_outlined, size: 64, color: Colors.grey[400]),
+                                  Icon(Icons.folder_open_rounded, size: 64, color: Colors.grey[400]),
                                   const SizedBox(height: 12),
                                   Text(
-                                    'No se encontraron archivos en "$_selectedBucket"',
+                                    'No files found in "$_selectedBucket"',
                                     style: TextStyle(color: Colors.grey[600], fontSize: 16),
                                   ),
                                 ],
@@ -918,107 +1027,147 @@ class _GalleryScreenState extends State<GalleryScreen> {
                                 mainAxisSpacing: 16,
                                 childAspectRatio: 1.0,
                               ),
-                              itemCount: _photos.length,
+                              itemCount: _filteredPhotos.length,
                               itemBuilder: (context, index) {
-                                final photo = _photos[index];
+                                final photo = _filteredPhotos[index];
                                 final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
                                 final filename = (photo['filename'] ?? key.split('/').last).toString();
                                 final sizeStr = _formatFileSize(photo['size']);
+                                final isImg = _isImage(filename.isNotEmpty ? filename : key);
 
                                 return FutureBuilder<String?>(
                                   future: _resolveImageUrl(photo),
                                   builder: (context, snapshot) {
                                     final downloadUrl = snapshot.data;
-                                    return Card(
-                                      elevation: 2,
-                                      clipBehavior: Clip.antiAlias,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
-                                      ),
-                                      child: InkWell(
-                                        onTap: () => _showPhotoDialog(context, key, downloadUrl, filename, photo),
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            if (snapshot.connectionState == ConnectionState.waiting)
-                                              const Center(child: CircularProgressIndicator(strokeWidth: 2))
-                                            else if (downloadUrl != null && downloadUrl.isNotEmpty)
-                                              Image.network(
-                                                downloadUrl,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => const Center(
-                                                  child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey),
-                                                ),
-                                              )
-                                            else
-                                              const Center(
-                                                child: Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.grey),
-                                              ),
-                                            Positioned(
-                                              bottom: 0,
-                                              left: 0,
-                                              right: 0,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    begin: Alignment.bottomCenter,
-                                                    end: Alignment.topCenter,
-                                                    colors: [
-                                                      Colors.black.withOpacity(0.75),
-                                                      Colors.transparent,
-                                                    ],
-                                                  ),
-                                                ),
-                                                child: Row(
+                                    final ext = _getFileExtension(filename.isNotEmpty ? filename : key);
+                                    final fileColor = _fileColor(ext);
+
+                                      return Card(
+                                        elevation: 2,
+                                        clipBehavior: Clip.antiAlias,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => isImg
+                                              ? _showPhotoDialog(context, key, downloadUrl, filename, photo)
+                                              : _showFileDialog(context, key, downloadUrl, filename, photo),
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              if (isImg)
+                                                (downloadUrl != null && downloadUrl.isNotEmpty)
+                                                    ? Image.network(
+                                                        downloadUrl,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey)),
+                                                      )
+                                                    : const Center(child: Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.grey))
+                                              else
+                                                Container(
+                                                color: fileColor.withOpacity(0.08),
+                                                child: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          Text(
-                                                            filename,
-                                                            style: const TextStyle(
-                                                              color: Colors.white,
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.w500,
-                                                            ),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
-                                                          if (sizeStr.isNotEmpty)
-                                                            Text(
-                                                              sizeStr,
-                                                              style: TextStyle(
-                                                                color: Colors.white.withOpacity(0.7),
-                                                                fontSize: 10,
-                                                              ),
-                                                            ),
-                                                        ],
+                                                    Container(
+                                                      padding: const EdgeInsets.all(12),
+                                                      decoration: BoxDecoration(
+                                                        color: fileColor.withOpacity(0.15),
+                                                        shape: BoxShape.circle,
                                                       ),
+                                                      child: Icon(_fileIcon(ext), size: 40, color: fileColor),
                                                     ),
-                                                    if (downloadUrl != null && downloadUrl.isNotEmpty)
-                                                      InkWell(
-                                                        onTap: () => ImagePickerHelper.downloadFile(downloadUrl, filename),
-                                                        child: const Padding(
-                                                          padding: EdgeInsets.all(4.0),
-                                                          child: Icon(
-                                                            Icons.download_rounded,
-                                                            color: Colors.white,
-                                                            size: 18,
-                                                          ),
+                                                    const SizedBox(height: 8),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: fileColor,
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        ext,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          letterSpacing: 0.5,
                                                         ),
                                                       ),
+                                                    ),
+                                                    const SizedBox(height: 28),
                                                   ],
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              Positioned(
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.bottomCenter,
+                                                      end: Alignment.topCenter,
+                                                      colors: [
+                                                        Colors.black.withOpacity(0.8),
+                                                        Colors.transparent,
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              filename,
+                                                              style: const TextStyle(
+                                                                color: Colors.white,
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                            if (sizeStr.isNotEmpty)
+                                                              Text(
+                                                                sizeStr,
+                                                                style: TextStyle(
+                                                                  color: Colors.white.withOpacity(0.7),
+                                                                  fontSize: 10,
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                                                        tooltip: 'Download',
+                                                        padding: EdgeInsets.zero,
+                                                        constraints: const BoxConstraints(),
+                                                        onPressed: () async {
+                                                          final url = downloadUrl ?? await _getDownloadUrl(key);
+                                                          if (url != null && url.isNotEmpty) {
+                                                            ImagePickerHelper.downloadFile(url, filename);
+                                                            if (mounted) {
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                const SnackBar(content: Text('Download started')),
+                                                              );
+                                                            }
+                                                          }
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    );
+                                      );
                                   },
                                 );
                               },
