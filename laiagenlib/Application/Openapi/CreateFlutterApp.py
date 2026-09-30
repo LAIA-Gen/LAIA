@@ -1,5 +1,4 @@
 import os
-from ...Domain.Openapi.AuditFlutter import install_audit_screens
 import subprocess
 import yaml
 import asyncio
@@ -122,12 +121,9 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             ):
                 embedded_model_names.add(embedded_cls_name)
 
-    audit_models = [name for name in ('AuditLog', 'LoginEvent') if name in openapi_model_names]
-
     frontend_models = [
         model for model in openapi.models
         if model.model_name.replace('-Input', '').replace('-Output', '') not in embedded_model_names
-        and model.model_name.replace('-Input', '').replace('-Output', '').removesuffix('Update') not in audit_models
     ]
 
     home_txt_path = os.path.join(f"./{app_name}", "lib", "home.txt")
@@ -205,7 +201,6 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
                 f.write(model_file_content)
 
     home_file_content = home_dart(app_name, frontend_models, use_access_rights)
-    home_file_content = install_audit_screens(screens_dir, app_name, audit_models, home_file_content)
     with open(os.path.join(screens_dir, 'home.dart'), 'w') as f:
         f.write(home_file_content)
 
