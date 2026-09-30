@@ -12,7 +12,7 @@ from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
 from ...Domain.LaiaUser.Role import Role
 from ...Domain.Shared.Utils.ImportModel import import_model
-from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file, embedded_model_dart, embedded_class_name_from_annotation, media_gallery_screen_dart
+from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_models_file, embedded_model_dart, embedded_class_name_from_annotation, media_gallery_screen_dart, backend_settings_screen_dart
 
 LAIA_INTERNAL_MODELS = {
     "Shard": Shard,
@@ -207,6 +207,10 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
     gallery_file_content = media_gallery_screen_dart(app_name)
     with open(os.path.join(screens_dir, 'gallery_screen.dart'), 'w') as f:
         f.write(gallery_file_content)
+
+    settings_file_content = backend_settings_screen_dart(app_name)
+    with open(os.path.join(screens_dir, 'backend_settings_screen.dart'), 'w') as f:
+        f.write(settings_file_content)
 
 async def run(cmd):
     proc = await asyncio.create_subprocess_shell(

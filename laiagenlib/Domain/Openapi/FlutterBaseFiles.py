@@ -1181,6 +1181,543 @@ class _GalleryScreenState extends State<GalleryScreen> {
 }
 """
 
+def backend_settings_screen_dart(app_name: str) -> str:
+    return f"""import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/screens/home.dart';
+""" + """import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class BackendSettingsScreen extends StatefulWidget {
+  final String? apiBaseUrl;
+  final bool showAppBar;
+  const BackendSettingsScreen({super.key, this.apiBaseUrl, this.showAppBar = true});
+
+  @override
+  State<BackendSettingsScreen> createState() => _BackendSettingsScreenState();
+}
+
+class _BackendSettingsScreenState extends State<BackendSettingsScreen> {
+  bool _isAuthenticated = false;
+  bool _isLoading = false;
+  String _adminPassword = '';
+  String _searchFilter = '';
+
+  List<Map<String, dynamic>> _envVars = [];
+  final Map<String, TextEditingController> _controllers = {};
+  final Map<String, bool> _obscureMap = {};
+
+  String get _activeBaseUrl => widget.apiBaseUrl ?? baseURL;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSudoVerificationDialog();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (var c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _showSudoVerificationDialog() async {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    String? localError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.admin_panel_settings, color: Colors.blueAccent),
+                  SizedBox(width: 10),
+                  Text('Administrator Verification'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This action allows viewing and modifying critical backend environment variables. Please enter your administrator password to proceed.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscure,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Administrator Password',
+                      border: const OutlineInputBorder(),
+                      errorText: localError,
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setDialogState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final pass = passwordController.text.trim();
+                    if (pass.isEmpty) {
+                      setDialogState(() {
+                        localError = 'Password is required';
+                      });
+                      return;
+                    }
+                    _adminPassword = pass;
+                    Navigator.of(ctx).pop(true);
+                  },
+                  child: const Text('Verify'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      _fetchEnvironmentVariables();
+    } else {
+      if (mounted) {
+        _goToHome();
+      }
+    }
+  }
+
+  void _goToHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(pageBuilder: (_, __, ___) => const Home()),
+      (route) => false,
+    );
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token') ?? prefs.getString('access_token');
+  }
+
+  Future<void> _fetchEnvironmentVariables() async {
+    setState(() => _isLoading = true);
+    final token = await _getToken();
+
+    try {
+      final res = await http.get(
+        Uri.parse('$_activeBaseUrl/admin/settings/env'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'X-Admin-Password': _adminPassword,
+        },
+      );
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final list = List<Map<String, dynamic>>.from(data['variables'] ?? []);
+
+        setState(() {
+          _isAuthenticated = true;
+          _envVars = list;
+          for (var item in list) {
+            final key = item['key'] as String;
+            final val = item['value']?.toString() ?? '';
+            final isSecret = item['is_secret'] == true;
+            _controllers[key] = TextEditingController(text: val);
+            _obscureMap[key] = isSecret;
+          }
+        });
+      } else {
+        String errMsg = 'Verification failed';
+        try {
+          errMsg = json.decode(res.body)['detail'] ?? errMsg;
+        } catch (_) {}
+        _showErrorSnackBar(errMsg);
+        _showSudoVerificationDialog();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Connection error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _addVariable(String key, String defaultValue, bool isSecret) {
+    if (_envVars.any((e) => e['key'] == key)) return;
+    setState(() {
+      _envVars.add({
+        'key': key,
+        'value': defaultValue,
+        'is_secret': isSecret,
+      });
+      _controllers[key] = TextEditingController(text: defaultValue);
+      _obscureMap[key] = isSecret;
+    });
+  }
+
+  void _removeVariable(String key) {
+    setState(() {
+      _envVars.removeWhere((e) => e['key'] == key);
+      _controllers[key]?.dispose();
+      _controllers.remove(key);
+      _obscureMap.remove(key);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed $key'), duration: const Duration(seconds: 1)),
+    );
+  }
+
+  Future<void> _showAddVariableDialog() async {
+    final keyController = TextEditingController();
+    final valController = TextEditingController();
+    bool isSecret = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Environment Variable'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: keyController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Variable Name (e.g. CLOUDINARY_API_KEY)',
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valController,
+                    decoration: const InputDecoration(
+                      labelText: 'Initial Value',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    title: const Text('Is secret / sensitive?', style: TextStyle(fontSize: 14)),
+                    value: isSecret,
+                    onChanged: (v) => setDialogState(() => isSecret = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final k = keyController.text.trim().toUpperCase();
+                    if (k.isNotEmpty) {
+                      _addVariable(k, valController.text.trim(), isSecret);
+                      Navigator.of(ctx).pop();
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveEnvironmentVariables() async {
+    setState(() => _isLoading = true);
+    final token = await _getToken();
+
+    final Map<String, String> payload = {};
+    for (var entry in _controllers.entries) {
+      payload[entry.key] = entry.value.text;
+    }
+
+    try {
+      final res = await http.put(
+        Uri.parse('$_activeBaseUrl/admin/settings/env'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'X-Admin-Password': _adminPassword,
+        },
+        body: json.encode({'variables': payload}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final bool restartRequired = data['requires_restart'] ?? false;
+
+        if (mounted) {
+          if (restartRequired) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Restart Required'),
+                  ],
+                ),
+                content: const Text(
+                  'Environment variables saved successfully. Changes to port or database connection require a backend server restart to take effect.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Settings updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        String errMsg = 'Save failed';
+        try {
+          errMsg = json.decode(res.body)['detail'] ?? errMsg;
+        } catch (_) {}
+        _showErrorSnackBar(errMsg);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Save error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredList = _envVars.where((item) {
+      final key = (item['key'] as String).toLowerCase();
+      return key.contains(_searchFilter.toLowerCase());
+    }).toList();
+
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to Home',
+                onPressed: _goToHome,
+              ),
+              title: const Text('Backend Settings'),
+              actions: [
+                if (_isAuthenticated) ...[
+                  IconButton(
+                    icon: const Icon(Icons.add_box_outlined),
+                    tooltip: 'Add Variable',
+                    onPressed: _showAddVariableDialog,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Refresh',
+                    onPressed: _fetchEnvironmentVariables,
+                  ),
+                ],
+              ],
+            )
+          : null,
+      body: !_isAuthenticated
+          ? Center(
+              child: _isLoading
+                  ? const CircularProgressIndicator()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _showSudoVerificationDialog,
+                          icon: const Icon(Icons.lock_open),
+                          label: const Text('Unlock Settings'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: _goToHome,
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Back to Home'),
+                        ),
+                      ],
+                    ),
+            )
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search environment variable...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.add_circle, color: Colors.blueAccent),
+                            tooltip: 'Add Variable',
+                            onPressed: _showAddVariableDialog,
+                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        onChanged: (val) => setState(() => _searchFilter = val),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        itemCount: filteredList.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredList[index];
+                          final key = item['key'] as String;
+                          final isSecret = item['is_secret'] == true;
+                          final isObscured = _obscureMap[key] ?? false;
+                          final controller = _controllers[key];
+                          final isStorageProvider = key == 'STORAGE_PROVIDER';
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            elevation: isStorageProvider ? 3 : 1.5,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: isStorageProvider
+                                  ? const BorderSide(color: Colors.blueAccent, width: 1.5)
+                                  : BorderSide.none,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          key,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'monospace',
+                                            fontSize: 13,
+                                            color: isStorageProvider
+                                                ? Colors.blue.shade800
+                                                : Colors.blueGrey,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.copy, size: 16, color: Colors.grey),
+                                        tooltip: 'Copy value',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () {
+                                          if (controller != null) {
+                                            Clipboard.setData(ClipboardData(text: controller.text));
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Copied $key to clipboard')),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                        tooltip: 'Remove $key',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () => _removeVariable(key),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: controller,
+                                    obscureText: isObscured,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: isSecret
+                                          ? IconButton(
+                                              icon: Icon(
+                                                isObscured ? Icons.visibility : Icons.visibility_off,
+                                                size: 20,
+                                              ),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _obscureMap[key] = !isObscured;
+                                                });
+                                              },
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save Configuration', style: TextStyle(fontSize: 16)),
+                        onPressed: _saveEnvironmentVariables,
+                      ),
+                    ),
+                  ],
+                ),
+    );
+  }
+}
+"""
+
 def http_client(app_name: str) -> str:
     return f"""export 'package:http/http.dart'
     hide Client, get, post, put, delete, patch, head;
@@ -1382,6 +1919,7 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
 import 'package:{app_name}/generic/nav_bar.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:{app_name}/screens/gallery_screen.dart';
+import 'package:{app_name}/screens/backend_settings_screen.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
@@ -1670,9 +2208,12 @@ class _HomeState extends State<Home> {
                 ),
 
                 AppCardItem(
-                  title: 'CRM',
+                  title: 'Settings',
                   icon: const Icon(Icons.settings_outlined),
-                  onTap: () => debugPrint('CRM'),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(pageBuilder: (_, __, ___) => const BackendSettingsScreen()),
+                  ),
                 ),
                 AppCardItem(
                   title: 'Invoice',
