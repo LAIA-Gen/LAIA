@@ -8,6 +8,7 @@ from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
 from ...Application.Hooks.HookExecutor import execute_hooks
+from ...Application.Audit import write_audit_log
 from bson import ObjectId
 #JMT
 
@@ -56,7 +57,7 @@ def _strip_named_fields(data, excluded_fields: List[str]):
     return data
 
 
-async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None, smtp_config: dict = None):
+async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: dict, model: Type, user_roles: List[str], repository: ModelRepository, user_id: str = '', use_access_rights: bool = True, use_ontology: bool = False, user_shard: str = "", populate: Optional[List] = None, smtp_config: dict = None, audit_context: dict = None):
     _logger.info(f"Searching {model.__name__} with filters: {filters}")
 
     model_name = model.__name__.lower()
@@ -155,5 +156,18 @@ async def search_laia_base_model(skip: int, limit: int, filters: dict, orders: d
 
     if use_ontology:
         response["@context"] = context
+
+    await write_audit_log(
+        repository,
+        "SEARCH",
+        model.__name__,
+        resource_id=None,
+        user_id=user_id,
+        request_context=audit_context,
+        before=None,
+        after={"count": len(serialized_items), "current_page": current_page, "max_pages": max_pages},
+        status_code=200,
+        success=True,
+    )
 
     return response

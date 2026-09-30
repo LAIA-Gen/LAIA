@@ -31,6 +31,8 @@ async def execute_hooks(event: str, model, element: dict, smtp_config: dict = No
     for hook_def in hook_list:
         script = hook_def.get("script")
         if not isinstance(script, str) or not script.strip():
+            if event.lower() == 'auth_login':
+                raise ValueError('auth_login hooks must define a file script')
             _logger.warning(f"Hook without file script in {model.__name__}, skipping")
             continue
 

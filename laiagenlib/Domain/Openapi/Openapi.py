@@ -1,5 +1,6 @@
 from typing import TypeVar, List
 import yaml
+from ...Application.Audit.Config import AuditConfig
 from ..LaiaBaseModel.LaiaBaseModel import LaiaBaseModel
 from .OpenapiModel import OpenAPIModel
 from .OpenapiRoute import OpenAPIRoute
@@ -50,6 +51,7 @@ class OpenAPI:
         self.parse_yaml(openapi_spec)
 
     def parse_yaml(self, openapi_spec):
+        self.audit_config = AuditConfig.from_openapi(openapi_spec)
         if 'paths' in openapi_spec:
             for path, path_data in openapi_spec['paths'].items():
                 methods = path_data.keys()

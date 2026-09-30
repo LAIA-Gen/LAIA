@@ -6,8 +6,10 @@ from ..AccessRights.GetAllowedFields import get_allowed_fields
 from ..Shared.Utils.StripExcludedFields import strip_excluded_fields
 from ...Domain.LaiaBaseModel.ModelRepository import ModelRepository
 from ...Domain.Shared.Utils.logger import _logger
+from ...Application.Audit import write_audit_log
 
-async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", user_id: str = ""):
+
+async def read_laia_base_model(element_id: str, model: Type, user_roles: List[str], repository: ModelRepository, use_access_rights: bool = True, user_shard: str = "", user_id: str = "", audit_context: dict = None):
     _logger.info(f"Getting {model.__name__} with ID: {element_id}")
 
     model_name = model.__name__.lower()
@@ -47,5 +49,19 @@ async def read_laia_base_model(element_id: str, model: Type, user_roles: List[st
         allowed_fields = get_allowed_fields(access_rights_list, 'fields_visible')
         item = {field: item[field] for field in allowed_fields if field in item}
 
+    result = serialize_bson(strip_excluded_fields(model, item))
+    await write_audit_log(
+        repository,
+        "READ",
+        model.__name__,
+        resource_id=element_id,
+        user_id=user_id,
+        request_context=audit_context,
+        before=None,
+        after=result,
+        status_code=200,
+        success=True,
+    )
+
     _logger.info(f"{model.__name__} retrieved successfully")
-    return serialize_bson(strip_excluded_fields(model, item))
+    return result
