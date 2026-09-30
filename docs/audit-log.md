@@ -91,3 +91,22 @@ python -m pytest tests/Integration/test_audit_login.py --confcutdir=tests/Integr
 exercise its actual login script; otherwise the self-contained test hook is used.
 Tests also cover API construction, model generation and OpenAPI configuration
 round-tripping. `datamodel-codegen` must be on PATH for the construction test.
+
+## Backoffice
+
+Administrators can open **AuditLog** and **LoginEvent** from **Home** or **Data**.
+The menu checks access against the API; unauthorized sessions do not see these entries.
+The lists are read-only, show newest records first, and support server-side sorting,
+pagination and exact-value filters. Use the eye button or a cell to inspect the full
+record, including request, before/after changes, result and metadata as selectable JSON.
+Dates in the table use the browser's local timezone; raw values remain visible in details.
+User and resource identifiers remain readable even when the original record no longer exists.
+
+The LAIA generator emits `screens/audit_logs.dart` and `screens/audit_navigation.dart`
+and inserts the menu in generated homes. Audit models are excluded from generic
+editable CRUD screens. The project also includes these files and an entry in its
+custom Home, so running build_runner does not remove the navigation.
+
+Validation: `flutter test test/audit_logs_test.dart`, targeted `flutter analyze`,
+and `flutter build web`. Generator regression tests are in LAIA's
+`tests/Integration/test_audit_flutter.py`.
