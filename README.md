@@ -189,15 +189,15 @@ Tabs can contain either a list of standard model properties (form fields) or a d
 
 
 #### 1. Standard Fields Tab
-Displays the specified list of model fields.
+Displays the specified list of model fields. You can define fields individually (one per row) or group them into columns within a row by using sublists:
 
 ```yaml
 x-frontend-tabs:
   - label: General
     fields:
-      - title
-      - description
-      - image
+      - [name, lastName]      # Row 1: 2 columns (side by side)
+      - [email, phone]         # Row 2: 2 columns (side by side)
+      - address                # Row 3: 1 column (full width)
 ```
 
 #### 2. Virtual Relation Tab (Read-Only)

@@ -133,6 +133,15 @@ class LaiaFastApi():
                 )
             )
 
+        from ...Framework.Settings.EnvSettingsController import EnvSettingsController
+        self.api.include_router(
+            EnvSettingsController(
+                db=self.db,
+                jwt_secret_key=jwtSecretKey,
+                user_collection=user_model_name.lower() if user_model_name else "user",
+            )
+        )
+
     def _setup_custom_openapi(self):
         api = self.api
 

@@ -127,12 +127,1595 @@ import 'package:flutter_map/src/layer/polygon_layer/polygon_layer.dart' as flutt
 import 'package:{app_name}/models/geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'dart:convert';"""+"""
+import 'dart:convert';
+import 'dart:typed_data';
+import 'image_picker_helper.dart';
+import 'imgproxy_helper.dart';"""+"""
 
 part 'generic_widgets.g.dart';
 
 @genericWidgets
 class GenericWidgets {}
+"""
+
+def image_picker_helper_dart() -> str:
+    return """export 'image_picker_stub.dart'
+    if (dart.library.html) 'image_picker_web.dart';
+"""
+
+def image_picker_stub_dart() -> str:
+    return """class ImagePickerHelper {
+  static void pickImage(Function(List<int>, String) onPicked) {}
+  static void pickFile(Function(List<int>, String) onPicked, [String? accept]) {}
+  static void Function() setupDropZone({
+    required Function(bool) onDragStateChanged,
+    required Function(List<int>, String) onFileDropped,
+  }) => () {};
+  static void downloadFile(String url, [String? filename]) {}
+}
+
+typedef FilePickerHelper = ImagePickerHelper;
+"""
+
+def image_picker_web_dart() -> str:
+    return """// ignore_for_file: avoid_web_libraries_in_flutter
+
+import 'dart:html' as html;
+import 'dart:typed_data';
+
+class ImagePickerHelper {
+  static void pickImage(Function(List<int>, String) onPicked) {
+    final input = html.FileUploadInputElement()..accept = 'image/*';
+    input.click();
+    input.onChange.first.then((_) => _readFile(input.files?.firstOrNull, onPicked));
+  }
+
+  static void pickFile(Function(List<int>, String) onPicked, [String? accept]) {
+    final input = html.FileUploadInputElement();
+    if (accept != null && accept.isNotEmpty) {
+      input.accept = accept;
+    }
+    input.click();
+    input.onChange.first.then((_) => _readFile(input.files?.firstOrNull, onPicked));
+  }
+
+  static void Function() setupDropZone({
+    required Function(bool) onDragStateChanged,
+    required Function(List<int>, String) onFileDropped,
+  }) {
+    final s1 = html.window.onDragOver.listen((e) { e.preventDefault(); onDragStateChanged(true); });
+    final s2 = html.window.onDragLeave.listen((_) => onDragStateChanged(false));
+    final s3 = html.window.onDrop.listen((e) {
+      e.preventDefault();
+      onDragStateChanged(false);
+      _readFile(e.dataTransfer.files?.firstOrNull, onFileDropped);
+    });
+    return () { s1.cancel(); s2.cancel(); s3.cancel(); };
+  }
+
+  static void downloadFile(String url, [String? filename]) {
+    final anchor = html.AnchorElement(href: url)
+      ..target = '_blank';
+    if (filename != null && filename.isNotEmpty) {
+      anchor.download = filename;
+    }
+    anchor.click();
+  }
+
+  static void _readFile(html.File? file, Function(List<int>, String) cb) {
+    if (file == null) return;
+    final reader = html.FileReader()..readAsArrayBuffer(file);
+    reader.onLoadEnd.first.then((_) {
+      final res = reader.result;
+      if (res is Uint8List) cb(res.toList(), file.name);
+      else if (res is ByteBuffer) cb(Uint8List.view(res).toList(), file.name);
+    });
+  }
+}
+
+typedef FilePickerHelper = ImagePickerHelper;
+"""
+
+def imgproxy_helper_dart() -> str:
+    return """class ImgproxyHelper {
+  /// Genera la URL limpia a través de la API del backend (compatible con MinIO, Imgproxy, Cloudinary y S3)
+  static String buildUrl({
+    required String imagePath,
+    String? apiBaseUrl,
+    int width = 0,
+    int height = 0,
+    String resize = 'fill',
+    String? gravity,
+    String format = 'webp',
+  }) {
+    if (imagePath.isEmpty) return '';
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+
+    final clean = imagePath.replaceAll(RegExp(r'^/+'), '');
+    final base = (apiBaseUrl != null && apiBaseUrl.isNotEmpty)
+        ? apiBaseUrl.replaceAll(RegExp(r'/+$'), '')
+        : '';
+
+    final query = <String>['raw=true'];
+    if (width > 0) query.add('width=\$width');
+    if (height > 0) query.add('height=\$height');
+    if (resize.isNotEmpty && resize != 'fit') query.add('resizing_type=\$resize');
+    if (gravity != null && gravity.isNotEmpty) query.add('gravity=\$gravity');
+    if (format.isNotEmpty && format != 'original') query.add('format=\$format');
+
+    final prefix = base.isNotEmpty ? '\$base/download' : '/download';
+    final qs = query.join('&');
+    return '\$prefix/\$clean?\$qs';
+  }
+}
+
+typedef StorageHelper = ImgproxyHelper;
+"""
+
+def media_gallery_screen_dart(app_name: str) -> str:
+    return f"""import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/generic/image_picker_helper.dart';
+import 'package:{app_name}/generic/imgproxy_helper.dart';
+""" + """import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class GalleryScreen extends StatefulWidget {
+  final bool showAppBar;
+  const GalleryScreen({super.key, this.showAppBar = false});
+
+  @override
+  State<GalleryScreen> createState() => _GalleryScreenState();
+}
+
+class _GalleryScreenState extends State<GalleryScreen> {
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<Map<String, dynamic>> _photos = [];
+  final Map<String, String> _presignedCache = {};
+
+  String _selectedBucket = 'originals';
+  final List<String> _allowedBuckets = const ['originals', 'public', 'processed'];
+  final TextEditingController _prefixController = TextEditingController();
+  String _activeFilter = 'all'; // 'all', 'images', 'files'
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPhotos();
+  }
+
+  @override
+  void dispose() {
+    _prefixController.dispose();
+    super.dispose();
+  }
+
+  String _itemKey(Map<String, dynamic> it) =>
+      (it['key'] ?? it['image_id'] ?? it['path'] ?? it['filename'] ?? '').toString();
+
+  bool _isImage(String name) {
+    final ext = name.toLowerCase().split('.').last;
+    return const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif'}.contains(ext);
+  }
+
+  String _getFileExtension(String name) =>
+      name.contains('.') ? name.split('.').last.toUpperCase() : 'FILE';
+
+  IconData _fileIcon(String ext) {
+    final e = ext.toLowerCase();
+    if (e == 'pdf') return Icons.picture_as_pdf_rounded;
+    if (['doc', 'docx'].contains(e)) return Icons.description_rounded;
+    if (['xls', 'xlsx', 'csv'].contains(e)) return Icons.table_chart_rounded;
+    if (['zip', 'rar', '7z'].contains(e)) return Icons.folder_zip_rounded;
+    return Icons.insert_drive_file_rounded;
+  }
+
+  Color _fileColor(String ext) {
+    final e = ext.toLowerCase();
+    if (e == 'pdf') return Colors.red.shade700;
+    if (['doc', 'docx'].contains(e)) return Colors.blue.shade700;
+    if (['xls', 'xlsx', 'csv'].contains(e)) return Colors.green.shade700;
+    if (['zip', 'rar', '7z'].contains(e)) return Colors.amber.shade800;
+    return Colors.blueGrey.shade700;
+  }
+
+  List<Map<String, dynamic>> get _filteredPhotos {
+    if (_activeFilter == 'images') return _photos.where((it) => _isImage(_itemKey(it))).toList();
+    if (_activeFilter == 'files') return _photos.where((it) => !_isImage(_itemKey(it))).toList();
+    return _photos;
+  }
+
+  int get _imageCount => _photos.where((it) => _isImage(_itemKey(it))).length;
+  int get _fileCount => _photos.where((it) => !_isImage(_itemKey(it))).length;
+
+  String _formatFileSize(dynamic size) {
+    if (size is num && size > 0) {
+      if (size < 1024) return '$size B';
+      if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)} KB';
+      return '${(size / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '';
+  }
+
+  Future<void> _fetchPhotos() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+      };
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final queryParams = <String, String>{
+        'bucket': _selectedBucket,
+        'recursive': 'true',
+      };
+      if (_prefixController.text.trim().isNotEmpty) {
+        queryParams['prefix'] = _prefixController.text.trim();
+      }
+
+      final uri = Uri.parse('$baseURL/admin/files/explorer').replace(queryParameters: queryParams);
+      http.Response? response;
+
+      try {
+        final res = await http.get(uri, headers: headers);
+        if (res.statusCode == 200 || res.statusCode == 403) {
+          response = res;
+        }
+      } catch (_) {}
+
+      // Fallback si no está disponible la ruta de admin
+      if (response == null || (response.statusCode != 200 && response.statusCode != 403)) {
+        final fallbackEndpoints = [
+          '$baseURL/storage/$_selectedBucket',
+          '$baseURL/photos',
+          '$baseURL/storage',
+        ];
+        for (final endpoint in fallbackEndpoints) {
+          try {
+            final res = await http.get(Uri.parse(endpoint), headers: headers);
+            if (res.statusCode == 200) {
+              response = res;
+              break;
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (response != null && response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+        final List<Map<String, dynamic>> items = [];
+
+        if (decoded is Map && decoded['files'] is List) {
+          for (final item in decoded['files']) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            }
+          }
+        } else if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            } else if (item is String) {
+              items.add({'key': item});
+            }
+          }
+        } else if (decoded is Map && decoded['items'] is List) {
+          for (final item in decoded['items']) {
+            if (item is Map) {
+              items.add(Map<String, dynamic>.from(item));
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _photos = items;
+            _isLoading = false;
+          });
+        }
+      } else if (response != null && response.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Restricted access: Backoffice admin permissions required';
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Could not load files from bucket "$_selectedBucket"';
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Error connecting to server: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<String?> _getDownloadUrl(String key, [Map<String, dynamic>? options]) async {
+    if (key.isEmpty) return null;
+
+    final isDefault = (options == null || options.isEmpty);
+    if (isDefault && _presignedCache.containsKey(key)) {
+      return _presignedCache[key];
+    }
+
+    if (key.startsWith('http://') || key.startsWith('https://')) {
+      if (isDefault) _presignedCache[key] = key;
+      return key;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+      final headers = <String, String>{};
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
+      final cleanKey = key.replaceAll(RegExp(r'^/+'), '');
+      String query = '';
+      if (options != null && options.isNotEmpty) {
+        final params = options.entries
+            .where((e) => e.value != null && e.value.toString().isNotEmpty)
+            .map((e) => '${Uri.encodeComponent(e.key.toString())}=${Uri.encodeComponent(e.value.toString())}')
+            .join('&');
+        if (params.isNotEmpty) query = '?$params';
+      }
+      final res = await http.get(Uri.parse('$baseURL/download/$cleanKey$query'), headers: headers);
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final url = data['url']?.toString();
+        if (url != null) {
+          if (isDefault) {
+            _presignedCache[key] = url;
+          }
+          return url;
+        }
+      }
+    } catch (_) {}
+    if (options != null && options.isNotEmpty) {
+      final w = options['width'] as int? ?? 0;
+      final h = options['height'] as int? ?? 0;
+      return ImgproxyHelper.buildUrl(
+        imagePath: key,
+        apiBaseUrl: baseURL,
+        width: w,
+        height: h,
+        resize: options['resizing_type']?.toString() ?? 'fill',
+        gravity: options['gravity']?.toString(),
+        format: options['format']?.toString() ?? 'webp',
+      );
+    }
+    return null;
+  }
+
+  Future<String?> _resolveImageUrl(Map<String, dynamic> photo) async {
+    final preview = (photo['preview_url'] ?? photo['url'] ?? photo['download_url'] ?? '').toString();
+    if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://'))) {
+      try {
+        final parsed = Uri.parse(preview);
+        final baseUri = Uri.parse(baseURL);
+        // Si el backend devolvió el host interno de Docker 'minio', sustituir por el host de la API
+        if (parsed.host == 'minio' || (parsed.host == 'localhost' && baseUri.host != 'localhost' && baseUri.host.isNotEmpty)) {
+          return parsed.replace(host: baseUri.host).toString();
+        }
+      } catch (_) {}
+      return preview;
+    }
+
+    final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? photo['id'] ?? '').toString();
+    if (key.isEmpty) return null;
+    return await _getDownloadUrl(key);
+  }
+
+  void _showDownloadOptionsDialog(BuildContext context, String key, String defaultUrl, String defaultFilename) {
+    String selectedSize = 'original';
+    String selectedShape = 'fit';
+    String selectedFormat = 'original';
+    bool downloading = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.download_rounded, size: 24),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Download Options",
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 20),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Dimensions / Size:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Original", style: TextStyle(fontSize: 12)), selected: selectedSize == 'original', onSelected: (_) => setDialogState(() => selectedSize = 'original')),
+                        ChoiceChip(label: const Text("Thumbnail (150x150)", style: TextStyle(fontSize: 12)), selected: selectedSize == '150x150', onSelected: (_) => setDialogState(() => selectedSize = '150x150')),
+                        ChoiceChip(label: const Text("Avatar (256x256)", style: TextStyle(fontSize: 12)), selected: selectedSize == 'avatar_256', onSelected: (_) => setDialogState(() {
+                          selectedSize = 'avatar_256';
+                          selectedShape = 'square';
+                        })),
+                        ChoiceChip(label: const Text("Medium (800x600)", style: TextStyle(fontSize: 12)), selected: selectedSize == '800x600', onSelected: (_) => setDialogState(() => selectedSize = '800x600')),
+                        ChoiceChip(label: const Text("Large (1280x720)", style: TextStyle(fontSize: 12)), selected: selectedSize == '1280x720', onSelected: (_) => setDialogState(() => selectedSize = '1280x720')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Crop / Aspect Ratio:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Keep aspect ratio (Fit)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'fit', onSelected: (_) => setDialogState(() => selectedShape = 'fit')),
+                        ChoiceChip(label: const Text("Square 1:1 (Smart Fill)", style: TextStyle(fontSize: 12)), selected: selectedShape == 'square', onSelected: (_) => setDialogState(() => selectedShape = 'square')),
+                        ChoiceChip(label: const Text("Landscape 16:9", style: TextStyle(fontSize: 12)), selected: selectedShape == '16:9', onSelected: (_) => setDialogState(() => selectedShape = '16:9')),
+                        ChoiceChip(label: const Text("Photo 4:3", style: TextStyle(fontSize: 12)), selected: selectedShape == '4:3', onSelected: (_) => setDialogState(() => selectedShape = '4:3')),
+                        ChoiceChip(label: const Text("Portrait 9:16", style: TextStyle(fontSize: 12)), selected: selectedShape == '9:16', onSelected: (_) => setDialogState(() => selectedShape = '9:16')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text("Output format:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(label: const Text("Original", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'original', onSelected: (_) => setDialogState(() => selectedFormat = 'original')),
+                        ChoiceChip(label: const Text("WebP", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'webp', onSelected: (_) => setDialogState(() => selectedFormat = 'webp')),
+                        ChoiceChip(label: const Text("PNG", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'png', onSelected: (_) => setDialogState(() => selectedFormat = 'png')),
+                        ChoiceChip(label: const Text("JPEG / JPG", style: TextStyle(fontSize: 12)), selected: selectedFormat == 'jpeg', onSelected: (_) => setDialogState(() => selectedFormat = 'jpeg')),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: downloading ? null : () => Navigator.of(ctx).pop(),
+                          child: const Text("Cancel"),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          icon: downloading
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.download_rounded, size: 18),
+                          label: Text(downloading ? "Processing..." : "Download"),
+                          onPressed: downloading ? null : () async {
+                            setDialogState(() => downloading = true);
+                            final options = <String, dynamic>{};
+                            int? w;
+                            int? h;
+                            if (selectedSize == '150x150') { w = 150; h = 150; }
+                            else if (selectedSize == 'avatar_256') {
+                              w = 256; h = 256;
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                            }
+                            else if (selectedSize == '800x600') { w = 800; h = 600; }
+                            else if (selectedSize == '1280x720') { w = 1280; h = 720; }
+
+                            if (selectedShape == 'square') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                              if (w != null && h == null) h = w;
+                              else if (h != null && w == null) w = h;
+                              else if (w == null && h == null) { w = 500; h = 500; }
+                            } else if (selectedShape == '16:9') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'ce';
+                              if (w == null && h == null) { w = 1280; h = 720; }
+                            } else if (selectedShape == '4:3') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'ce';
+                              if (w == null && h == null) { w = 800; h = 600; }
+                            } else if (selectedShape == '9:16') {
+                              options['resizing_type'] = 'fill';
+                              options['gravity'] = 'sm';
+                              if (w == null && h == null) { w = 720; h = 1280; }
+                            } else if (w != null || h != null) {
+                              options['resizing_type'] = 'fit';
+                            }
+                            if (w != null && w > 0) options['width'] = w;
+                            if (h != null && h > 0) options['height'] = h;
+                            if (selectedFormat != 'original') options['format'] = selectedFormat;
+
+                            String? targetUrl;
+                            if (options.isNotEmpty) {
+                              targetUrl = await _getDownloadUrl(key, options);
+                            }
+                            targetUrl ??= defaultUrl;
+
+                            final dotIdx = defaultFilename.lastIndexOf('.');
+                            String nameWithoutExt = dotIdx > 0 ? defaultFilename.substring(0, dotIdx) : defaultFilename;
+                            String ext = dotIdx > 0 ? defaultFilename.substring(dotIdx + 1) : 'jpg';
+                            if (selectedFormat != 'original') ext = selectedFormat;
+                            String dimSuffix = (w != null && h != null) ? '_${w}x${h}' : (w != null ? '_w$w' : (h != null ? '_h$h' : ''));
+                            String shapeSuffix = selectedShape != 'fit' ? '_$selectedShape' : '';
+                            final finalFilename = '$nameWithoutExt$dimSuffix$shapeSuffix.$ext';
+
+                            ImagePickerHelper.downloadFile(targetUrl, finalFilename);
+                            if (mounted) {
+                              Navigator.of(ctx).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Download started")));
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showPhotoDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? photo]) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 850, maxHeight: 750),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 16,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.image_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        filename,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: downloadUrl != null && downloadUrl.isNotEmpty
+                    ? InteractiveViewer(
+                        clipBehavior: Clip.antiAlias,
+                        maxScale: 4.0,
+                        child: Center(
+                          child: Image.network(
+                            downloadUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (_, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(child: CircularProgressIndicator());
+                            },
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                      )
+                    : const Center(
+                        child: Text('Could not get image preview URL'),
+                      ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    const Spacer(),
+                    if (downloadUrl != null && downloadUrl.isNotEmpty)
+                      FilledButton.icon(
+                        icon: const Icon(Icons.download_rounded, size: 18),
+                        label: const Text('Download'),
+                        onPressed: () => _showDownloadOptionsDialog(context, key, downloadUrl, filename),
+                      ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      child: const Text('Close'),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFileDialog(BuildContext context, String key, String? downloadUrl, String filename, [Map<String, dynamic>? file]) {
+    final ext = _getFileExtension(filename);
+    final color = _fileColor(ext);
+    final size = _formatFileSize(file?['size']);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(_fileIcon(ext), color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text(filename, style: const TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+                child: Icon(_fileIcon(ext), size: 48, color: color),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (size.isNotEmpty) Text('Size: $size', style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Bucket: $_selectedBucket', style: const TextStyle(fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Key: $key', style: const TextStyle(fontSize: 12, color: Colors.grey), overflow: TextOverflow.ellipsis),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+          FilledButton.icon(
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: const Text('Download'),
+            style: FilledButton.styleFrom(backgroundColor: color),
+            onPressed: () async {
+              final url = downloadUrl ?? await _getDownloadUrl(key);
+              if (url != null && url.isNotEmpty) {
+                ImagePickerHelper.downloadFile(url, filename);
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Download started')));
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(
+              title: const Text('File & Media Explorer'),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Refresh',
+                  onPressed: _fetchPhotos,
+                ),
+              ],
+            )
+          : null,
+      body: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.perm_media_rounded, color: Theme.of(context).primaryColor, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'File & Media Explorer',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          _isLoading ? 'Loading...' : '${_filteredPhotos.length} items in "$_selectedBucket"',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedBucket,
+                          icon: const Icon(Icons.arrow_drop_down, size: 20),
+                          items: _allowedBuckets.map((b) => DropdownMenuItem(
+                            value: b,
+                            child: Text(b, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                          )).toList(),
+                          onChanged: (newBucket) {
+                            if (newBucket != null && newBucket != _selectedBucket) {
+                              setState(() => _selectedBucket = newBucket);
+                              _fetchPhotos();
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 180,
+                      height: 40,
+                      child: TextField(
+                        controller: _prefixController,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Prefix (e.g. users/)',
+                          hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          isDense: true,
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.search, size: 18),
+                            onPressed: _fetchPhotos,
+                          ),
+                        ),
+                        onSubmitted: (_) => _fetchPhotos(),
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      icon: const Icon(Icons.refresh_rounded),
+                      tooltip: 'Refresh',
+                      onPressed: _fetchPhotos,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  avatar: const Icon(Icons.apps_rounded, size: 16),
+                  label: Text('All (${_photos.length})', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'all',
+                  onSelected: (_) => setState(() => _activeFilter = 'all'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.image_outlined, size: 16),
+                  label: Text('Images ($_imageCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'images',
+                  onSelected: (_) => setState(() => _activeFilter = 'images'),
+                ),
+                ChoiceChip(
+                  avatar: const Icon(Icons.insert_drive_file_outlined, size: 16),
+                  label: Text('Files ($_fileCount)', style: const TextStyle(fontSize: 12)),
+                  selected: _activeFilter == 'files',
+                  onSelected: (_) => setState(() => _activeFilter = 'files'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text('Querying MinIO...', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    )
+                  : _errorMessage != null
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.error_outline_rounded, size: 48, color: Colors.redAccent),
+                              const SizedBox(height: 12),
+                              Text(_errorMessage!, style: const TextStyle(color: Colors.grey)),
+                              const SizedBox(height: 16),
+                              FilledButton.icon(
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry'),
+                                onPressed: _fetchPhotos,
+                              ),
+                            ],
+                          ),
+                        )
+                      : _filteredPhotos.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.folder_open_rounded, size: 64, color: Colors.grey[400]),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    'No files found in "$_selectedBucket"',
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : GridView.builder(
+                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 240,
+                                crossAxisSpacing: 16,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 1.0,
+                              ),
+                              itemCount: _filteredPhotos.length,
+                              itemBuilder: (context, index) {
+                                final photo = _filteredPhotos[index];
+                                final key = (photo['key'] ?? photo['image_id'] ?? photo['path'] ?? '').toString();
+                                final filename = (photo['filename'] ?? key.split('/').last).toString();
+                                final sizeStr = _formatFileSize(photo['size']);
+                                final isImg = _isImage(filename.isNotEmpty ? filename : key);
+
+                                return FutureBuilder<String?>(
+                                  future: _resolveImageUrl(photo),
+                                  builder: (context, snapshot) {
+                                    final downloadUrl = snapshot.data;
+                                    final ext = _getFileExtension(filename.isNotEmpty ? filename : key);
+                                    final fileColor = _fileColor(ext);
+
+                                      return Card(
+                                        elevation: 2,
+                                        clipBehavior: Clip.antiAlias,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => isImg
+                                              ? _showPhotoDialog(context, key, downloadUrl, filename, photo)
+                                              : _showFileDialog(context, key, downloadUrl, filename, photo),
+                                          child: Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              if (isImg)
+                                                (downloadUrl != null && downloadUrl.isNotEmpty)
+                                                    ? Image.network(
+                                                        downloadUrl,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded, size: 36, color: Colors.grey)),
+                                                      )
+                                                    : const Center(child: Icon(Icons.image_not_supported_outlined, size: 36, color: Colors.grey))
+                                              else
+                                                Container(
+                                                color: fileColor.withOpacity(0.08),
+                                                child: Column(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.all(12),
+                                                      decoration: BoxDecoration(
+                                                        color: fileColor.withOpacity(0.15),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(_fileIcon(ext), size: 40, color: fileColor),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: fileColor,
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        ext,
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          letterSpacing: 0.5,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 28),
+                                                  ],
+                                                ),
+                                              ),
+                                              Positioned(
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.bottomCenter,
+                                                      end: Alignment.topCenter,
+                                                      colors: [
+                                                        Colors.black.withOpacity(0.8),
+                                                        Colors.transparent,
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          mainAxisSize: MainAxisSize.min,
+                                                          children: [
+                                                            Text(
+                                                              filename,
+                                                              style: const TextStyle(
+                                                                color: Colors.white,
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
+                                                            if (sizeStr.isNotEmpty)
+                                                              Text(
+                                                                sizeStr,
+                                                                style: TextStyle(
+                                                                  color: Colors.white.withOpacity(0.7),
+                                                                  fontSize: 10,
+                                                                ),
+                                                              ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+                                                        tooltip: 'Download',
+                                                        padding: EdgeInsets.zero,
+                                                        constraints: const BoxConstraints(),
+                                                        onPressed: () async {
+                                                          final url = downloadUrl ?? await _getDownloadUrl(key);
+                                                          if (url != null && url.isNotEmpty) {
+                                                            ImagePickerHelper.downloadFile(url, filename);
+                                                            if (mounted) {
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                const SnackBar(content: Text('Download started')),
+                                                              );
+                                                            }
+                                                          }
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                  },
+                                );
+                              },
+                            ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+"""
+
+def backend_settings_screen_dart(app_name: str) -> str:
+    return f"""import 'package:{app_name}/config/api.dart';
+import 'package:{app_name}/screens/home.dart';
+""" + """import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+class BackendSettingsScreen extends StatefulWidget {
+  final String? apiBaseUrl;
+  final bool showAppBar;
+  const BackendSettingsScreen({super.key, this.apiBaseUrl, this.showAppBar = true});
+
+  @override
+  State<BackendSettingsScreen> createState() => _BackendSettingsScreenState();
+}
+
+class _BackendSettingsScreenState extends State<BackendSettingsScreen> {
+  bool _isAuthenticated = false;
+  bool _isLoading = false;
+  String _adminPassword = '';
+  String _searchFilter = '';
+
+  List<Map<String, dynamic>> _envVars = [];
+  final Map<String, TextEditingController> _controllers = {};
+  final Map<String, bool> _obscureMap = {};
+
+  String get _activeBaseUrl => widget.apiBaseUrl ?? baseURL;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSudoVerificationDialog();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (var c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _showSudoVerificationDialog() async {
+    final passwordController = TextEditingController();
+    bool obscure = true;
+    String? localError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.admin_panel_settings, color: Colors.blueAccent),
+                  SizedBox(width: 10),
+                  Text('Administrator Verification'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This action allows viewing and modifying critical backend environment variables. Please enter your administrator password to proceed.',
+                    style: TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: obscure,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Administrator Password',
+                      border: const OutlineInputBorder(),
+                      errorText: localError,
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setDialogState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final pass = passwordController.text.trim();
+                    if (pass.isEmpty) {
+                      setDialogState(() {
+                        localError = 'Password is required';
+                      });
+                      return;
+                    }
+                    _adminPassword = pass;
+                    Navigator.of(ctx).pop(true);
+                  },
+                  child: const Text('Verify'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == true) {
+      _fetchEnvironmentVariables();
+    } else {
+      if (mounted) {
+        _goToHome();
+      }
+    }
+  }
+
+  void _goToHome() {
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder(pageBuilder: (_, __, ___) => const Home()),
+      (route) => false,
+    );
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token') ?? prefs.getString('access_token');
+  }
+
+  Future<void> _fetchEnvironmentVariables() async {
+    setState(() => _isLoading = true);
+    final token = await _getToken();
+
+    try {
+      final res = await http.get(
+        Uri.parse('$_activeBaseUrl/admin/settings/env'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'X-Admin-Password': _adminPassword,
+        },
+      );
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final list = List<Map<String, dynamic>>.from(data['variables'] ?? []);
+
+        setState(() {
+          _isAuthenticated = true;
+          _envVars = list;
+          for (var item in list) {
+            final key = item['key'] as String;
+            final val = item['value']?.toString() ?? '';
+            final isSecret = item['is_secret'] == true;
+            _controllers[key] = TextEditingController(text: val);
+            _obscureMap[key] = isSecret;
+          }
+        });
+      } else {
+        String errMsg = 'Verification failed';
+        try {
+          errMsg = json.decode(res.body)['detail'] ?? errMsg;
+        } catch (_) {}
+        _showErrorSnackBar(errMsg);
+        _showSudoVerificationDialog();
+      }
+    } catch (e) {
+      _showErrorSnackBar('Connection error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _addVariable(String key, String defaultValue, bool isSecret) {
+    if (_envVars.any((e) => e['key'] == key)) return;
+    setState(() {
+      _envVars.add({
+        'key': key,
+        'value': defaultValue,
+        'is_secret': isSecret,
+      });
+      _controllers[key] = TextEditingController(text: defaultValue);
+      _obscureMap[key] = isSecret;
+    });
+  }
+
+  void _removeVariable(String key) {
+    setState(() {
+      _envVars.removeWhere((e) => e['key'] == key);
+      _controllers[key]?.dispose();
+      _controllers.remove(key);
+      _obscureMap.remove(key);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Removed $key'), duration: const Duration(seconds: 1)),
+    );
+  }
+
+  Future<void> _showAddVariableDialog() async {
+    final keyController = TextEditingController();
+    final valController = TextEditingController();
+    bool isSecret = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Environment Variable'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: keyController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Variable Name (e.g. CLOUDINARY_API_KEY)',
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valController,
+                    decoration: const InputDecoration(
+                      labelText: 'Initial Value',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    title: const Text('Is secret / sensitive?', style: TextStyle(fontSize: 14)),
+                    value: isSecret,
+                    onChanged: (v) => setDialogState(() => isSecret = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final k = keyController.text.trim().toUpperCase();
+                    if (k.isNotEmpty) {
+                      _addVariable(k, valController.text.trim(), isSecret);
+                      Navigator.of(ctx).pop();
+                    }
+                  },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveEnvironmentVariables() async {
+    setState(() => _isLoading = true);
+    final token = await _getToken();
+
+    final Map<String, String> payload = {};
+    for (var entry in _controllers.entries) {
+      payload[entry.key] = entry.value.text;
+    }
+
+    try {
+      final res = await http.put(
+        Uri.parse('$_activeBaseUrl/admin/settings/env'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+          'X-Admin-Password': _adminPassword,
+        },
+        body: json.encode({'variables': payload}),
+      );
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final bool restartRequired = data['requires_restart'] ?? false;
+
+        if (mounted) {
+          if (restartRequired) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Restart Required'),
+                  ],
+                ),
+                content: const Text(
+                  'Environment variables saved successfully. Changes to port or database connection require a backend server restart to take effect.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Settings updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      } else {
+        String errMsg = 'Save failed';
+        try {
+          errMsg = json.decode(res.body)['detail'] ?? errMsg;
+        } catch (_) {}
+        _showErrorSnackBar(errMsg);
+      }
+    } catch (e) {
+      _showErrorSnackBar('Save error: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredList = _envVars.where((item) {
+      final key = (item['key'] as String).toLowerCase();
+      return key.contains(_searchFilter.toLowerCase());
+    }).toList();
+
+    return Scaffold(
+      appBar: widget.showAppBar
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Back to Home',
+                onPressed: _goToHome,
+              ),
+              title: const Text('Backend Settings'),
+              actions: [
+                if (_isAuthenticated) ...[
+                  IconButton(
+                    icon: const Icon(Icons.add_box_outlined),
+                    tooltip: 'Add Variable',
+                    onPressed: _showAddVariableDialog,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Refresh',
+                    onPressed: _fetchEnvironmentVariables,
+                  ),
+                ],
+              ],
+            )
+          : null,
+      body: !_isAuthenticated
+          ? Center(
+              child: _isLoading
+                  ? const CircularProgressIndicator()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _showSudoVerificationDialog,
+                          icon: const Icon(Icons.lock_open),
+                          label: const Text('Unlock Settings'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: _goToHome,
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Back to Home'),
+                        ),
+                      ],
+                    ),
+            )
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search environment variable...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.add_circle, color: Colors.blueAccent),
+                            tooltip: 'Add Variable',
+                            onPressed: _showAddVariableDialog,
+                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        onChanged: (val) => setState(() => _searchFilter = val),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        itemCount: filteredList.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredList[index];
+                          final key = item['key'] as String;
+                          final isSecret = item['is_secret'] == true;
+                          final isObscured = _obscureMap[key] ?? false;
+                          final controller = _controllers[key];
+                          final isStorageProvider = key == 'STORAGE_PROVIDER';
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            elevation: isStorageProvider ? 3 : 1.5,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: isStorageProvider
+                                  ? const BorderSide(color: Colors.blueAccent, width: 1.5)
+                                  : BorderSide.none,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          key,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontFamily: 'monospace',
+                                            fontSize: 13,
+                                            color: isStorageProvider
+                                                ? Colors.blue.shade800
+                                                : Colors.blueGrey,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.copy, size: 16, color: Colors.grey),
+                                        tooltip: 'Copy value',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () {
+                                          if (controller != null) {
+                                            Clipboard.setData(ClipboardData(text: controller.text));
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text('Copied $key to clipboard')),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                        tooltip: 'Remove $key',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () => _removeVariable(key),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: controller,
+                                    obscureText: isObscured,
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: const OutlineInputBorder(),
+                                      suffixIcon: isSecret
+                                          ? IconButton(
+                                              icon: Icon(
+                                                isObscured ? Icons.visibility : Icons.visibility_off,
+                                                size: 20,
+                                              ),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _obscureMap[key] = !isObscured;
+                                                });
+                                              },
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save Configuration', style: TextStyle(fontSize: 16)),
+                        onPressed: _saveEnvironmentVariables,
+                      ),
+                    ),
+                  ],
+                ),
+    );
+  }
+}
 """
 
 def http_client(app_name: str) -> str:
@@ -335,6 +1918,8 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     return f"""import 'package:{app_name}/config/styles.dart';
 import 'package:{app_name}/generic/nav_bar.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
+import 'package:{app_name}/screens/gallery_screen.dart';
+import 'package:{app_name}/screens/backend_settings_screen.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
@@ -356,7 +1941,7 @@ class _HomeState extends State<Home> {
   int _index = 2;
 
   final items = const [
-    NavItem(icon: Icons.grid_view_rounded, label: 'Apps'),
+    NavItem(icon: Icons.photo_library_rounded, label: 'Fotos'),
     NavItem(icon: Icons.fact_check_outlined, label: 'Tasks'),
     NavItem(icon: Icons.home_outlined, label: 'Home'),
     NavItem(icon: Icons.storage_outlined, label: 'Data'),
@@ -536,7 +2121,7 @@ class _HomeState extends State<Home> {
         children: [
           if (_index == 0)
           Expanded(
-            child: Text('Apps View', style: Theme.of(context).textTheme.headlineMedium),
+            child: const GalleryScreen(),
           ),
           if (_index == 1)
           Expanded(
@@ -552,6 +2137,16 @@ class _HomeState extends State<Home> {
                   onTap: () => Navigator.push(
                     context,
                     PageRouteBuilder(pageBuilder: (_, __, ___) => UserListView()),
+                  ),
+                ),
+                AppCardItem(
+                  title: 'Fotos',
+                  icon: const Icon(Icons.photo_library_outlined),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(
+                      pageBuilder: (_, __, ___) => const GalleryScreen(showAppBar: true),
+                    ),
                   ),
                 ),
                 AppCardItem(
@@ -613,9 +2208,12 @@ class _HomeState extends State<Home> {
                 ),
 
                 AppCardItem(
-                  title: 'CRM',
+                  title: 'Settings',
                   icon: const Icon(Icons.settings_outlined),
-                  onTap: () => debugPrint('CRM'),
+                  onTap: () => Navigator.push(
+                    context,
+                    PageRouteBuilder(pageBuilder: (_, __, ___) => const BackendSettingsScreen()),
+                  ),
                 ),
                 AppCardItem(
                   title: 'Invoice',
@@ -743,13 +2341,24 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
             tab_elements = []
             for tab in raw_tabs:
                 label = tab.get('label', '')
-                fields_list = tab.get('fields', [])
-                fields_str = ", ".join([f'"{f}"' for f in fields_list])
+                raw_fields_list = tab.get('fields', [])
+                fields_dart_parts = []
+                flattened_fields = []
+                for item in raw_fields_list:
+                    if isinstance(item, list):
+                        row_cols = [str(x) for x in item]
+                        flattened_fields.extend(row_cols)
+                        cols_str = ", ".join([f'"{c}"' for c in row_cols])
+                        fields_dart_parts.append(f'[{cols_str}]')
+                    elif isinstance(item, str):
+                        flattened_fields.append(item)
+                        fields_dart_parts.append(f'"{item}"')
+                fields_str = ", ".join(fields_dart_parts)
                 relation = tab.get('relation', '')
                 inverse_relation_field = tab.get('inverseRelationField', '')
 
-                if fields_list:
-                    for f in fields_list:
+                if flattened_fields:
+                    for f in flattened_fields:
                         prop_info = openapiModel.properties.get(f, {})
                         nicename = (
                             prop_info.get('x_frontend_nicename')
@@ -772,7 +2381,7 @@ def model_dart(openapiModel: OpenAPIModel=None, app_name: str="", model: Type[Ba
                 filters = tab.get('filters') or tab.get('extraFilters')
                 
                 parts = [f'label: "{label}"']
-                if fields_list:
+                if fields_dart_parts:
                     parts.append(f'fields: [{fields_str}]')
                 if relation:
                     parts.append(f'relation: "{relation}"')
@@ -962,6 +2571,7 @@ import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:{app_name}/config/http_client.dart' as http;
 import 'package:{app_name}/config/styles.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:collection/collection.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart';
 {extra_imports}
