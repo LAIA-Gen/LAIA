@@ -1920,6 +1920,7 @@ import 'package:{app_name}/generic/nav_bar.dart';
 import 'package:{app_name}/generic/generic_widgets.dart';
 import 'package:{app_name}/screens/gallery_screen.dart';
 import 'package:{app_name}/screens/backend_settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:laia_annotations/laia_annotations.dart';
 {import_statements}
 {laia_import_statements}
