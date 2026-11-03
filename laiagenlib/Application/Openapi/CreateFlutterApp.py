@@ -5,8 +5,6 @@ import asyncio
 from enum import EnumMeta
 from pydantic import BaseModel
 
-from ...Domain.Email.EmailRequest import EmailRequest
-
 from ...Domain.Shard.Shard import Shard
 from ...Domain.Openapi.Openapi import OpenAPI
 from ...Domain.AccessRights.AccessRights import AccessRight
@@ -16,7 +14,6 @@ from ...Domain.Openapi.FlutterBaseFiles import model_dart, home_dart, geojson_mo
 
 LAIA_INTERNAL_MODELS = {
     "Shard": Shard,
-    "EmailRequest": EmailRequest,
     # "AccessRight": AccessRight,  (si quieres unificar aquí también)
     # "Role": Role,
 }
@@ -156,9 +153,6 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
         if model_name_clean in generated_models:
             print(f"Skipping already generated model: {model_name_clean}")
             continue
-        generated_models.add(model_name_clean)
-
-        print(f"Generating model: {model_name_clean}")
 
         if hasattr(model_module, model_name_clean):
             model = getattr(model_module, model_name_clean)
@@ -168,6 +162,9 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
 
         else:
             continue  # Skip models that are not found
+
+        generated_models.add(model_name_clean)
+        print(f"Generating model: {model_name_clean}")
 
         model_file_content = model_dart(openapiModel, app_name, model)
         with open(os.path.join(models_dir, f'{model_name_clean.lower()}.dart'), 'w') as f:
@@ -188,6 +185,7 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
                 embedded_content = embedded_model_dart(embedded_cls_name, app_name, embedded_cls)
                 with open(os.path.join(models_dir, f'{embedded_cls_name.lower()}.dart'), 'w') as f:
                     f.write(embedded_content)
+                generated_models.add(embedded_cls_name)
 
     with open(os.path.join(models_dir, 'geometry.dart'), 'w') as f:
         f.write(geojson_models_file())
@@ -199,8 +197,13 @@ async def create_flutter_app(openapi: OpenAPI=None, app_name:str="", app_path: s
             model_file_content = model_dart(openapiModel=laiaModel, app_name=app_name, model=model)
             with open(os.path.join(models_dir, f'{model.__name__.lower()}.dart'), 'w') as f:
                 f.write(model_file_content)
+            generated_models.add(model.__name__)
 
-    home_file_content = home_dart(app_name, frontend_models, use_access_rights)
+    models_for_home = [
+        m for m in frontend_models
+        if m.model_name.replace('-Input', '').replace('-Output', '') in generated_models
+    ]
+    home_file_content = home_dart(app_name, models_for_home, use_access_rights)
     with open(os.path.join(screens_dir, 'home.dart'), 'w') as f:
         f.write(home_file_content)
 

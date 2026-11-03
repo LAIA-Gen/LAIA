@@ -239,15 +239,15 @@ def imgproxy_helper_dart() -> str:
         : '';
 
     final query = <String>['raw=true'];
-    if (width > 0) query.add('width=\$width');
-    if (height > 0) query.add('height=\$height');
-    if (resize.isNotEmpty && resize != 'fit') query.add('resizing_type=\$resize');
-    if (gravity != null && gravity.isNotEmpty) query.add('gravity=\$gravity');
-    if (format.isNotEmpty && format != 'original') query.add('format=\$format');
+    if (width > 0) query.add('width=$width');
+    if (height > 0) query.add('height=$height');
+    if (resize.isNotEmpty && resize != 'fit') query.add('resizing_type=$resize');
+    if (gravity != null && gravity.isNotEmpty) query.add('gravity=$gravity');
+    if (format.isNotEmpty && format != 'original') query.add('format=$format');
 
-    final prefix = base.isNotEmpty ? '\$base/download' : '/download';
+    final prefix = base.isNotEmpty ? '$base/download' : '/download';
     final qs = query.join('&');
-    return '\$prefix/\$clean?\$qs';
+    return '$prefix/$clean?$qs';
   }
 }
 
@@ -369,31 +369,18 @@ class _GalleryScreenState extends State<GalleryScreen> {
       http.Response? response;
 
       try {
-        final res = await http.get(uri, headers: headers);
-        if (res.statusCode == 200 || res.statusCode == 403) {
-          response = res;
+        response = await http.get(uri, headers: headers);
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Error de conexión con el backend: $e';
+            _isLoading = false;
+          });
         }
-      } catch (_) {}
-
-      // Fallback si no está disponible la ruta de admin
-      if (response == null || (response.statusCode != 200 && response.statusCode != 403)) {
-        final fallbackEndpoints = [
-          '$baseURL/storage/$_selectedBucket',
-          '$baseURL/photos',
-          '$baseURL/storage',
-        ];
-        for (final endpoint in fallbackEndpoints) {
-          try {
-            final res = await http.get(Uri.parse(endpoint), headers: headers);
-            if (res.statusCode == 200) {
-              response = res;
-              break;
-            }
-          } catch (_) {}
-        }
+        return;
       }
 
-      if (response != null && response.statusCode == 200) {
+      if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         final List<Map<String, dynamic>> items = [];
 
@@ -425,17 +412,31 @@ class _GalleryScreenState extends State<GalleryScreen> {
             _isLoading = false;
           });
         }
-      } else if (response != null && response.statusCode == 403) {
+      } else if (response.statusCode == 401) {
         if (mounted) {
           setState(() {
-            _errorMessage = 'Restricted access: Backoffice admin permissions required';
+            _errorMessage = 'Autenticación requerida: Inicia sesión con un usuario administrador.';
+            _isLoading = false;
+          });
+        }
+      } else if (response.statusCode == 403) {
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'Acceso restringido: Se requieren permisos de administrador de backoffice.';
             _isLoading = false;
           });
         }
       } else {
+        String serverDetail = '';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['detail'] != null) {
+            serverDetail = ': ${decoded['detail']}';
+          }
+        } catch (_) {}
         if (mounted) {
           setState(() {
-            _errorMessage = 'Could not load files from bucket "$_selectedBucket"';
+            _errorMessage = 'No se pudieron cargar los archivos del bucket "$_selectedBucket"$serverDetail';
             _isLoading = false;
           });
         }
@@ -448,6 +449,65 @@ class _GalleryScreenState extends State<GalleryScreen> {
         });
       }
     }
+  }
+
+  Future<void> _uploadNewFile() async {
+    ImagePickerHelper.pickFile((bytes, filename) async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString("token");
+        final headers = <String, String>{};
+        if (token != null && token.isNotEmpty) {
+          headers['Authorization'] = 'Bearer $token';
+        }
+
+        final queryParams = StringBuffer('folder=$_selectedBucket');
+        if (_prefixController.text.trim().isNotEmpty) {
+          queryParams.write('&id=${Uri.encodeComponent(_prefixController.text.trim().replaceAll('/', ''))}');
+        }
+
+        final req = http.MultipartRequest('POST', Uri.parse('$baseURL/upload?$queryParams'));
+        if (headers['Authorization'] != null) {
+          req.headers['Authorization'] = headers['Authorization']!;
+        }
+        req.fields['folder'] = _selectedBucket;
+        req.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Subiendo archivo...')),
+          );
+        }
+
+        final streamed = await req.send();
+        final res = await http.Response.fromStream(streamed);
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Archivo "$filename" subido con éxito')),
+            );
+            _fetchPhotos();
+          }
+        } else {
+          String err = 'Error al subir (${res.statusCode})';
+          try {
+            final data = jsonDecode(res.body);
+            if (data['detail'] != null) err = data['detail'];
+          } catch (_) {}
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(err), backgroundColor: Colors.redAccent),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error al subir: $e'), backgroundColor: Colors.redAccent),
+          );
+        }
+      }
+    });
   }
 
   Future<String?> _getDownloadUrl(String key, [Map<String, dynamic>? options]) async {
@@ -947,6 +1007,12 @@ class _GalleryScreenState extends State<GalleryScreen> {
                       icon: const Icon(Icons.refresh_rounded),
                       tooltip: 'Refresh',
                       onPressed: _fetchPhotos,
+                    ),
+                    const SizedBox(width: 4),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                      label: const Text('Subir'),
+                      onPressed: _uploadNewFile,
                     ),
                   ],
                 ),
@@ -1897,7 +1963,7 @@ Future<http.Response> head(Uri url, {{Map<String, String>? headers}}) =>
     _defaultClient.head(url, headers: headers);
 """
 
-def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool):
+def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool = True):
     if use_access_rights:
       laia_import_statements = '\n'.join([f"import 'package:{app_name}/models/{model.__name__.lower()}.dart';" for model in [AccessRight, Role]])
     else:
@@ -1906,7 +1972,7 @@ def home_dart(app_name: str, models: List[OpenAPIModel], use_access_rights: bool
     seen = set()
 
     for model in models:
-        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update"):
+        if not model.model_name.startswith("Body_") and not model.model_name.endswith("Update") and "__" not in model.model_name:
             clean_name = model.model_name.replace('-Input', '').replace('-Output', '')
             if clean_name not in seen:
                 seen.add(clean_name)
