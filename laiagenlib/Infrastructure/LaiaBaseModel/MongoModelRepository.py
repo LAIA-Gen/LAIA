@@ -286,15 +286,65 @@ class MongoModelRepository(ModelRepository):
                     }
                 })
 
-                # Lookups
-                lookup_stages.append({
-                    "$lookup": {
+                # Role assignments also accept names (see AuthController).
+                # Resolve both representations without rewriting stored permissions.
+                if local_field == "roles" and actual_col.lower() == "role":
+                    raw_roles = {"$cond": [
+                        {"$isArray": "$roles"}, "$roles", ["$roles"]
+                    ]}
+                    role_names = {"$filter": {
+                        "input": raw_roles,
+                        "as": "role",
+                        "cond": {"$and": [
+                            {"$eq": [{"$type": "$$role"}, "string"]},
+                            {"$ne": ["$$role", ""]},
+                            {"$eq": [{"$convert": {
+                                "input": "$$role", "to": "objectId",
+                                "onError": None, "onNull": None,
+                            }}, None]},
+                        ]},
+                    }}
+                    lookup_stages.append({"$lookup": {
                         "from": actual_col,
-                        "localField": f"{local_field}_as_obj",
-                        "foreignField": "_id",
-                        "as": temp_field
-                    }
-                })
+                        "let": {
+                            "ids": {"$cond": [
+                                {"$isArray": f"${local_field}_as_obj"},
+                                f"${local_field}_as_obj", [f"${local_field}_as_obj"],
+                            ]},
+                            "names": role_names,
+                        },
+                        "pipeline": [{"$match": {"$expr": {"$or": [
+                            {"$in": ["$_id", "$$ids"]},
+                            {"$in": ["$name", "$$names"]},
+                        ]}}}],
+                        "as": temp_field,
+                    }})
+                    # Legacy names need not have a Role document. Keep their
+                    # assigned name visible/searchable instead of silently dropping
+                    # it. ObjectId references never receive this fallback.
+                    lookup_stages.append({"$set": {temp_field: {"$concatArrays": [
+                        f"${temp_field}",
+                        {"$map": {
+                            "input": {"$filter": {
+                                "input": role_names,
+                                "as": "role",
+                                "cond": {"$not": [{"$in": [
+                                    "$$role", f"${temp_field}.name"
+                                ]}]},
+                            }},
+                            "as": "role",
+                            "in": {"_id": "$$role", "name": "$$role"},
+                        }},
+                    ]}}})
+                else:
+                    lookup_stages.append({
+                        "$lookup": {
+                            "from": actual_col,
+                            "localField": f"{local_field}_as_obj",
+                            "foreignField": "_id",
+                            "as": temp_field
+                        }
+                    })
 
                 # Projection (if fields are specified)
                 if fields_to_keep:
